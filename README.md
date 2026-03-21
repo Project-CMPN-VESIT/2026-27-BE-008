@@ -16,6 +16,21 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Live Stock Data (TradingView API)
+
+This app now fetches market data through `@mathieuc/tradingview`.
+
+- Home page search suggestions: `/api/tv-search?q=reliance`
+- Home page stock snapshot and chart: `/api/nse-stock?symbol=RELIANCE` (route name kept for compatibility)
+- War Room live quote: `/api/live-quote?symbol=NSE_RELIANCE`
+- Advanced chart terminal: `/chart?symbol=RELIANCE&marketId=NSE:RELIANCE`
+- Advanced chart API: `/api/tv-chart?marketId=NSE:RELIANCE&timeframe=D&range=180`
+
+Notes:
+
+- No API key is required for this setup.
+- Some premium/intraday TradingView features may require authenticated cookies.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
