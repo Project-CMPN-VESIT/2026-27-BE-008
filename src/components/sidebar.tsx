@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -26,7 +26,18 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("finpilot-sidebar-collapsed") === "1";
+  });
+
+  useEffect(() => {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    window.localStorage.setItem("finpilot-sidebar-collapsed", collapsed ? "1" : "0");
+    return () => {
+      document.body.classList.remove("sidebar-collapsed");
+    };
+  }, [collapsed]);
 
   return (
     <aside

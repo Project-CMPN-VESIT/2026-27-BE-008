@@ -33,7 +33,7 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <Sidebar />
-          <div className="ml-60 min-h-screen transition-all duration-300">
+          <div className="app-shell min-h-screen">
             <TopBar />
             <main>{children}</main>
           </div>
