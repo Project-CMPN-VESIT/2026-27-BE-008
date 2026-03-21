@@ -1,415 +1,278 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Shield,
-  ShieldCheck,
   ShieldAlert,
-  ShieldX,
   Search,
   Filter,
-  ChevronDown,
   ExternalLink,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  User,
+  Users,
   Building2,
   FileWarning,
   RefreshCw,
   Info,
+  Calendar,
+  XCircle,
+  Play
 } from "lucide-react";
 
-type Status = "clear" | "flagged" | "warning" | "pending";
-
-interface Director {
+interface ScrapedEntity {
   id: number;
+  source_id: string;
   name: string;
-  designation: string;
-  din: string;
-  company: string;
-  sebiStatus: Status;
-  rbiStatus: Status;
-  unStatus: Status;
-  mca21Status: Status;
-  lastChecked: string;
-  details?: string;
-}
-
-const directors: Director[] = [
-  {
-    id: 1,
-    name: "Gautam S. Adani",
-    designation: "Chairman & Managing Director",
-    din: "00006273",
-    company: "Adani Enterprises Ltd",
-    sebiStatus: "warning",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "clear",
-    lastChecked: "2 mins ago",
-    details: "SEBI investigation pending regarding disclosure practices. No debarment order issued.",
-  },
-  {
-    id: 2,
-    name: "Rajesh S. Adani",
-    designation: "Managing Director",
-    din: "00006322",
-    company: "Adani Enterprises Ltd",
-    sebiStatus: "clear",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "clear",
-    lastChecked: "2 mins ago",
-  },
-  {
-    id: 3,
-    name: "Vinod K. Agarwal",
-    designation: "Independent Director",
-    din: "00058548",
-    company: "Adani Enterprises Ltd",
-    sebiStatus: "clear",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "warning",
-    lastChecked: "5 mins ago",
-    details: "Served on board of company that received MCA show-cause notice in 2023.",
-  },
-  {
-    id: 4,
-    name: "Hemant M. Nerurkar",
-    designation: "Independent Director",
-    din: "00265887",
-    company: "Adani Ports & SEZ",
-    sebiStatus: "clear",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "clear",
-    lastChecked: "8 mins ago",
-  },
-  {
-    id: 5,
-    name: "Rajeev R. Shah",
-    designation: "Whole Time Director",
-    din: "01onal",
-    company: "Yes Bank Ltd",
-    sebiStatus: "flagged",
-    rbiStatus: "flagged",
-    unStatus: "clear",
-    mca21Status: "flagged",
-    lastChecked: "1 min ago",
-    details: "SEBI debarment order dated 14-Mar-2024. RBI directive restricting banking sector board positions. Multiple MCA disqualification proceedings.",
-  },
-  {
-    id: 6,
-    name: "Priya K. Mehta",
-    designation: "Independent Director",
-    din: "07283910",
-    company: "Infosys Ltd",
-    sebiStatus: "clear",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "clear",
-    lastChecked: "12 mins ago",
-  },
-  {
-    id: 7,
-    name: "Suresh K. Patel",
-    designation: "CFO & Director",
-    din: "04829311",
-    company: "Paytm (One97)",
-    sebiStatus: "warning",
-    rbiStatus: "warning",
-    unStatus: "clear",
-    mca21Status: "clear",
-    lastChecked: "3 mins ago",
-    details: "SEBI show-cause notice regarding related party transaction disclosures. RBI observation on digital lending compliance.",
-  },
-  {
-    id: 8,
-    name: "Aman L. Gupta",
-    designation: "Non-Executive Director",
-    din: "06472839",
-    company: "Tata Motors Ltd",
-    sebiStatus: "clear",
-    rbiStatus: "clear",
-    unStatus: "clear",
-    mca21Status: "pending",
-    lastChecked: "15 mins ago",
-    details: "MCA annual compliance verification pending for FY2025.",
-  },
-];
-
-const statusConfig: Record<Status, { label: string; icon: typeof CheckCircle2; color: string; bg: string; border: string }> = {
-  clear: {
-    label: "Clear",
-    icon: CheckCircle2,
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-500/10",
-    border: "border-emerald-200 dark:border-emerald-500/20",
-  },
-  flagged: {
-    label: "FLAGGED",
-    icon: XCircle,
-    color: "text-red-600 dark:text-red-400",
-    bg: "bg-red-50 dark:bg-red-500/10",
-    border: "border-red-200 dark:border-red-500/20",
-  },
-  warning: {
-    label: "Warning",
-    icon: AlertTriangle,
-    color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-500/10",
-    border: "border-amber-200 dark:border-amber-500/20",
-  },
-  pending: {
-    label: "Pending",
-    icon: Clock,
-    color: "text-slate-500 dark:text-slate-400",
-    bg: "bg-slate-50 dark:bg-slate-800",
-    border: "border-slate-300 dark:border-slate-700",
-  },
-};
-
-function StatusBadge({ status }: { status: Status }) {
-  const config = statusConfig[status];
-  const Icon = config.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${config.color} ${config.bg} border ${config.border}`}>
-      <Icon className="w-3 h-3" />
-      {config.label}
-    </span>
-  );
-}
-
-function getOverallStatus(d: Director): Status {
-  if (d.sebiStatus === "flagged" || d.rbiStatus === "flagged" || d.unStatus === "flagged" || d.mca21Status === "flagged") return "flagged";
-  if (d.sebiStatus === "warning" || d.rbiStatus === "warning" || d.unStatus === "warning" || d.mca21Status === "warning") return "warning";
-  if (d.sebiStatus === "pending" || d.rbiStatus === "pending" || d.unStatus === "pending" || d.mca21Status === "pending") return "pending";
-  return "clear";
+  din_number?: string;
+  pan_number?: string;
+  cin_number?: string;
+  date_of_publish?: string;
+  link_to_circular?: string;
+  issuing_body?: string;
+  circular_number?: string;
 }
 
 export default function RegulatoryPage() {
-  const [selectedDirector, setSelectedDirector] = useState<Director | null>(null);
+  const [entities, setEntities] = useState<ScrapedEntity[]>([]);
+  const [selectedEntity, setSelectedEntity] = useState<ScrapedEntity | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterSource, setFilterSource] = useState<string>("all");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredDirectors = directors.filter((d) => {
-    const matchesSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || d.company.toLowerCase().includes(searchQuery.toLowerCase());
-    const overall = getOverallStatus(d);
-    const matchesFilter = filterStatus === "all" || overall === filterStatus;
+  const fetchEntities = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("http://localhost:8000/v1/entities?page_size=5000");
+      if (!response.ok) throw new Error("Failed to fetch entities");
+      const data = await response.json();
+      setEntities(data.entities || []);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to connect to Scrapper API");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+
+  const runPipeline = async () => {
+    setIsRunningPipeline(true);
+    setError(null);
+    try {
+      const response = await fetch("http://localhost:8000/v1/pipeline/run", {
+        method: "POST"
+      });
+      if (!response.ok) throw new Error("Failed to run pipeline");
+      await fetchEntities();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to run pipeline");
+    } finally {
+      setIsRunningPipeline(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEntities();
+  }, []);
+
+  const filteredEntities = entities.filter((e) => {
+    const searchContext = `${e.name} ${e.din_number || ""} ${e.pan_number || ""} ${e.cin_number || ""} ${e.issuing_body || ""}`.toLowerCase();
+    const matchesSearch = searchContext.includes(searchQuery.toLowerCase());
+    const matchesFilter = filterSource === "all" || e.source_id === filterSource;
     return matchesSearch && matchesFilter;
   });
 
-  const stats = {
-    total: directors.length,
-    clear: directors.filter((d) => getOverallStatus(d) === "clear").length,
-    flagged: directors.filter((d) => getOverallStatus(d) === "flagged").length,
-    warning: directors.filter((d) => getOverallStatus(d) === "warning").length,
+  const getSourceLabel = (sourceId: string) => {
+    switch (sourceId) {
+      case "sebi_debarred": return "SEBI Debarred";
+      case "rbi_standalone_circulars": return "RBI Default/Actions";
+      case "un_sanctions_consolidated": return "UN Sanctions";
+      default: return sourceId.replace("_", " ").toUpperCase();
+    }
   };
+
+  const getActualLink = (entity: ScrapedEntity) => {
+    if (entity.source_id === "un_sanctions_consolidated" || entity.link_to_circular?.endsWith(".xml")) {
+      return `https://www.google.com/search?q=${encodeURIComponent('UN Security Council Sanctions "' + entity.name + '"')}`;
+    }
+    return entity.link_to_circular;
+  };
+
+  const getSourceBadgeColor = (sourceId: string) => {
+    switch (sourceId) {
+      case "sebi_debarred": return "bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20";
+      case "rbi_standalone_circulars": return "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20";
+      case "un_sanctions_consolidated": return "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20";
+      default: return "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
+    }
+  };
+
+  const stats = {
+    total: entities.length,
+    sebi: entities.filter(e => e.source_id === "sebi_debarred").length,
+    rbi: entities.filter(e => e.source_id === "rbi_standalone_circulars").length,
+    un: entities.filter(e => e.source_id === "un_sanctions_consolidated").length,
+  };
+
+  const availableSources = ["all", ...Array.from(new Set(entities.map(e => e.source_id)))];
 
   return (
     <div className="p-6 space-y-6 bg-grid-pattern min-h-screen">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
             <Shield className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">SEBI Regulatory Shield</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Automated integrity checks against SEBI, RBI, MCA & UN debarred lists
+              Live automated feed from Indian regulatory bodies and global sanctions lists
             </p>
           </div>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors">
-          <RefreshCw className="w-4 h-4" />
-          Re-scan All
-        </button>
+        <div className="flex gap-2">
+          <button onClick={fetchEntities} disabled={isLoading || isRunningPipeline} className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors border border-slate-300 dark:border-slate-700 ${(isLoading || isRunningPipeline) ? "opacity-50 cursor-not-allowed" : ""}`}>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            {isLoading ? "Fetching data..." : "Refresh Feed"}
+          </button>
+          <button onClick={runPipeline} disabled={isLoading || isRunningPipeline} className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors shadow-sm ${(isLoading || isRunningPipeline) ? "opacity-50 cursor-not-allowed" : ""}`}>
+            <Play className={`w-4 h-4 ${isRunningPipeline ? "animate-pulse" : ""}`} />
+            {isRunningPipeline ? "Running Pipeline..." : "Run Pipeline"}
+          </button>
+        </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Scanned</span>
-            <User className="w-4 h-4 text-slate-400" />
-          </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Extracted</span><Users className="w-4 h-4 text-slate-400" /></div>
           <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</div>
-          <p className="text-xs text-slate-400 mt-1">Directors & Promoters</p>
+          <p className="text-xs text-slate-400 mt-1">Flagged Entities & Orgs</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-500/20 p-4 glow-emerald">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">All Clear</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{stats.clear}</div>
-          <p className="text-xs text-emerald-500/70 mt-1">No regulatory issues</p>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-500/20 p-4 shadow-sm glow-rose">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-rose-600 dark:text-rose-400 uppercase tracking-wider">SEBI Actions</span><ShieldAlert className="w-4 h-4 text-rose-500" /></div>
+          <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{stats.sebi}</div>
+          <p className="text-xs text-rose-500/70 mt-1">Debarred / Banned</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-500/20 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">Warnings</span>
-            <ShieldAlert className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.warning}</div>
-          <p className="text-xs text-amber-500/70 mt-1">Needs attention</p>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-500/20 p-4 shadow-sm glow-amber">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">RBI Defaulters</span><Building2 className="w-4 h-4 text-amber-500" /></div>
+          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.rbi}</div>
+          <p className="text-xs text-amber-500/70 mt-1">Wilful & Large Defaults</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-red-200 dark:border-red-500/20 p-4 glow-rose">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">FLAGGED</span>
-            <ShieldX className="w-4 h-4 text-red-500" />
-          </div>
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{stats.flagged}</div>
-          <p className="text-xs text-red-500/70 mt-1">Debarred / Action taken</p>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-500/20 p-4 shadow-sm glow-purple">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">Global Sanctions</span><XCircle className="w-4 h-4 text-purple-500" /></div>
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{stats.un}</div>
+          <p className="text-xs text-purple-500/70 mt-1">UN & International Lists</p>
         </div>
       </div>
 
-      {/* Search and Filter */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus-within:border-blue-300 dark:focus-within:border-blue-500/40 transition-colors">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by name, company, or DIN..."
-            className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 outline-none"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      {error && (
+        <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl flex items-start gap-2 text-sm">
+          <FileWarning className="w-5 h-5 shrink-0" />
+          <div className="flex-1 mt-0.5">{error}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400" />
-          {["all", "clear", "warning", "flagged"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilterStatus(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
-                filterStatus === f
-                  ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20"
-                  : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-              }`}
-            >
-              {f}
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors shadow-sm">
+          <Search className="w-4 h-4 text-slate-400" />
+          <input type="text" placeholder="Search entities by name, DIN, PAN..." className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 outline-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter className="w-4 h-4 text-slate-400 mx-1" />
+          {availableSources.map((f) => (
+            <button key={f} onClick={() => setFilterSource(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterSource === f ? "bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"}`}>
+              {f === 'all' ? 'All Sources' : getSourceLabel(f)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Directors Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-                <th className="text-left px-5 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Director / Promoter</th>
-                <th className="text-left px-5 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Company</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">SEBI</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">RBI</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">UN List</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">MCA-21</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Overall</th>
-                <th className="text-right px-5 py-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Checked</th>
+              <tr className="border-b border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Entity Details</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Identifiers</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Source Database</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Publish Date</th>
               </tr>
             </thead>
-            <tbody>
-              {filteredDirectors.map((d) => {
-                const overall = getOverallStatus(d);
-                return (
-                  <tr
-                    key={d.id}
-                    onClick={() => setSelectedDirector(selectedDirector?.id === d.id ? null : d)}
-                    className={`border-b border-slate-300/70 dark:border-slate-800/50 cursor-pointer transition-colors ${
-                      selectedDirector?.id === d.id ? "bg-blue-50/50 dark:bg-blue-500/5" : "hover:bg-slate-50 dark:hover:bg-slate-800/30"
-                    } ${overall === "flagged" ? "bg-red-50/30 dark:bg-red-500/[0.03]" : ""}`}
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                          overall === "flagged" ? "bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400" :
-                          overall === "warning" ? "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400" :
-                          "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                        }`}>
-                          {d.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-slate-900 dark:text-white">{d.name}</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400">{d.designation} · DIN: {d.din}</div>
-                        </div>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
+              {filteredEntities.map((entity) => (
+                <tr key={`${entity.id}-${entity.source_id}`} onClick={() => {
+                  const link = getActualLink(entity);
+                  if (link) {
+                    window.open(link, '_blank', 'noopener,noreferrer');
+                  }
+                  setSelectedEntity(selectedEntity?.id === entity.id ? null : entity);
+                }} className={`group cursor-pointer transition-colors ${selectedEntity?.id === entity.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-300">
+                        {entity.name.substring(0, 2).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-xs text-slate-700 dark:text-slate-300">{d.company}</span>
+                      <div>
+                        <div className="text-sm font-medium text-slate-900 dark:text-white capitalize group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{entity.name.toLowerCase()}</div>
+                        {entity.issuing_body && <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[280px]">Body: {entity.issuing_body}</div>}
                       </div>
-                    </td>
-                    <td className="px-3 py-3.5 text-center"><StatusBadge status={d.sebiStatus} /></td>
-                    <td className="px-3 py-3.5 text-center"><StatusBadge status={d.rbiStatus} /></td>
-                    <td className="px-3 py-3.5 text-center"><StatusBadge status={d.unStatus} /></td>
-                    <td className="px-3 py-3.5 text-center"><StatusBadge status={d.mca21Status} /></td>
-                    <td className="px-3 py-3.5 text-center"><StatusBadge status={overall} /></td>
-                    <td className="px-5 py-3.5 text-right">
-                      <span className="text-[10px] text-slate-400">{d.lastChecked}</span>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 align-top">
+                    <div className="space-y-1">
+                      {entity.din_number && <div className="text-[11px]"><span className="text-slate-400">DIN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.din_number}</span></div>}
+                      {entity.pan_number && <div className="text-[11px]"><span className="text-slate-400">PAN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.pan_number}</span></div>}
+                      {entity.cin_number && <div className="text-[11px]"><span className="text-slate-400">CIN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.cin_number}</span></div>}
+                      {!entity.din_number && !entity.pan_number && !entity.cin_number && <span className="text-[11px] text-slate-400">—</span>}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 align-top">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide ${getSourceBadgeColor(entity.source_id)}`}>
+                      {getSourceLabel(entity.source_id)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 align-top">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Calendar className="w-3.5 h-3.5 text-slate-400" />{entity.date_of_publish || "N/A"}</div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          {filteredEntities.length === 0 && !isLoading && (
+            <div className="px-5 py-8 text-center text-sm text-slate-500">No matching entities found.</div>
+          )}
         </div>
       </div>
 
-      {/* Detail Panel */}
-      {selectedDirector && selectedDirector.details && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-5 animate-fade-in">
-          <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              getOverallStatus(selectedDirector) === "flagged"
-                ? "bg-red-100 dark:bg-red-500/10" 
-                : "bg-amber-100 dark:bg-amber-500/10"
-            }`}>
-              <FileWarning className={`w-5 h-5 ${
-                getOverallStatus(selectedDirector) === "flagged" 
-                  ? "text-red-500" 
-                  : "text-amber-500"
-              }`} />
+      {selectedEntity && (
+        <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-300 dark:border-slate-700 p-5 shadow-sm animate-fade-in relative overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-400 to-teal-500"></div>
+          <div className="flex gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+              <FileWarning className="w-6 h-6 text-slate-400" />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">{selectedDirector.name}</h3>
-                <StatusBadge status={getOverallStatus(selectedDirector)} />
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white capitalize">{selectedEntity.name.toLowerCase()}</h3>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold ${getSourceBadgeColor(selectedEntity.source_id)}`}>{getSourceLabel(selectedEntity.source_id)}</span>
               </div>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{selectedDirector.details}</p>
-              <div className="flex items-center gap-3 mt-3">
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors">
-                  <ExternalLink className="w-3 h-3" />
-                  View SEBI Order
-                </button>
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-medium border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                  <Info className="w-3 h-3" />
-                  Full Report
-                </button>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                {selectedEntity.din_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">DIN Number</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.din_number}</div></div>}
+                {selectedEntity.pan_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">PAN</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.pan_number}</div></div>}
+                {selectedEntity.cin_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">CIN</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.cin_number}</div></div>}
+                {selectedEntity.circular_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">Order/Circular No.</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.circular_number}</div></div>}
               </div>
+              {getActualLink(selectedEntity) && (
+                <div className="mt-5 pt-5 border-t border-slate-200 dark:border-slate-700/50">
+                  <a href={getActualLink(selectedEntity)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium text-blue-600 dark:text-blue-400 hover:border-blue-300 dark:hover:border-blue-500/50 transition-colors shadow-sm"><ExternalLink className="w-4 h-4" />Open Original Source</a>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
-
-       {/* Methodology Note */}
-      <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-slate-300 dark:border-slate-700/50 p-4">
-        <div className="flex items-start gap-2">
-          <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Verification Methodology</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
-              All checks are performed against official databases: SEBI Debarred Entities list, RBI Defaulter Directory, 
-              UN Security Council Consolidated Sanctions List, and MCA-21 Director Disqualification records. 
-              Results are cached for 24 hours and can be refreshed on demand.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,0 +1,31 @@
+{
+  "sources": [
+    {
+      "source_id": "rbi_standalone_circulars",
+      "name": "RBI Standalone Circulars",
+      "url": "https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx",
+      "detail_url_base": "https://www.rbi.org.in/Scripts/NotificationUser.aspx",
+      "format_type": "html_index",
+      "publishing_body": "RBI",
+      "scraper_module": "scrapers.rbi_scraper",
+      "active": true,
+      "requires_headless": false,
+      "request_delay_min": 2,
+      "request_delay_max": 5,
+      "notes": "Scrapes index page for circular links, then each detail page for text content"
+    },
+    {
+      "source_id": "un_sanctions_consolidated",
+      "name": "UN Security Council Consolidated Sanctions List",
+      "url": "https://scsanctions.un.org/resources/xml/en/consolidated.xml",
+      "format_type": "xml_direct",
+      "publishing_body": "UNSC",
+      "scraper_module": "scrapers.un_scraper",
+      "active": true,
+      "requires_headless": false,
+      "request_delay_min": 0,
+      "request_delay_max": 0,
+      "notes": "Single XML download, fully structured - no AI extraction needed"
+    }
+  ]
+}

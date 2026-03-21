@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scrapper runtime artifacts
+scrapper/**/__pycache__/
+scrapper/**/*.pyc
+scrapper/logs/
+scrapper/data/*.db

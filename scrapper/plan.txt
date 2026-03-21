@@ -1,0 +1,215 @@
+Here is the complete, revised architecture plan — synthesizing everything from both sessions into one definitive document.
+
+---
+
+# SEBI Regulatory Shield — Complete Architecture Plan
+
+---
+
+## Overview and core philosophy
+
+The system is split into two completely independent pipelines that never block each other. The data pipeline is slow, AI-heavy, and runs once a day. The serving pipeline is ultra-fast, pre-indexed, and handles real-time API calls. Mixing these two concerns is the most common mistake in systems like this — if your matching API depends on the ingestion worker completing, you have a fragile system.---
+
+## Part 1 — The source registry
+
+Before writing a single scraper, you need a central configuration store. Every data source — SEBI, RBI, UN, OFAC, MCA, any future addition — is a row in this registry. Adding a new source requires zero code changes.
+
+Each source registry entry must capture: a unique source ID, the URL or file path, the format type (`html_table`, `pdf_index`, `csv_direct`, `xml_direct`, `excel_direct`), the cron schedule, the name of the publishing regulatory body, a field mapping config (which column or position maps to which of your 11 attributes), an active flag, and a scraping strategy hint (headless browser required vs plain HTTP sufficient).
+
+This registry is the system's backbone. The orchestrator reads it at runtime. When SEBI redesigns their page, you update one row. When you add IRDAI, you add one row.
+
+---
+
+## Part 2 — The ingestion engine (nightly pipeline)
+
+The orchestrator — Apache Airflow, AWS Step Functions, or even a well-structured cron with a task queue — reads the source registry and fans out one scraping job per active source. Each job is independent; a failure on the RBI scraper does not block the SEBI scraper.
+
+**The scraper module** has four adapters based on format type.
+
+For `html_table` sources: use Playwright (headless Chromium) rather than raw HTTP, because most government sites render tables via JavaScript. Extract table rows as raw key-value dicts.
+
+For `pdf_index` sources: this is a two-step operation. First, scrape the index page to collect all circular links and their metadata (circular number, date). Second, for each new or changed circular, download the PDF and extract text using `pdfplumber` or `pymupdf`. Never OCR a PDF that has embedded text — it wastes time and degrades quality.
+
+For `csv_direct` / `excel_direct` / `xml_direct` sources: download the file and apply deterministic column mapping from the source registry config. No AI needed here at all.
+
+**Anti-blocking strategy** for government websites: randomize scrape times within a ±2 hour window around the scheduled time, rotate user agents, add jitter between requests (2–8 seconds), use residential proxy rotation for sites known to block datacenter IPs, and implement exponential backoff on 429/503 responses. Critically, set up a dead-letter alert — if a source fails 3 consecutive days, send a Slack/email alert. Silently stale data is worse than a visible failure.
+
+**The diff detector** sits between the scraper and the AI extraction queue. Every raw record gets a SHA-256 hash of its content. Before queuing a record for AI extraction, check if that hash already exists in the store. If it does, skip it. This means on a typical day, out of 50,000 stored records, only the ~200 that are new or modified flow through the expensive AI extraction step.---
+
+## Part 3 — The AI extraction engine
+
+This is the most nuanced layer. The key insight is to use AI surgically, not universally.
+
+**Step 1 — Regex pre-pass (fast, free, deterministic).** Run pattern matching first, before touching the LLM. PAN always matches `[A-Z]{5}[0-9]{4}[A-Z]`. DIN is always 8 digits. CIN follows the `L/U + 5digits + state + company_type + 6digits` format. Extract these deterministically. The LLM then only needs to handle the genuinely ambiguous fields: name, country, sanction dates buried in legal narrative, and circular references embedded mid-paragraph.
+
+**Step 2 — LLM structured extraction.** Pass the pre-processed text to the LLM with a strict JSON schema output instruction. The prompt should include the source body name as context (so the LLM knows whether to expect Indian regulatory formatting or UN sanctions formatting), a few-shot example of the target JSON structure, and explicit instruction to output `null` for fields it cannot find with confidence rather than guessing.
+
+**The output schema** must include per-field confidence scores alongside the values. A name extracted from a clean HTML table warrants confidence 0.98. A name pieced together from a garbled PDF scan might be 0.71. This confidence data flows all the way to the match API's scoring logic — a low-confidence name match should never push a record over the match threshold on its own.
+
+**Step 3 — Name variant generation.** This is the step most plans miss. After extraction, generate and store all likely name variants: the canonical form, initials form (`R. K. Sharma`), surname-first form (`Sharma, Ramesh Kumar`), and common transliteration alternates for Indian names (`Suresh` / `Suresh Kumar` / `S. Kumar`). All variants are indexed. At match time, the query also gets this same variant expansion before hitting the search index.
+
+**The 11 fields and their extraction strategy:**
+
+| Field | Strategy | Notes |
+|---|---|---|
+| Name | LLM + variant expansion | Store all variants, not just canonical |
+| DIN | Regex | 8-digit pattern, always deterministic |
+| CIN | Regex | Known format, always deterministic |
+| PAN | Regex | `AAAAA9999A` pattern |
+| Date of birth | LLM + date normalizer | ~10 formats in the wild; normalize to ISO 8601 |
+| Country | Source config fallback + LLM | Often implied by source body, not stated |
+| Circular number | LLM | Often mid-sentence; LLM handles well |
+| Date of publish | Scraper metadata | Extracted from index page, not the PDF body |
+| Sanction start date | LLM | Often phrased as "with effect from..." |
+| Sanction end date | LLM | Store `null` for indefinite sanctions explicitly |
+| Link to circular | Scraper metadata | The URL of the source document |
+| Publishing body | Source registry | Set from config, never extracted |
+
+---
+
+## Part 4 — The data store and indexing strategy
+
+Three storage layers work together. No single layer handles everything.
+
+**PostgreSQL** is the primary store of record. It holds the canonical entity records with all 11 fields, the source registry, the content hash table for diff detection, the audit log of every ingestion run, and the `sanction_status` computed field (`ACTIVE`, `EXPIRED`, `PREVIOUSLY_SANCTIONED_CLEARED`). PostgreSQL with the `pg_trgm` extension also handles trigram indexing on names for fuzzy matching at moderate scale.
+
+**Elasticsearch / OpenSearch** is the search index. Every entity record is mirrored here after upsert into Postgres. The ES index stores: all name variants as a `text` field with n-gram analysis, PAN/DIN/CIN as `keyword` fields for exact match, DOB and country as filter fields, and the final match score fields. This is where the bulk msearch query executes during API calls.
+
+**pgvector or Qdrant** is the semantic vector store. Name and company name embeddings (generated at ingest time) live here. This layer handles transliteration mismatches and alternate script forms that trigram matching misses — for example, matching `Suresh Kumar` against `Suresh Kumar Gupta` or against the Devanagari-rendered version of the same name from a different source.
+
+The write order is always: Postgres first (source of truth), then ES, then vector store. If the ES or vector write fails, a background reconciliation job re-syncs from Postgres. The API never depends on Postgres at query time — it only reads from ES and the vector store.
+
+---
+
+## Part 5 — The matching API
+
+**Endpoint design:** `POST /v1/screen` accepts a JSON body with an array of up to 2,000 input records. Each input record can contain any combination of: name, company name, DIN, CIN, PAN, date of birth, country. The more fields provided, the higher the possible match confidence. The request also accepts a `threshold` parameter (default 0.75) and a `include_cleared` boolean flag.
+
+**The no N+1 rule** is the most critical implementation constraint. You do not loop over 1,000 records and make 1,000 queries. You package all 1,000 inputs into a single Elasticsearch `_msearch` payload — one HTTP request, one round trip, 1,000 results back in parallel.
+
+**Three match strategies fire simultaneously** for each input record in the batch:
+
+The exact ID match checks PAN, DIN, and CIN as keyword lookups. If any exact match is found, the score is immediately 1.0 and the record is flagged as a confirmed match. No further scoring needed.
+
+The trigram / fuzzy name match uses Elasticsearch's `match` query with `fuzziness: AUTO` against the name variants field. This catches typos, missing middle names, and minor transliteration differences. Produces a raw ES score that gets normalized to 0–1.
+
+The vector similarity search runs in parallel against pgvector/Qdrant. Generates an embedding of the input name and finds nearest neighbors above a cosine similarity threshold. This catches deeper transliteration mismatches and alternate-script variants.
+
+**Score aggregation waterfall:**
+
+```
+if exact_id_match:
+    final_score = 1.0
+    status = CONFIRMED_MATCH
+else:
+    base_score = (trigram_score × 0.5) + (vector_score × 0.4)
+    
+    if dob_matches:     base_score += 0.10
+    if country_matches: base_score += 0.05
+    
+    final_score = min(base_score, 0.99)  # never claim 100% without exact ID
+    
+    if final_score >= threshold:    status = MATCH
+    elif final_score >= 0.50:       status = POSSIBLE_MATCH
+    else:                           status = NO_MATCH
+```
+
+**Sanction status logic** runs after scoring. Even if an entity matches, check the `sanction_end_date`. If the end date has passed, the match status gets an additional `sanction_status` field: `ACTIVE`, `EXPIRED`, or `PREVIOUSLY_SANCTIONED_CLEARED`. This is surfaced separately from the match score — a compliance team needs to know both that there was a match AND whether the sanction is currently active.
+
+**False positive mitigation for common names.** `Rahul Sharma` will match hundreds of records on name alone. The rule: a name-only match above the threshold requires at least one secondary confirming signal (DOB match, country match, or partial ID match) before it graduates from `POSSIBLE_MATCH` to `MATCH`. This is enforced in the score aggregation logic — a pure name-fuzzy score is capped at 0.74 (just below the default 0.75 threshold) unless a secondary signal boosts it over.---
+
+## Part 6 — The latency budget (hitting the 1-second SLA)
+
+This needs to be specified concretely, not hand-waved. Here is the realistic per-stage breakdown for a 1,000-record batch:
+
+| Stage | Time | Notes |
+|---|---|---|
+| Request parsing + input normalisation | ~15ms | Pure CPU, in-memory |
+| Name variant expansion | ~10ms | Dictionary lookup, no I/O |
+| msearch payload construction | ~5ms | JSON serialisation |
+| Network to Elasticsearch | ~10ms | Same-region deployment required |
+| ES msearch execution (parallel) | ~120ms | N-gram + fuzzy across 1000 inputs |
+| Vector search (parallel to ES) | ~80ms | Qdrant ANN, fires simultaneously |
+| Await both (max of the two) | ~120ms | Parallel, not sequential |
+| Score aggregation + sanction check | ~20ms | In-memory, no I/O |
+| Response serialisation | ~15ms | JSON build |
+| **Total** | **~195ms** | Comfortable headroom under 1s |
+
+The key: ES and vector search fire simultaneously, not sequentially. The wait is `max(120, 80)` = 120ms, not 200ms. This is achievable if ES and the vector store are deployed in the same AWS/GCP region as the API server. Cross-region deploys will add 40–150ms of network latency and blow the budget.
+
+The API server should be written in Go, Rust, or FastAPI (Python with async). Node.js is also viable. The critical constraint is that the HTTP server must be non-blocking — a synchronous Python Flask server will queue requests and destroy throughput under concurrent load.
+
+---
+
+## Part 7 — The API response contract
+
+Every response record must return:
+
+```json
+{
+  "input_record_id": "rec_001",
+  "match_status": "MATCH",
+  "match_score": 0.94,
+  "sanction_status": "ACTIVE",
+  "matched_entity": {
+    "name": "Ramesh Kumar Sharma",
+    "name_variants": ["R. K. Sharma", "Sharma, Ramesh Kumar"],
+    "din": "00123456",
+    "pan": "ABCDE1234F",
+    "dob": "1968-03-12",
+    "country": "IN",
+    "circular_number": "WTM/RKA/ISD/45/2024",
+    "date_of_publish": "2024-04-15",
+    "sanction_start": "2024-04-15",
+    "sanction_end": null,
+    "circular_link": "https://www.sebi.gov.in/...",
+    "publishing_body": "SEBI",
+    "extraction_confidence": 0.96
+  },
+  "match_breakdown": {
+    "exact_id_hit": false,
+    "trigram_score": 0.89,
+    "vector_score": 0.91,
+    "dob_boost": true,
+    "country_boost": false
+  }
+}
+```
+
+The `match_breakdown` field is critical for compliance teams who need to explain to auditors why a particular record was flagged or cleared. Never return just a score — return the reasoning behind it.
+
+---
+
+## Part 8 — Edge cases and production considerations
+
+**Common names producing false positives.** A pure name match for `Rahul Sharma` is meaningless — there are thousands of people with this name. The system must enforce that name-only matches are capped below the threshold and only graduate to `MATCH` with a secondary confirming signal. This is a product rule, not just an engineering one — document it in the API contract so downstream teams understand why a high-scoring fuzzy match might still return `POSSIBLE_MATCH`.
+
+**Indefinite sanctions with null end dates.** Store `null` explicitly, not a placeholder date far in the future. Query logic must treat `null` end date as "currently active." A far-future placeholder date will silently expire and de-flag a legitimately sanctioned entity.
+
+**Website blocking and scraper failures.** Implement a stale-data alert: if a source has not successfully ingested new data in 48 hours, send an alert. Stale data is worse than no data, because the system appears to be working but is operating on an outdated snapshot.
+
+**Scraper failures should not cascade.** Each source scrapes independently. A CAPTCHA block on the RBI site should fail that source's job, log the error, and alert — but the SEBI and UN jobs should continue normally.
+
+**Payload size limits.** Enforce a hard cap of 2,000 records per request. Beyond that, document a chunking pattern in your API documentation. Memory spikes from very large payloads under concurrent load can take down the API server.
+
+**Audit logging.** Every API call should produce an immutable audit log entry: timestamp, caller identity, number of records screened, number of matches returned, threshold used. This is a compliance system — the audit trail is as important as the matching logic itself.
+
+---
+
+## Part 9 — Build order recommendation
+
+Build in this sequence. Each stage is independently testable before moving to the next.
+
+**Stage 1** — Source registry schema + two source adapters (SEBI HTML and UN CSV). Get raw text flowing into a staging table. Validate the data quality before building anything downstream.
+
+**Stage 2** — AI extraction pipeline on the SEBI HTML data. Validate all 11 fields manually against 50 real records. Tune the prompt until field accuracy is above 90% before proceeding.
+
+**Stage 3** — PostgreSQL schema with `pg_trgm` indexes. Load the extracted data. Build the diff detection hash table.
+
+**Stage 4** — Basic matching API with exact ID match and trigram fuzzy match only. Measure latency at 1,000 records. This alone should hit the SLA — it is simpler and faster than the full three-strategy approach.
+
+**Stage 5** — Add Elasticsearch for production-grade fuzzy search. Migrate the fuzzy match from Postgres to ES. Validate that latency stays within budget.
+
+**Stage 6** — Add vector embeddings and Qdrant. This is the transliteration layer — add it only after the core matching is working and tested. It adds complexity; only add that complexity when you have evidence that trigram matching alone is producing false negatives on real Indian name data.
+
+**Stage 7** — Add remaining source adapters (RBI PDF, MCA, OFAC, etc.) using the source registry pattern. Each new source is a config change, not a code change.
