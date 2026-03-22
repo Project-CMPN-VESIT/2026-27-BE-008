@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Activity,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },
   { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
   { href: "/council", label: "Agent Council", icon: Users },
+  { href: "/paper-trading", label: "Paper Trading", icon: Activity },
 ];
 
 export function Sidebar() {

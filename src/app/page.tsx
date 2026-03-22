@@ -14,6 +14,7 @@ import {
   Users,
   BarChart3,
   X,
+  Activity,
 } from "lucide-react";
 
 type SearchSuggestion = {
@@ -81,6 +82,7 @@ const features = [
   { href: "/scoring", icon: BarChart3, title: "RK/PL Scores", desc: "Dual-metric risk and profit scoring", color: "amber" },
   { href: "/alerts", icon: AlertTriangle, title: "Disparity Alerts", desc: "Market hype vs filing fact checker", color: "rose" },
   { href: "/council", icon: Users, title: "Agent Council", desc: "Multi-agent debate and paper trading", color: "cyan" },
+  { href: "/paper-trading", icon: Activity, title: "Paper Trading", desc: "AI-Mentored virtual portfolio and reflection journal", color: "indigo" },
 ];
 
 const colorMap: Record<string, string> = {
@@ -89,6 +91,7 @@ const colorMap: Record<string, string> = {
   amber: "from-amber-500 to-amber-600",
   rose: "from-rose-500 to-rose-600",
   cyan: "from-cyan-500 to-cyan-600",
+  indigo: "from-indigo-500 to-indigo-600",
 };
 
 const colorMapBorder: Record<string, string> = {
@@ -97,6 +100,7 @@ const colorMapBorder: Record<string, string> = {
   amber: "border-amber-200 dark:border-amber-500/20",
   rose: "border-rose-200 dark:border-rose-500/20",
   cyan: "border-cyan-200 dark:border-cyan-500/20",
+  indigo: "border-indigo-200 dark:border-indigo-500/20",
 };
 
 const colorMapBg: Record<string, string> = {
@@ -105,6 +109,7 @@ const colorMapBg: Record<string, string> = {
   amber: "bg-amber-50 dark:bg-amber-500/5",
   rose: "bg-rose-50 dark:bg-rose-500/5",
   cyan: "bg-cyan-50 dark:bg-cyan-500/5",
+  indigo: "bg-indigo-50 dark:bg-indigo-500/5",
 };
 
 const formatMoney = (value: number | undefined) => {

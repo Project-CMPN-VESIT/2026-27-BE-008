@@ -271,3 +271,91 @@ class Database:
             return [dict(r) for r in rows]
         finally:
             conn.close()
+
+    # --- Paper Trading ---
+    def get_or_create_user(self, user_id: str) -> dict:
+        conn = self._get_conn()
+        try:
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user:
+                conn.execute("INSERT INTO users (id) VALUES (?)", (user_id,))
+                conn.commit()
+                user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return dict(user)
+        finally:
+            conn.close()
+
+    def get_user_positions(self, user_id: str) -> list:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute("SELECT * FROM positions WHERE user_id = ? AND quantity > 0", (user_id,)).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def get_trade_journal(self, user_id: str) -> list:
+        conn = self._get_conn()
+        try:
+            rows = conn.execute("SELECT * FROM trade_journal WHERE user_id = ? ORDER BY timestamp DESC", (user_id,)).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def execute_trade(self, user_id: str, ticker: str, action: str, quantity: int, execution_price: float, user_thesis: str, ai_feedback: str) -> dict:
+        conn = self._get_conn()
+        try:
+            conn.execute("BEGIN TRANSACTION")
+
+            # 1. Get user 
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user:
+                conn.execute("INSERT INTO users (id) VALUES (?)", (user_id,))
+                user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            
+            current_balance = user['virtual_balance']
+            trade_value = quantity * execution_price
+
+            if action.upper() == "BUY":
+                if current_balance < trade_value:
+                    conn.rollback()
+                    return {"success": False, "error": "Insufficient virtual balance"}
+                new_balance = current_balance - trade_value
+            else:
+                # Sell - check if enough quantity
+                pos = conn.execute("SELECT * FROM positions WHERE user_id = ? AND ticker = ?", (user_id, ticker)).fetchone()
+                if not pos or pos['quantity'] < quantity:
+                    conn.rollback()
+                    return {"success": False, "error": "Insufficient holding quantity"}
+                new_balance = current_balance + trade_value
+            
+            # 2. Update balance
+            conn.execute("UPDATE users SET virtual_balance = ? WHERE id = ?", (new_balance, user_id))
+
+            # 3. Update position
+            pos = conn.execute("SELECT * FROM positions WHERE user_id = ? AND ticker = ?", (user_id, ticker)).fetchone()
+            if action.upper() == "BUY":
+                if pos:
+                    new_qty = pos['quantity'] + quantity
+                    old_value = pos['quantity'] * pos['average_buy_price']
+                    new_avg = (old_value + trade_value) / new_qty
+                    conn.execute("UPDATE positions SET quantity = ?, average_buy_price = ?, updated_at = datetime('now') WHERE id = ?", (new_qty, new_avg, pos['id']))
+                else:
+                    conn.execute("INSERT INTO positions (user_id, ticker, quantity, average_buy_price) VALUES (?, ?, ?, ?)", (user_id, ticker, quantity, execution_price))
+            else:
+                new_qty = pos['quantity'] - quantity
+                if new_qty == 0:
+                    conn.execute("DELETE FROM positions WHERE id = ?", (pos['id'],))
+                else:
+                    conn.execute("UPDATE positions SET quantity = ?, updated_at = datetime('now') WHERE id = ?", (new_qty, pos['id']))
+            
+            # 4. Insert Journal entry
+            conn.execute("INSERT INTO trade_journal (user_id, ticker, action, execution_price, quantity, user_thesis, ai_feedback) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (user_id, ticker, action.upper(), execution_price, quantity, user_thesis, ai_feedback))
+            
+            conn.commit()
+            return {"success": True, "new_balance": new_balance}
+        except Exception as e:
+            conn.rollback()
+            return {"success": False, "error": str(e)}
+        finally:
+            conn.close()

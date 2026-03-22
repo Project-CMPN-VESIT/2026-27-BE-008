@@ -80,3 +80,36 @@ CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
 CREATE INDEX IF NOT EXISTS idx_name_variants_variant ON name_variants(variant);
 CREATE INDEX IF NOT EXISTS idx_raw_records_hash ON raw_records(content_hash);
 CREATE INDEX IF NOT EXISTS idx_entities_source ON entities(source_id);
+
+-- Paper Trading: Users
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    virtual_balance REAL DEFAULT 1000000.0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Paper Trading: Positions
+CREATE TABLE IF NOT EXISTS positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    quantity INTEGER DEFAULT 0,
+    average_buy_price REAL DEFAULT 0.0,
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, ticker)
+);
+
+-- Paper Trading: Trade Journal
+CREATE TABLE IF NOT EXISTS trade_journal (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    action TEXT NOT NULL,
+    execution_price REAL NOT NULL,
+    quantity INTEGER NOT NULL,
+    user_thesis TEXT,
+    ai_feedback TEXT,
+    timestamp TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
