@@ -5,6 +5,13 @@ import { createChart, IChartApi, LineSeries, ColorType } from "lightweight-chart
 import { Activity, BookOpen, Briefcase, DollarSign, TrendingUp, Brain } from "lucide-react";
 import TradingModal from "@/components/TradingModal";
 
+type SearchSuggestion = {
+  marketId: string;
+  exchange: string;
+  symbol: string;
+  companyName: string;
+};
+
 type Position = {
   id: number;
   ticker: string;
@@ -35,16 +42,59 @@ export default function PaperTradingPage() {
   const chartRef = useRef<IChartApi | null>(null);
   
   const [data, setData] = useState<PortfolioData | null>(null);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<"holdings" | "journal">("holdings");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tradeForm, setTradeForm] = useState({ ticker: "RELIANCE", action: "BUY" as "BUY"|"SELL", quantity: 10 });
   const [isClient, setIsClient] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (tradeForm.ticker.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/tv-search?q=${encodeURIComponent(tradeForm.ticker.trim())}`);
+        const data = await response.json();
+        if (!isMounted) return;
+        if (response.ok && data.ok) {
+          const items = data.data as SearchSuggestion[];
+          // simple dedupe by symbol
+          const deduped = Array.from(new Map(items.map(i => [i.symbol, i])).values());
+          setSuggestions(deduped);
+        }
+      } catch {}
+    }, 250);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [tradeForm.ticker]);
+
+  const fetchLivePrices = async (positions: Position[]) => {
+    const newPrices: Record<string, number> = {};
+    for (const p of positions) {
+      try {
+        const res = await fetch(`/api/live-quote?symbol=NSE_${p.ticker}`);
+        const json = await res.json();
+        if (json.ok && json.data.ltp) newPrices[p.ticker] = json.data.ltp;
+      } catch (e) {}
+    }
+    setLivePrices(prev => ({ ...prev, ...newPrices }));
+  };
   
   const loadPortfolio = async () => {
     try {
       const res = await fetch("/api/paper-trading/portfolio?userId=test_user");
       const json = await res.json();
-      if (json.ok) setData(json.data);
+      if (json.ok) {
+        setData(json.data);
+        fetchLivePrices(json.data.positions);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -53,6 +103,8 @@ export default function PaperTradingPage() {
   useEffect(() => {
     setIsClient(true);
     loadPortfolio();
+    const interval = setInterval(loadPortfolio, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -83,8 +135,8 @@ export default function PaperTradingPage() {
     }
     
     // Set actual current value as last point
-    const holdingsValue = data.positions.reduce((acc, p) => acc + (p.quantity * p.average_buy_price), 0);
-    mockData[mockData.length - 1].value = data.balance + holdingsValue;
+    const holdingsValueCalc = data.positions.reduce((acc, p) => acc + (p.quantity * (livePrices[p.ticker] || p.average_buy_price)), 0);
+    mockData[mockData.length - 1].value = data.balance + holdingsValueCalc;
     
     lineSeries.setData(mockData);
     chart.timeScale().fitContent();
@@ -100,7 +152,7 @@ export default function PaperTradingPage() {
       chart.remove();
       chartRef.current = null;
     };
-  }, [data]);
+  }, [data, livePrices]);
 
   const handleExecuteTrade = async (thesis: string, feedback: string) => {
     try {
@@ -130,7 +182,7 @@ export default function PaperTradingPage() {
 
   if (!isClient || !data) return <div className="p-8 text-white min-h-screen bg-[#080c14]">Loading Crucible Dashboard...</div>;
 
-  const holdingsValue = data.positions.reduce((acc, p) => acc + (p.quantity * p.average_buy_price), 0);
+  const holdingsValue = data.positions.reduce((acc, p) => acc + (p.quantity * (livePrices[p.ticker] || p.average_buy_price)), 0);
   const totalValue = data.balance + holdingsValue;
   const pnl = totalValue - 1000000;
 
@@ -174,13 +226,36 @@ export default function PaperTradingPage() {
           <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5 flex flex-col justify-center relative">
             <h2 className="text-base font-semibold text-white mb-4">Execute Trade</h2>
             <div className="space-y-4">
-              <div>
+              <div className="relative">
                 <label className="text-sm text-slate-400 block mb-1">Ticker</label>
                 <input 
                   value={tradeForm.ticker} 
-                  onChange={e => setTradeForm({...tradeForm, ticker: e.target.value.toUpperCase()})}
+                  onChange={e => {
+                    setTradeForm({...tradeForm, ticker: e.target.value.toUpperCase()});
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 px-3 text-white outline-none focus:border-blue-500" 
                 />
+                
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 top-full mt-1 z-30 w-full rounded-lg border border-slate-700 bg-slate-900 shadow-xl max-h-60 overflow-y-auto">
+                    {suggestions.map((item) => (
+                      <button
+                        key={item.marketId}
+                        type="button"
+                        onClick={() => {
+                          setTradeForm({...tradeForm, ticker: item.symbol});
+                          setShowSuggestions(false);
+                        }}
+                        className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-800 border-b border-slate-800/50 last:border-0"
+                      >
+                        <div className="text-sm font-bold text-slate-200">{item.symbol}</div>
+                        <div className="text-xs text-slate-400 truncate w-full">{item.companyName}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -251,7 +326,16 @@ export default function PaperTradingPage() {
                         <td className="px-6 py-4 font-medium text-white">{p.ticker}</td>
                         <td className="px-6 py-4">{p.quantity}</td>
                         <td className="px-6 py-4">₹{p.average_buy_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="px-6 py-4">₹{(p.quantity * p.average_buy_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span>₹{(p.quantity * (livePrices[p.ticker] || p.average_buy_price)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            <span className={`text-xs ${
+                              (livePrices[p.ticker] || p.average_buy_price) >= p.average_buy_price ? 'text-emerald-500' : 'text-rose-500'
+                            }`}>
+                              @ ₹{(livePrices[p.ticker] || p.average_buy_price).toLocaleString(undefined, { maximumFractionDigits: 2 })} {livePrices[p.ticker] ? '' : '(Offline)'}
+                            </span>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

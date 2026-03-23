@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { X, Brain, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Brain, AlertTriangle, Loader2 } from "lucide-react";
 
 type TradingModalProps = {
   isOpen: boolean;
@@ -18,6 +18,22 @@ export default function TradingModal({
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(false);
   const [evaluated, setEvaluated] = useState(false);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLivePrice(null);
+    const fetchPrice = async () => {
+      try {
+        const res = await fetch(`/api/live-quote?symbol=NSE_${ticker}`);
+        const data = await res.json();
+        if (data.ok && data.data.ltp) setLivePrice(data.data.ltp);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchPrice();
+  }, [isOpen, ticker]);
 
   if (!isOpen) return null;
 
@@ -68,7 +84,13 @@ export default function TradingModal({
           <div className="mt-1 text-xl font-semibold">
             <span className={action === "BUY" ? "text-emerald-400" : "text-rose-400"}>{action}</span> {quantity} {ticker}
           </div>
-          <div className="mt-1 text-sm text-slate-400">Est. Request Sent Immediately</div>
+          <div className="mt-1 text-sm text-slate-400 flex items-center gap-2">
+            {livePrice ? (
+              <>Est. Trade Value: <span className="font-semibold text-slate-200">₹{(quantity * livePrice).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span> (@ ₹{livePrice.toLocaleString()}/sh)</>
+            ) : (
+              <><Loader2 className="h-3 w-3 animate-spin"/> Fetching live market quote...</>
+            )}
+          </div>
         </div>
 
         {!evaluated ? (
