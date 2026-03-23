@@ -292,11 +292,18 @@ export default function AdvancedChartPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
 
     const fetchQuote = async () => {
+      if (inFlight) {
+        return;
+      }
+
+      inFlight = true;
+
       try {
         const response = await fetch(
-          `/api/tv-quote?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}`,
+          `/api/tv-quote?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&_ts=${Date.now()}`,
           { cache: "no-store" }
         );
         const json = await response.json();
@@ -310,21 +317,38 @@ export default function AdvancedChartPage() {
             return prev;
           }
 
+          const liveQuote = json.data.quote ?? prev.quote;
+          const nextCandles = [...prev.candles];
+          const lastIndex = nextCandles.length - 1;
+
+          if (lastIndex >= 0 && typeof liveQuote?.ltp === "number" && Number.isFinite(liveQuote.ltp)) {
+            const last = nextCandles[lastIndex];
+            nextCandles[lastIndex] = {
+              ...last,
+              close: liveQuote.ltp,
+              high: Math.max(last.high, liveQuote.ltp),
+              low: Math.min(last.low, liveQuote.ltp),
+            };
+          }
+
           return {
             ...prev,
             exchange: json.data.exchange ?? prev.exchange,
             marketId: json.data.marketId ?? prev.marketId,
-            quote: json.data.quote ?? prev.quote,
+            quote: liveQuote,
+            candles: nextCandles,
             updatedAt: json.data.updatedAt ?? prev.updatedAt,
           };
         });
       } catch {
         // Keep existing values if quote polling fails.
+      } finally {
+        inFlight = false;
       }
     };
 
     fetchQuote();
-    const timer = setInterval(fetchQuote, 3000);
+    const timer = setInterval(fetchQuote, 1000);
 
     return () => {
       cancelled = true;

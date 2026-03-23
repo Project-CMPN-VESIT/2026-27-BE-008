@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCandleHistory, getLiveQuote, resolveMarket } from "@/lib/tradingview";
 import { getScreenerSnapshot } from "@/lib/screener";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 const allowedTimeframes = new Set(["1", "3", "5", "15", "30", "60", "120", "240", "D", "W", "M"]);
 
 const toNumber = (value: string | null, fallback: number) => {
@@ -63,7 +72,10 @@ export async function GET(request: NextRequest) {
           ok: false,
           error: "No matching market found",
         },
-        { status: 404 }
+        {
+          status: 404,
+          headers: noStoreHeaders,
+        }
       );
     }
 
@@ -86,54 +98,60 @@ export async function GET(request: NextRequest) {
 
     const closes = candles.map((item) => item.close);
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        symbol: resolved.symbol,
-        marketId: resolved.marketId,
-        exchange: resolved.exchange,
-        companyName: resolved.companyName,
-        timeframe,
-        quote,
-        candles,
-        technicals: {
-          sma20: getSma(closes, 20),
-          sma50: getSma(closes, 50),
-          rsi14: getRsi(closes, 14),
+    return NextResponse.json(
+      {
+        ok: true,
+        data: {
+          symbol: resolved.symbol,
+          marketId: resolved.marketId,
+          exchange: resolved.exchange,
+          companyName: resolved.companyName,
+          timeframe,
+          quote,
+          candles,
+          technicals: {
+            sma20: getSma(closes, 20),
+            sma50: getSma(closes, 50),
+            rsi14: getRsi(closes, 14),
+          },
+          fundamentals: screener?.fundamentals ?? {
+            marketCap: null,
+            peRatio: null,
+            pbRatio: null,
+            roe: null,
+            eps: null,
+            dividendYield: null,
+            bookValue: null,
+            faceValue: null,
+            debtToEquity: null,
+          },
+          financials: screener?.financials ?? {
+            revenueTtm: null,
+            netProfitTtm: null,
+            operatingProfitTtm: null,
+            totalAssets: null,
+            totalLiabilities: null,
+          },
+          note:
+            quoteResult.status === "rejected" || candlesResult.status === "rejected" || screenerResult.status === "rejected"
+              ? "Some feeds are delayed, serving available market data"
+              : undefined,
+          updatedAt: new Date().toISOString(),
+          source: "tradingview-api + screener.in",
         },
-        fundamentals: screener?.fundamentals ?? {
-          marketCap: null,
-          peRatio: null,
-          pbRatio: null,
-          roe: null,
-          eps: null,
-          dividendYield: null,
-          bookValue: null,
-          faceValue: null,
-          debtToEquity: null,
-        },
-        financials: screener?.financials ?? {
-          revenueTtm: null,
-          netProfitTtm: null,
-          operatingProfitTtm: null,
-          totalAssets: null,
-          totalLiabilities: null,
-        },
-        note:
-          quoteResult.status === "rejected" || candlesResult.status === "rejected" || screenerResult.status === "rejected"
-            ? "Some feeds are delayed, serving available market data"
-            : undefined,
-        updatedAt: new Date().toISOString(),
-        source: "tradingview-api + screener.in",
       },
-    });
+      { headers: noStoreHeaders }
+    );
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
         error: error instanceof Error ? error.message : "TradingView chart request failed",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: noStoreHeaders,
+      }
     );
   }
 }

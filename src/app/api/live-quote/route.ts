@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLiveQuote, resolveMarket } from "@/lib/tradingview";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 const fallbackPrices: Record<string, number> = {
   NSE_ADANIENT: 1928.9,
   NSE_RELIANCE: 1414.4,
@@ -28,7 +37,10 @@ export async function GET(request: NextRequest) {
             updatedAt: new Date().toISOString(),
           },
         },
-        { status: 200 }
+        {
+          status: 200,
+          headers: noStoreHeaders,
+        }
       );
     }
 
@@ -47,7 +59,10 @@ export async function GET(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: noStoreHeaders,
+      }
     );
   } catch {
     return NextResponse.json(
@@ -61,7 +76,10 @@ export async function GET(request: NextRequest) {
           updatedAt: new Date().toISOString(),
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: noStoreHeaders,
+      }
     );
   }
 }
