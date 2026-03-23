@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { getLiveQuote } from "@/lib/tradingview";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 const NSE_BASE_URL = "https://www.nseindia.com";
 
 const nseHeaders = {
@@ -76,16 +85,6 @@ export async function GET() {
           (row) => row?.index === item.nseKey || row?.indexSymbol === item.nseKey
         );
 
-        if (nseItem && typeof nseItem.last === "number") {
-          return {
-            label: item.label,
-            marketId: item.marketId,
-            ltp: nseItem.last,
-            change: typeof nseItem.variation === "number" ? nseItem.variation : 0,
-            pChange: typeof nseItem.percentChange === "number" ? nseItem.percentChange : 0,
-          };
-        }
-
         try {
           const quote = await getLiveQuote(item.marketId);
           return {
@@ -96,6 +95,16 @@ export async function GET() {
             pChange: quote.pChange,
           };
         } catch {
+          if (nseItem && typeof nseItem.last === "number") {
+            return {
+              label: item.label,
+              marketId: item.marketId,
+              ltp: nseItem.last,
+              change: typeof nseItem.variation === "number" ? nseItem.variation : 0,
+              pChange: typeof nseItem.percentChange === "number" ? nseItem.percentChange : 0,
+            };
+          }
+
           return {
             label: item.label,
             marketId: item.marketId,
@@ -138,21 +147,27 @@ export async function GET() {
         marketId: `NSE:${item.symbol}`,
       }));
 
-    return NextResponse.json({
-      ok: true,
-      data: {
-        indices: indexData,
-        mostTraded,
-        updatedAt: new Date().toISOString(),
+    return NextResponse.json(
+      {
+        ok: true,
+        data: {
+          indices: indexData,
+          mostTraded,
+          updatedAt: new Date().toISOString(),
+        },
       },
-    });
+      { headers: noStoreHeaders }
+    );
   } catch {
     return NextResponse.json(
       {
         ok: false,
         error: "Failed to load market overview",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: noStoreHeaders,
+      }
     );
   }
 }

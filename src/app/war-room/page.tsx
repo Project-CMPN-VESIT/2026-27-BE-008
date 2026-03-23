@@ -110,10 +110,17 @@ export default function WarRoomPage() {
 
   useEffect(() => {
     let alive = true;
+    let inFlight = false;
 
     const loadQuote = async () => {
+      if (inFlight) {
+        return;
+      }
+
+      inFlight = true;
+
       try {
-        const response = await fetch(`/api/live-quote?symbol=${activeSymbol}&company=${encodeURIComponent(company)}`, {
+        const response = await fetch(`/api/live-quote?symbol=${activeSymbol}&company=${encodeURIComponent(company)}&_ts=${Date.now()}`, {
           cache: "no-store",
         });
         const data = await response.json();
@@ -129,11 +136,13 @@ export default function WarRoomPage() {
         setQuoteError("");
       } catch {
         if (alive) setQuoteError("Unable to connect to quote service");
+      } finally {
+        inFlight = false;
       }
     };
 
     loadQuote();
-    const timer = setInterval(loadQuote, 20000);
+    const timer = setInterval(loadQuote, 1000);
 
     return () => {
       alive = false;

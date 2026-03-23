@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -76,6 +76,13 @@ type MarketOverviewResponse = {
   updatedAt: string;
 };
 
+const liveIndexTargets = [
+  { label: "NIFTY", marketId: "NSE:NIFTY" },
+  { label: "SENSEX", marketId: "BSE:SENSEX" },
+  { label: "BANKNIFTY", marketId: "NSE:BANKNIFTY" },
+  { label: "MIDCPNIFTY", marketId: "NSE:MIDCPNIFTY" },
+];
+
 const features = [
   { href: "/war-room", icon: Swords, title: "War Room", desc: "CYRO AI research with source-backed analysis", color: "blue" },
   { href: "/regulatory", icon: Shield, title: "SEBI Shield", desc: "Automated regulatory integrity checks", color: "emerald" },
@@ -125,6 +132,11 @@ const formatPct = (value: number | undefined) => {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const overviewRef = useRef<MarketOverviewResponse | null>(null);
+  const livePollCursorRef = useRef(0);
+  const livePollInFlightRef = useRef(false);
+  const liveMostTradedCursorRef = useRef(0);
+  const liveMostTradedInFlightRef = useRef(false);
 
   const [searchInput, setSearchInput] = useState("");
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
@@ -134,11 +146,22 @@ export default function DashboardPage() {
   const [overviewError, setOverviewError] = useState("");
 
   useEffect(() => {
+    overviewRef.current = overview;
+  }, [overview]);
+
+  useEffect(() => {
     let isMounted = true;
+    let inFlight = false;
 
     const loadOverview = async () => {
+      if (inFlight) {
+        return;
+      }
+
+      inFlight = true;
+
       try {
-        const response = await fetch("/api/market-overview", { cache: "no-store" });
+        const response = await fetch(`/api/market-overview?_ts=${Date.now()}`, { cache: "no-store" });
         const data = await response.json();
 
         if (!isMounted) return;
@@ -154,11 +177,152 @@ export default function DashboardPage() {
         if (isMounted) {
           setOverviewError("Unable to connect to market feed");
         }
+      } finally {
+        inFlight = false;
       }
     };
 
     loadOverview();
-    const timer = setInterval(loadOverview, 25000);
+    const timer = setInterval(loadOverview, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLiveIndexTick = async () => {
+      if (livePollInFlightRef.current) {
+        return;
+      }
+
+      livePollInFlightRef.current = true;
+      const target = liveIndexTargets[livePollCursorRef.current % liveIndexTargets.length];
+      livePollCursorRef.current += 1;
+
+      try {
+        const response = await fetch(
+          `/api/tv-quote?marketId=${encodeURIComponent(target.marketId)}&_ts=${Date.now()}`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!response.ok || !data.ok) {
+          return;
+        }
+
+        const liveRow: LiveIndex = {
+          label: target.label,
+          marketId: target.marketId,
+          ltp: typeof data.data?.quote?.ltp === "number" ? data.data.quote.ltp : 0,
+          change: typeof data.data?.quote?.change === "number" ? data.data.quote.change : 0,
+          pChange: typeof data.data?.quote?.pChange === "number" ? data.data.quote.pChange : 0,
+        };
+
+        setOverview((prev) => {
+          if (!prev) {
+            return {
+              indices: [liveRow],
+              mostTraded: [],
+              updatedAt: new Date().toISOString(),
+            };
+          }
+
+          const mergedIndices = prev.indices.map((item) => (item.marketId === liveRow.marketId ? liveRow : item));
+          const hasCurrent = mergedIndices.some((item) => item.marketId === liveRow.marketId);
+
+          return {
+            ...prev,
+            indices: hasCurrent ? mergedIndices : [...mergedIndices, liveRow],
+            updatedAt: new Date().toISOString(),
+          };
+        });
+      } catch {
+        // Keep previous ticks if one poll fails.
+      } finally {
+        livePollInFlightRef.current = false;
+      }
+    };
+
+    loadLiveIndexTick();
+    const timer = setInterval(loadLiveIndexTick, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLiveMostTradedTick = async () => {
+      if (liveMostTradedInFlightRef.current) {
+        return;
+      }
+
+      const currentMostTraded = overviewRef.current?.mostTraded ?? [];
+      if (!currentMostTraded.length) {
+        return;
+      }
+
+      liveMostTradedInFlightRef.current = true;
+      const target = currentMostTraded[liveMostTradedCursorRef.current % currentMostTraded.length];
+      liveMostTradedCursorRef.current += 1;
+
+      try {
+        const response = await fetch(
+          `/api/tv-quote?marketId=${encodeURIComponent(target.marketId)}&_ts=${Date.now()}`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+
+        if (!isMounted || !response.ok || !data.ok) {
+          return;
+        }
+
+        const nextLtp = typeof data.data?.quote?.ltp === "number" ? data.data.quote.ltp : target.ltp;
+        const nextChange = typeof data.data?.quote?.change === "number" ? data.data.quote.change : target.change;
+        const nextPChange = typeof data.data?.quote?.pChange === "number" ? data.data.quote.pChange : target.pChange;
+
+        setOverview((prev) => {
+          if (!prev) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            mostTraded: prev.mostTraded.map((row) => {
+              if (row.marketId !== target.marketId) {
+                return row;
+              }
+
+              return {
+                ...row,
+                ltp: nextLtp,
+                change: nextChange,
+                pChange: nextPChange,
+              };
+            }),
+            updatedAt: new Date().toISOString(),
+          };
+        });
+      } catch {
+        // Keep previous values if one poll fails.
+      } finally {
+        liveMostTradedInFlightRef.current = false;
+      }
+    };
+
+    loadLiveMostTradedTick();
+    const timer = setInterval(loadLiveMostTradedTick, 1000);
 
     return () => {
       isMounted = false;

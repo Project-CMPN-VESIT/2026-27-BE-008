@@ -87,7 +87,7 @@ export type TvCandle = {
 
 const allowedExchanges = new Set(["NSE", "BSE"]);
 
-const QUOTE_CACHE_TTL_MS = 4000;
+const QUOTE_CACHE_TTL_MS = 900;
 const CANDLE_CACHE_TTL_MS = 45000;
 
 type CachedEntry<T> = {
