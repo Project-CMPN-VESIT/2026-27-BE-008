@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createChart, IChartApi, LineSeries, ColorType } from "lightweight-charts";
+import { createChart, IChartApi, CandlestickSeries, ColorType } from "lightweight-charts";
 import { Activity, BookOpen, Briefcase, DollarSign, TrendingUp, Brain } from "lucide-react";
 import TradingModal from "@/components/TradingModal";
 
@@ -49,6 +49,7 @@ export default function PaperTradingPage() {
   const [isClient, setIsClient] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [chartRange, setChartRange] = useState("1M");
 
   useEffect(() => {
     let isMounted = true;
@@ -122,23 +123,56 @@ export default function PaperTradingPage() {
       height: 300,
     });
     
-    const lineSeries = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 });
+    const candleSeries = chart.addSeries(CandlestickSeries, { 
+      upColor: '#10b981', 
+      downColor: '#f43f5e', 
+      borderVisible: false, 
+      wickUpColor: '#10b981', 
+      wickDownColor: '#f43f5e',
+    });
     
-    // Mock 30-day data for the chart 
+    // Mock data for the chart 
+    const rangeMap: Record<string, number> = {
+      "1D": 1,
+      "1W": 7,
+      "1M": 30,
+      "3M": 90,
+      "1Y": 365,
+      "5Y": 1825,
+      "ALL": 2000,
+    };
+    const days = rangeMap[chartRange] || 30;
     const initialBalance = 1000000;
     const mockData = [];
     const now = new Date();
-    for (let i = 30; i >= 0; i--) {
+    
+    const pointsCount = days === 1 ? 1 : days; 
+    let lastClose = initialBalance;
+    
+    for (let i = pointsCount; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      mockData.push({ time: d.toISOString().split("T")[0], value: initialBalance });
+      
+      const volatility = lastClose * 0.003;
+      const open = lastClose;
+      const close = i === 0 ? initialBalance : open + (Math.random() - 0.45) * volatility;
+      const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+      const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+      
+      mockData.push({ time: d.toISOString().split("T")[0], open, high, low, close });
+      lastClose = close;
     }
     
     // Set actual current value as last point
     const holdingsValueCalc = data.positions.reduce((acc, p) => acc + (p.quantity * (livePrices[p.ticker] || p.average_buy_price)), 0);
-    mockData[mockData.length - 1].value = data.balance + holdingsValueCalc;
+    const currentTotal = data.balance + holdingsValueCalc;
+    const lastMock = mockData[mockData.length - 1];
     
-    lineSeries.setData(mockData);
+    lastMock.close = currentTotal;
+    if (currentTotal > lastMock.high) lastMock.high = currentTotal;
+    if (currentTotal < lastMock.low) lastMock.low = currentTotal;
+    
+    candleSeries.setData(mockData);
     chart.timeScale().fitContent();
     chartRef.current = chart;
 
@@ -152,7 +186,7 @@ export default function PaperTradingPage() {
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, livePrices]);
+  }, [data, livePrices, chartRange]);
 
   const handleExecuteTrade = async (thesis: string, feedback: string) => {
     try {
@@ -219,7 +253,20 @@ export default function PaperTradingPage() {
         {/* Middle: Chart & Trade Entry */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/30 p-5">
-            <h2 className="text-base font-semibold text-white mb-4">30-Day Value Curve</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-white">Portfolio Value Curve</h2>
+              <div className="flex gap-1 bg-slate-800/50 p-1 rounded-lg border border-slate-700">
+                {["1D", "1W", "1M", "3M", "1Y", "5Y", "ALL"].map(r => (
+                  <button 
+                    key={r}
+                    onClick={() => setChartRange(r)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${chartRange === r ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div ref={chartContainerRef} className="w-full relative" />
           </div>
           
