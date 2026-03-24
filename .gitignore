@@ -44,4 +44,5 @@ next-env.d.ts
 scrapper/**/__pycache__/
 scrapper/**/*.pyc
 scrapper/logs/
-scrapper/data/*.db
+# Include sanctions.db for team access, exclude others if needed
+!scrapper/data/sanctions.db
