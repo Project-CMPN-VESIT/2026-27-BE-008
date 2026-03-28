@@ -40,6 +40,7 @@ type CandleHover = {
   high: number;
   low: number;
   close: number;
+  xPosition: number | null;
 };
 
 type TvChartResponse = {
@@ -73,6 +74,42 @@ type TvChartResponse = {
     totalAssets: number | null;
     totalLiabilities: number | null;
   };
+  patternIntelligence: {
+    patterns: Array<{
+      id: string;
+      name: string;
+      category: "breakout" | "reversal" | "support-resistance" | "divergence";
+      direction: "bullish" | "bearish" | "neutral";
+      detectedAt: number;
+      detectedAtLabel: string;
+      confidence: number;
+      entry: number;
+      target: number | null;
+      stop: number | null;
+      description: string;
+      successRate: number | null;
+      sampleSize: number;
+      avgMovePct: number | null;
+    }>;
+    supportLevels: number[];
+    resistanceLevels: number[];
+    trendBias: "bullish" | "bearish" | "sideways";
+    note: string;
+  };
+  source: string;
+  updatedAt: string;
+};
+
+type CompanyProfile = {
+  companyName: string;
+  summary: string | null;
+  founded: string | null;
+  founder: string | null;
+  ceoMd: string | null;
+  headquarters: string | null;
+  industry: string | null;
+  website: string | null;
+  wikipediaUrl: string | null;
   source: string;
   updatedAt: string;
 };
@@ -119,14 +156,29 @@ const dedupeSuggestions = (items: SearchMatch[]) => {
   return Array.from(deduped.values());
 };
 
-const timeframeOptions = [
+const stockRangeOptions = [
+  { value: "1D", label: "1D", timeframe: "5", range: 78 },
+  { value: "1W", label: "1W", timeframe: "30", range: 65 },
+  { value: "1M", label: "1M", timeframe: "D", range: 30 },
+  { value: "3M", label: "3M", timeframe: "D", range: 90 },
+  { value: "6M", label: "6M", timeframe: "D", range: 180 },
+  { value: "1Y", label: "1Y", timeframe: "D", range: 365 },
+  { value: "3Y", label: "3Y", timeframe: "W", range: 156 },
+  { value: "5Y", label: "5Y", timeframe: "W", range: 260 },
+];
+
+const candleTimeframeOptions = [
+  { value: "AUTO", label: "5m" },
   { value: "1", label: "1m" },
-  { value: "5", label: "5m" },
+  { value: "3", label: "3m" },
   { value: "15", label: "15m" },
+  { value: "30", label: "30m" },
   { value: "60", label: "1H" },
+  { value: "120", label: "2H" },
   { value: "240", label: "4H" },
   { value: "D", label: "1D" },
   { value: "W", label: "1W" },
+  { value: "M", label: "1M" },
 ];
 
 const formatNumber = (value: number | undefined | null) => {
@@ -142,6 +194,55 @@ const formatCompact = (value: number | undefined | null) => {
   }).format(value);
 };
 
+const formatHoverTimeLabel = (unix: number, timeframe: string) => {
+  const start = new Date(unix * 1000);
+  const dateTimeZone = "Asia/Kolkata";
+
+  const intradayMinutes = Number(timeframe);
+  if (Number.isFinite(intradayMinutes) && intradayMinutes > 0) {
+    const end = new Date(start.getTime() + intradayMinutes * 60 * 1000);
+    const dateFmt = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", timeZone: dateTimeZone });
+    const timeFmt = new Intl.DateTimeFormat("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: dateTimeZone,
+    });
+    return `${dateFmt.format(start)} ${timeFmt.format(start)} - ${timeFmt.format(end)}`;
+  }
+
+  if (timeframe === "W") {
+    const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const rangeFmt = new Intl.DateTimeFormat("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: dateTimeZone,
+    });
+    return `${rangeFmt.format(start)} - ${rangeFmt.format(end)}`;
+  }
+
+  if (timeframe === "M") {
+    return new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: dateTimeZone }).format(start);
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: dateTimeZone,
+  }).format(start);
+};
+
+const toIstDateKey = (unix: number) => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(unix * 1000));
+};
+
 export default function AdvancedChartPage() {
   const searchParams = useSearchParams();
   const initialSymbol = searchParams.get("symbol") ?? "RELIANCE";
@@ -152,17 +253,57 @@ export default function AdvancedChartPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [symbol, setSymbol] = useState(initialSymbol.toUpperCase());
   const [marketId, setMarketId] = useState(initialMarketId.toUpperCase());
-  const [timeframe, setTimeframe] = useState("D");
-  const [chartMode, setChartMode] = useState<ChartMode>("candles");
+  const [selectedRange, setSelectedRange] = useState("1D");
+  const [chartMode, setChartMode] = useState<ChartMode>("line");
+  const [selectedCandleTimeframe, setSelectedCandleTimeframe] = useState("AUTO");
+  const activeInstrumentSymbol = useMemo(() => {
+    const fromMarket = marketId.split(":")[1]?.trim().toUpperCase();
+    return fromMarket || symbol;
+  }, [marketId, symbol]);
+  const activeRange = useMemo(
+    () => stockRangeOptions.find((option) => option.value === selectedRange) ?? stockRangeOptions[2],
+    [selectedRange]
+  );
+  const requestedRange = useMemo(() => 10000, []);
+  const chartRequestTimeframe = chartMode === "candles"
+    ? (selectedCandleTimeframe === "AUTO" ? "5" : selectedCandleTimeframe)
+    : activeRange.timeframe;
+
   const [refreshTick, setRefreshTick] = useState(0);
   const [chartData, setChartData] = useState<TvChartResponse | null>(null);
   const [exchangeOptions, setExchangeOptions] = useState<ExchangeOption[]>([]);
   const [hoveredCandle, setHoveredCandle] = useState<CandleHover | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+  const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const userAdjustedZoomRef = useRef(false);
+  const preservedLogicalRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const lastRenderContextRef = useRef("");
+  const suppressVisibleRangeEventRef = useRef(false);
+  const userZoomIntentUntilRef = useRef(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const markZoomIntent = () => {
+      userZoomIntentUntilRef.current = Date.now() + 1500;
+    };
+
+    container.addEventListener("wheel", markZoomIntent, { passive: true });
+    container.addEventListener("pointerdown", markZoomIntent, { passive: true });
+
+    return () => {
+      container.removeEventListener("wheel", markZoomIntent);
+      container.removeEventListener("pointerdown", markZoomIntent);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -257,7 +398,7 @@ export default function AdvancedChartPage() {
       setLoading(true);
       try {
         const response = await fetch(
-          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&range=180`,
+          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${chartRequestTimeframe}&range=${requestedRange}`,
           { cache: "no-store" }
         );
         const json = await response.json();
@@ -288,7 +429,59 @@ export default function AdvancedChartPage() {
     return () => {
       cancelled = true;
     };
-  }, [marketId, symbol, timeframe, refreshTick]);
+  }, [marketId, symbol, activeRange, chartRequestTimeframe, requestedRange, refreshTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const fetchCompanyProfile = async () => {
+      if (!activeInstrumentSymbol) {
+        return;
+      }
+
+      setCompanyProfileLoading(true);
+
+      try {
+        const normalizedCompanyName =
+          chartData?.companyName && !chartData.companyName.includes(":")
+            ? chartData.companyName
+            : activeInstrumentSymbol;
+
+        const response = await fetch(
+          `/api/company-profile?symbol=${encodeURIComponent(activeInstrumentSymbol)}&companyName=${encodeURIComponent(normalizedCompanyName)}`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        const json = await response.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (response.ok && json.ok) {
+          setCompanyProfile(json.data as CompanyProfile);
+        } else {
+          setCompanyProfile(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setCompanyProfile(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setCompanyProfileLoading(false);
+        }
+      }
+    };
+
+    setCompanyProfile(null);
+    fetchCompanyProfile();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [activeInstrumentSymbol, chartData?.companyName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,25 +511,13 @@ export default function AdvancedChartPage() {
           }
 
           const liveQuote = json.data.quote ?? prev.quote;
-          const nextCandles = [...prev.candles];
-          const lastIndex = nextCandles.length - 1;
-
-          if (lastIndex >= 0 && typeof liveQuote?.ltp === "number" && Number.isFinite(liveQuote.ltp)) {
-            const last = nextCandles[lastIndex];
-            nextCandles[lastIndex] = {
-              ...last,
-              close: liveQuote.ltp,
-              high: Math.max(last.high, liveQuote.ltp),
-              low: Math.min(last.low, liveQuote.ltp),
-            };
-          }
 
           return {
             ...prev,
             exchange: json.data.exchange ?? prev.exchange,
             marketId: json.data.marketId ?? prev.marketId,
             quote: liveQuote,
-            candles: nextCandles,
+            candles: prev.candles,
             updatedAt: json.data.updatedAt ?? prev.updatedAt,
           };
         });
@@ -356,16 +537,41 @@ export default function AdvancedChartPage() {
     };
   }, [marketId, symbol]);
 
-  const candleSeries = chartData?.candles;
+  const candleSeries = useMemo(() => {
+    if (!chartData?.candles?.length) {
+      return [];
+    }
+
+    return [...chartData.candles]
+      .sort((a, b) => a.time - b.time)
+      .filter((candle, index, arr) => index === 0 || candle.time !== arr[index - 1].time);
+  }, [chartData?.candles]);
+  const displayTimeframe = chartData?.timeframe ?? activeRange.timeframe;
+  const renderContextKey = `${marketId}|${symbol}|${chartMode}|${chartRequestTimeframe}|${activeRange.range}`;
 
   useEffect(() => {
-    if (!containerRef.current || !candleSeries?.length) {
+    if (!containerRef.current || !candleSeries.length) {
       return;
     }
 
     if (chartRef.current) {
+      if (userAdjustedZoomRef.current) {
+        const existingRange = chartRef.current.timeScale().getVisibleLogicalRange();
+        if (existingRange) {
+          preservedLogicalRangeRef.current = {
+            from: existingRange.from,
+            to: existingRange.to,
+          };
+        }
+      }
       chartRef.current.remove();
       chartRef.current = null;
+    }
+
+    const isContextSwitch = lastRenderContextRef.current !== renderContextKey;
+    if (isContextSwitch) {
+      userAdjustedZoomRef.current = false;
+      preservedLogicalRangeRef.current = null;
     }
 
     const chart = createChart(containerRef.current, {
@@ -375,19 +581,68 @@ export default function AdvancedChartPage() {
         textColor: "#475569",
       },
       grid: {
-        vertLines: { color: "#e2e8f0" },
-        horzLines: { color: "#e2e8f0" },
+        vertLines: { color: "transparent" },
+        horzLines: { color: "transparent" },
       },
       rightPriceScale: {
         borderColor: "#cbd5e1",
       },
       timeScale: {
         borderColor: "#cbd5e1",
+        visible: false,
       },
       crosshair: {
         mode: 1,
+        vertLine: {
+          labelVisible: false,
+        },
       },
     });
+
+    const handleVisibleRangeChange = () => {
+      if (suppressVisibleRangeEventRef.current) {
+        return;
+      }
+      if (Date.now() > userZoomIntentUntilRef.current) {
+        return;
+      }
+      const range = chart.timeScale().getVisibleLogicalRange();
+      if (!range) {
+        return;
+      }
+      userAdjustedZoomRef.current = true;
+      preservedLogicalRangeRef.current = {
+        from: range.from,
+        to: range.to,
+      };
+    };
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+
+    const applyDefaultVisibleWindow = () => {
+      const totalBars = candleSeries.length;
+      const intradayMinutes = Number(chartRequestTimeframe);
+
+      // For 1D intraday mode, show only the latest trading session candles.
+      if (selectedRange === "1D" && Number.isFinite(intradayMinutes) && intradayMinutes > 0) {
+        const latest = candleSeries[totalBars - 1];
+        if (latest) {
+          const latestDayKey = toIstDateKey(latest.time);
+          const fromIndex = candleSeries.findIndex((bar) => toIstDateKey(bar.time) === latestDayKey);
+
+          if (fromIndex >= 0) {
+            const to = Math.max(0, totalBars - 1);
+            chart.timeScale().setVisibleLogicalRange({ from: fromIndex, to });
+            return;
+          }
+        }
+      }
+
+      const visibleBars = Math.min(activeRange.range, totalBars);
+      const to = Math.max(0, totalBars - 1);
+      const from = Math.max(0, to - visibleBars + 1);
+      chart.timeScale().setVisibleLogicalRange({ from, to });
+    };
 
     if (chartMode === "candles") {
       const series = chart.addSeries(CandlestickSeries, {
@@ -409,6 +664,10 @@ export default function AdvancedChartPage() {
       series.setData(candlePoints);
 
       const handleCrosshairMove = (param: MouseEventParams) => {
+        const pointX = typeof param.point?.x === "number"
+          ? Math.max(60, Math.min((containerRef.current?.clientWidth ?? 0) - 60, param.point.x))
+          : null;
+
         const seriesData = param.seriesData.get(series) as
           | { open?: number; high?: number; low?: number; close?: number }
           | undefined;
@@ -423,11 +682,12 @@ export default function AdvancedChartPage() {
           const latest = candleSeries[candleSeries.length - 1];
           if (!latest) return;
           setHoveredCandle({
-            timeLabel: latest.timeLabel,
+            timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
             open: latest.open,
             high: latest.high,
             low: latest.low,
             close: latest.close,
+            xPosition: null,
           });
           return;
         }
@@ -436,7 +696,7 @@ export default function AdvancedChartPage() {
         if (typeof param.time === "number") {
           const match = candleSeries.find((candle) => candle.time === param.time);
           if (match) {
-            timeLabel = match.timeLabel;
+            timeLabel = formatHoverTimeLabel(match.time, displayTimeframe);
           }
         }
 
@@ -446,6 +706,7 @@ export default function AdvancedChartPage() {
           high: seriesData.high,
           low: seriesData.low,
           close: seriesData.close,
+          xPosition: pointX,
         });
       };
 
@@ -455,19 +716,28 @@ export default function AdvancedChartPage() {
       const latest = candleSeries[candleSeries.length - 1];
       if (latest) {
         setHoveredCandle({
-          timeLabel: latest.timeLabel,
+          timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
           open: latest.open,
           high: latest.high,
           low: latest.low,
           close: latest.close,
+          xPosition: null,
         });
       }
 
-      chart.timeScale().fitContent();
+      suppressVisibleRangeEventRef.current = true;
+      if (!isContextSwitch && userAdjustedZoomRef.current && preservedLogicalRangeRef.current) {
+        chart.timeScale().setVisibleLogicalRange(preservedLogicalRangeRef.current);
+      } else {
+        applyDefaultVisibleWindow();
+      }
+      suppressVisibleRangeEventRef.current = false;
+      lastRenderContextRef.current = renderContextKey;
       chartRef.current = chart;
 
       return () => {
         chart.unsubscribeCrosshairMove(handleCrosshairMove);
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
         chart.remove();
         chartRef.current = null;
       };
@@ -483,28 +753,86 @@ export default function AdvancedChartPage() {
       }));
 
       series.setData(linePoints);
+
+      const handleCrosshairMove = (param: MouseEventParams) => {
+        const pointX = typeof param.point?.x === "number"
+          ? Math.max(60, Math.min((containerRef.current?.clientWidth ?? 0) - 60, param.point.x))
+          : null;
+
+        const seriesData = param.seriesData.get(series) as number | { value?: number } | undefined;
+        const lineValue = typeof seriesData === "number"
+          ? seriesData
+          : typeof seriesData?.value === "number"
+            ? seriesData.value
+            : undefined;
+
+        const latest = candleSeries[candleSeries.length - 1];
+        if (!latest) {
+          return;
+        }
+
+        let matchedCandle: Candle | undefined;
+        if (typeof param.time === "number") {
+          matchedCandle = candleSeries.find((candle) => candle.time === param.time);
+        }
+
+        const displayCandle = matchedCandle ?? latest;
+
+        if (typeof lineValue !== "number") {
+          setHoveredCandle({
+            timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
+            open: latest.open,
+            high: latest.high,
+            low: latest.low,
+            close: latest.close,
+            xPosition: null,
+          });
+          return;
+        }
+
+        setHoveredCandle({
+          timeLabel: formatHoverTimeLabel(displayCandle.time, displayTimeframe),
+          open: displayCandle.open,
+          high: displayCandle.high,
+          low: displayCandle.low,
+          close: lineValue,
+          xPosition: pointX,
+        });
+      };
+
+      chart.subscribeCrosshairMove(handleCrosshairMove);
       void series;
 
       const latest = candleSeries[candleSeries.length - 1];
       if (latest) {
         setHoveredCandle({
-          timeLabel: latest.timeLabel,
+          timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
           open: latest.open,
           high: latest.high,
           low: latest.low,
           close: latest.close,
+          xPosition: null,
         });
       }
 
-      chart.timeScale().fitContent();
+      suppressVisibleRangeEventRef.current = true;
+      if (!isContextSwitch && userAdjustedZoomRef.current && preservedLogicalRangeRef.current) {
+        chart.timeScale().setVisibleLogicalRange(preservedLogicalRangeRef.current);
+      } else {
+        applyDefaultVisibleWindow();
+      }
+      suppressVisibleRangeEventRef.current = false;
+      lastRenderContextRef.current = renderContextKey;
       chartRef.current = chart;
 
       return () => {
+        chart.unsubscribeCrosshairMove(handleCrosshairMove);
+        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
         chart.remove();
         chartRef.current = null;
       };
     }
-  }, [candleSeries, chartMode]);
+  }, [candleSeries, chartMode, displayTimeframe, renderContextKey, activeRange.range, chartRequestTimeframe, selectedRange]);
 
   const isUp = (chartData?.quote?.pChange ?? 0) >= 0;
 
@@ -720,24 +1048,46 @@ export default function AdvancedChartPage() {
               <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
                 <div className="relative h-[430px] min-w-0">
                   {hoveredCandle && (
-                    <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white/90 px-2 py-1.5 text-xs backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/90">
-                      <span className="font-medium text-slate-600 dark:text-slate-300">{hoveredCandle.timeLabel}</span>
-                      <span className="text-slate-500 dark:text-slate-400">O <span className="font-semibold text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.open)}</span></span>
-                      <span className="text-slate-500 dark:text-slate-400">H <span className="font-semibold text-emerald-600">{formatNumber(hoveredCandle.high)}</span></span>
-                      <span className="text-slate-500 dark:text-slate-400">L <span className="font-semibold text-rose-600">{formatNumber(hoveredCandle.low)}</span></span>
-                      <span className="text-slate-500 dark:text-slate-400">C <span className="font-semibold text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.close)}</span></span>
+                    <div className="pointer-events-none absolute inset-x-0 top-2 z-10 text-xs">
+                      {typeof hoveredCandle.xPosition === "number" && (
+                        <div
+                          className="absolute top-6 -translate-x-1/2 rounded bg-slate-900 px-2 py-1 font-medium text-white dark:bg-slate-100 dark:text-slate-900"
+                          style={{ left: `${hoveredCandle.xPosition}px` }}
+                        >
+                          {hoveredCandle.timeLabel}
+                        </div>
+                      )}
+                      <div className="ml-auto mr-28 flex w-fit items-center gap-1 text-slate-500 dark:text-slate-400">
+                        <span className="font-medium">OHLC</span>
+                        <span className="inline-flex w-[74px] items-center">
+                          <span>O</span>
+                          <span className="ml-1.5 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.open)}</span>
+                        </span>
+                        <span className="inline-flex w-[74px] items-center">
+                          <span>H</span>
+                          <span className="ml-1.5 font-semibold tabular-nums text-emerald-600">{formatNumber(hoveredCandle.high)}</span>
+                        </span>
+                        <span className="inline-flex w-[74px] items-center">
+                          <span>L</span>
+                          <span className="ml-1.5 font-semibold tabular-nums text-rose-600">{formatNumber(hoveredCandle.low)}</span>
+                        </span>
+                        <span className="inline-flex w-[74px] items-center">
+                          <span>C</span>
+                          <span className="ml-1.5 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.close)}</span>
+                        </span>
+                      </div>
                     </div>
                   )}
                   <div ref={containerRef} className="h-full w-full min-w-0" />
                 </div>
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-1 pt-2 dark:border-slate-800">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {timeframeOptions.map((option) => (
+                    {stockRangeOptions.map((option) => (
                       <button
                         key={option.value}
-                        onClick={() => setTimeframe(option.value)}
+                        onClick={() => setSelectedRange(option.value)}
                         className={`h-8 rounded-md px-2.5 text-xs font-semibold transition-colors ${
-                          timeframe === option.value
+                          selectedRange === option.value
                             ? "bg-blue-600 text-white"
                             : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                         }`}
@@ -769,14 +1119,161 @@ export default function AdvancedChartPage() {
                       <CandlestickChart className="h-3.5 w-3.5" />
                       Candles
                     </button>
+                    {chartMode === "candles" && (
+                      <select
+                        value={selectedCandleTimeframe}
+                        onChange={(e) => setSelectedCandleTimeframe(e.target.value)}
+                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                      >
+                        {candleTimeframeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
-                <div className="mt-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">Use 1D for day trend and 1W for weekly trend</div>
+                <div className="mt-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">Stock range view: 1D, 1W, 1M and long-term trend windows</div>
               </div>
               {loading && <p className="mt-2 text-xs text-slate-500">Loading TradingView chart...</p>}
               {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-900">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Company Snapshot</h3>
+                  {companyProfile?.wikipediaUrl && (
+                    <a
+                      href={companyProfile.wikipediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Source
+                    </a>
+                  )}
+                </div>
+
+                {companyProfileLoading ? (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Loading company profile...</p>
+                ) : companyProfile ? (
+                  <div className="space-y-2">
+                    <p className="line-clamp-3 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                      {companyProfile.summary ?? "Company overview is currently unavailable from public profile sources."}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Founded</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.founded ?? "--"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Founder</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.founder ?? "--"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">CEO / MD</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.ceoMd ?? "--"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">HQ</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.headquarters ?? "--"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Industry</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.industry ?? "--"}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Website</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {companyProfile.website ? (
+                            <a href={companyProfile.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+                              {companyProfile.website}
+                            </a>
+                          ) : (
+                            "--"
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Company profile is unavailable for this symbol right now.</p>
+                )}
+              </div>
             </div>
             <aside className="space-y-3 lg:col-span-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Chart Pattern Intelligence</h3>
+                <div className="mb-2 text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Trend Bias</span>
+                  <span
+                    className={`ml-2 inline-flex rounded px-1.5 py-0.5 font-semibold ${
+                      chartData?.patternIntelligence?.trendBias === "bullish"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                        : chartData?.patternIntelligence?.trendBias === "bearish"
+                          ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                          : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    {(chartData?.patternIntelligence?.trendBias ?? "sideways").toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {(chartData?.patternIntelligence?.patterns ?? []).length > 0 ? (
+                    (chartData?.patternIntelligence?.patterns ?? []).map((pattern) => (
+                      <div key={pattern.id} className="rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{pattern.name}</p>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                              pattern.direction === "bullish"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                : pattern.direction === "bearish"
+                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                                  : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            {pattern.direction.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{pattern.description}</p>
+                        <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                          <span className="text-slate-500 dark:text-slate-400">Confidence</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">{formatNumber(pattern.confidence)}%</span>
+                          <span className="text-slate-500 dark:text-slate-400">Hit Rate</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {pattern.successRate != null ? `${formatNumber(pattern.successRate)}% (${pattern.sampleSize})` : "--"}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">No active high-confidence pattern signal right now.</p>
+                  )}
+                </div>
+
+                <div className="mt-2 space-y-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Nearest Support</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {chartData?.patternIntelligence?.supportLevels?.length
+                        ? formatNumber(chartData.patternIntelligence.supportLevels[0])
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-slate-400">Nearest Resistance</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {chartData?.patternIntelligence?.resistanceLevels?.length
+                        ? formatNumber(chartData.patternIntelligence.resistanceLevels[0])
+                        : "--"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Technical Snapshot</h3>
                 <div className="space-y-1.5">

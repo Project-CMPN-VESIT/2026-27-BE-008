@@ -9,6 +9,7 @@ import {
   BarChart3,
   AlertTriangle,
   Users,
+  Newspaper,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },
   { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
   { href: "/council", label: "Agent Council", icon: Users },
+  { href: "/news-feed", label: "News Feed", icon: Newspaper },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
 ];
 

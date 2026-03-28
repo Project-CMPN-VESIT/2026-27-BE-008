@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createChart, IChartApi, CandlestickSeries, ColorType } from "lightweight-charts";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { IChartApi } from "lightweight-charts";
 import { Activity, BookOpen, Briefcase, DollarSign, TrendingUp, Brain } from "lucide-react";
 import TradingModal from "@/components/TradingModal";
 
@@ -40,6 +40,7 @@ type PortfolioData = {
 export default function PaperTradingPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const chartResizeHandlerRef = useRef<(() => void) | null>(null);
   
   const [data, setData] = useState<PortfolioData | null>(null);
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
@@ -76,19 +77,36 @@ export default function PaperTradingPage() {
     };
   }, [tradeForm.ticker]);
 
-  const fetchLivePrices = async (positions: Position[]) => {
-    const newPrices: Record<string, number> = {};
-    for (const p of positions) {
-      try {
-        const res = await fetch(`/api/live-quote?symbol=NSE_${p.ticker}`);
-        const json = await res.json();
-        if (json.ok && json.data.ltp) newPrices[p.ticker] = json.data.ltp;
-      } catch (e) {}
+  const fetchLivePrices = useCallback(async (positions: Position[]) => {
+    if (!positions.length) {
+      return;
     }
-    setLivePrices(prev => ({ ...prev, ...newPrices }));
-  };
+
+    const settled = await Promise.allSettled(
+      positions.map(async (position) => {
+        const res = await fetch(`/api/live-quote?symbol=NSE_${position.ticker}`);
+        const json = await res.json();
+        return { ticker: position.ticker, ltp: json?.ok ? json?.data?.ltp : undefined };
+      })
+    );
+
+    const newPrices: Record<string, number> = {};
+    for (const item of settled) {
+      if (item.status !== "fulfilled") {
+        continue;
+      }
+
+      if (typeof item.value.ltp === "number") {
+        newPrices[item.value.ticker] = item.value.ltp;
+      }
+    }
+
+    if (Object.keys(newPrices).length > 0) {
+      setLivePrices((prev) => ({ ...prev, ...newPrices }));
+    }
+  }, []);
   
-  const loadPortfolio = async () => {
+  const loadPortfolio = useCallback(async () => {
     try {
       const res = await fetch("/api/paper-trading/portfolio?userId=test_user");
       const json = await res.json();
@@ -99,94 +117,111 @@ export default function PaperTradingPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [fetchLivePrices]);
 
   useEffect(() => {
     setIsClient(true);
     loadPortfolio();
     const interval = setInterval(loadPortfolio, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadPortfolio]);
 
   useEffect(() => {
     if (!chartContainerRef.current || !data) return;
-    
-    // Cleanup old chart
-    if (chartRef.current) {
+
+    let isCancelled = false;
+
+    const renderChart = async () => {
+      const { createChart, CandlestickSeries, ColorType } = await import("lightweight-charts");
+
+      if (isCancelled || !chartContainerRef.current) {
+        return;
+      }
+
+      if (chartRef.current) {
         chartRef.current.remove();
-    }
+        chartRef.current = null;
+      }
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#94a3b8" },
-      grid: { vertLines: { color: "#1e293b" }, horzLines: { color: "#1e293b" } },
-      width: chartContainerRef.current.clientWidth,
-      height: 300,
-    });
-    
-    const candleSeries = chart.addSeries(CandlestickSeries, { 
-      upColor: '#10b981', 
-      downColor: '#f43f5e', 
-      borderVisible: false, 
-      wickUpColor: '#10b981', 
-      wickDownColor: '#f43f5e',
-    });
-    
-    // Mock data for the chart 
-    const rangeMap: Record<string, number> = {
-      "1D": 1,
-      "1W": 7,
-      "1M": 30,
-      "3M": 90,
-      "1Y": 365,
-      "5Y": 1825,
-      "ALL": 2000,
-    };
-    const days = rangeMap[chartRange] || 30;
-    const initialBalance = 1000000;
-    const mockData = [];
-    const now = new Date();
-    
-    const pointsCount = days === 1 ? 1 : days; 
-    let lastClose = initialBalance;
-    
-    for (let i = pointsCount; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      
-      const volatility = lastClose * 0.003;
-      const open = lastClose;
-      const close = i === 0 ? initialBalance : open + (Math.random() - 0.45) * volatility;
-      const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-      const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-      
-      mockData.push({ time: d.toISOString().split("T")[0], open, high, low, close });
-      lastClose = close;
-    }
-    
-    // Set actual current value as last point
-    const holdingsValueCalc = data.positions.reduce((acc, p) => acc + (p.quantity * (livePrices[p.ticker] || p.average_buy_price)), 0);
-    const currentTotal = data.balance + holdingsValueCalc;
-    const lastMock = mockData[mockData.length - 1];
-    
-    lastMock.close = currentTotal;
-    if (currentTotal > lastMock.high) lastMock.high = currentTotal;
-    if (currentTotal < lastMock.low) lastMock.low = currentTotal;
-    
-    candleSeries.setData(mockData);
-    chart.timeScale().fitContent();
-    chartRef.current = chart;
+      if (chartResizeHandlerRef.current) {
+        window.removeEventListener("resize", chartResizeHandlerRef.current);
+        chartResizeHandlerRef.current = null;
+      }
 
-    const handleResize = () => {
-      if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      const chart = createChart(chartContainerRef.current, {
+        layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#94a3b8" },
+        grid: { vertLines: { color: "#1e293b" }, horzLines: { color: "#1e293b" } },
+        width: chartContainerRef.current.clientWidth,
+        height: 300,
+      });
+
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: "#10b981",
+        downColor: "#f43f5e",
+        borderVisible: false,
+        wickUpColor: "#10b981",
+        wickDownColor: "#f43f5e",
+      });
+
+      const rangeMap: Record<string, number> = {
+        "1D": 1,
+        "1W": 7,
+        "1M": 30,
+        "3M": 90,
+        "1Y": 365,
+        "5Y": 1825,
+        "ALL": 2000,
+      };
+      const days = rangeMap[chartRange] || 30;
+      const initialBalance = 1000000;
+      const mockData = [];
+      const now = new Date();
+
+      const pointsCount = days === 1 ? 1 : days;
+      let lastClose = initialBalance;
+
+      for (let i = pointsCount; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+
+        const volatility = lastClose * 0.003;
+        const open = lastClose;
+        const close = i === 0 ? initialBalance : open + (Math.random() - 0.45) * volatility;
+        const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+        const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+
+        mockData.push({ time: d.toISOString().split("T")[0], open, high, low, close });
+        lastClose = close;
+      }
+
+      candleSeries.setData(mockData);
+      chart.timeScale().fitContent();
+      chartRef.current = chart;
+
+      const handleResize = () => {
+        if (chartContainerRef.current) {
+          chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        }
+      };
+
+      chartResizeHandlerRef.current = handleResize;
+      window.addEventListener("resize", handleResize);
     };
-    window.addEventListener("resize", handleResize);
+
+    renderChart();
 
     return () => {
-      window.removeEventListener("resize", handleResize);
-      chart.remove();
-      chartRef.current = null;
+      isCancelled = true;
+      if (chartResizeHandlerRef.current) {
+        window.removeEventListener("resize", chartResizeHandlerRef.current);
+        chartResizeHandlerRef.current = null;
+      }
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
     };
-  }, [data, livePrices, chartRange]);
+  }, [data, chartRange]);
 
   const handleExecuteTrade = async (thesis: string, feedback: string) => {
     try {
@@ -209,8 +244,9 @@ export default function PaperTradingPage() {
       } else {
         alert("Trade Failed: " + json.error);
       }
-    } catch (e: any) {
-      alert("Error: " + e.message);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Unexpected error";
+      alert("Error: " + message);
     }
   };
 
@@ -408,7 +444,7 @@ export default function PaperTradingPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <div className="rounded-lg bg-slate-900 p-4 border border-slate-800">
                         <div className="text-xs font-semibold uppercase text-slate-500 mb-2">My Thesis</div>
-                        <p className="text-sm text-slate-300 italic">"{entry.user_thesis}"</p>
+                        <p className="text-sm text-slate-300 italic">&ldquo;{entry.user_thesis}&rdquo;</p>
                       </div>
                       <div className="rounded-lg bg-blue-900/10 p-4 border border-blue-900/30">
                         <div className="text-xs font-semibold uppercase text-blue-500 mb-2 flex items-center gap-1">

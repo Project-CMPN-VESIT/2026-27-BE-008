@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCandleHistory, getLiveQuote, resolveMarket } from "@/lib/tradingview";
 import { getScreenerSnapshot } from "@/lib/screener";
+import { analyzePatternIntelligence } from "@/lib/pattern-intelligence";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
 
     const candles = candlesResult.status === "fulfilled" ? candlesResult.value : [];
     const screener = screenerResult.status === "fulfilled" ? screenerResult.value : null;
+    const patternIntelligence = analyzePatternIntelligence(candles, timeframe);
 
     const closes = candles.map((item) => item.close);
 
@@ -132,6 +134,7 @@ export async function GET(request: NextRequest) {
             totalAssets: null,
             totalLiabilities: null,
           },
+          patternIntelligence,
           note:
             quoteResult.status === "rejected" || candlesResult.status === "rejected" || screenerResult.status === "rejected"
               ? "Some feeds are delayed, serving available market data"

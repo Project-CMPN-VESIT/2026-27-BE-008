@@ -276,8 +276,6 @@ export async function getCandleHistory(marketId: string, timeframe = "D", range 
     );
 
     const candles = periods
-      .slice(0, 300)
-      .reverse()
       .filter((row) => {
         return typeof row.time === "number"
           && typeof row.open === "number"
@@ -293,7 +291,8 @@ export async function getCandleHistory(marketId: string, timeframe = "D", range 
         low: row.min,
         close: row.close,
         volume: typeof row.volume === "number" ? row.volume : 0,
-      }));
+      }))
+      .sort((a, b) => a.time - b.time);
 
     candleCache.set(cacheKey, { value: candles, fetchedAt: Date.now() });
     return candles;

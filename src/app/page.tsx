@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, startTransition, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -82,6 +82,10 @@ const liveIndexTargets = [
   { label: "BANKNIFTY", marketId: "NSE:BANKNIFTY" },
   { label: "MIDCPNIFTY", marketId: "NSE:MIDCPNIFTY" },
 ];
+
+const OVERVIEW_POLL_MS = 15000;
+const LIVE_INDEX_POLL_MS = 3000;
+const LIVE_MOST_TRADED_POLL_MS = 3000;
 
 const features = [
   { href: "/war-room", icon: Swords, title: "War Room", desc: "CYRO AI research with source-backed analysis", color: "blue" },
@@ -183,7 +187,12 @@ export default function DashboardPage() {
     };
 
     loadOverview();
-    const timer = setInterval(loadOverview, 10000);
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      loadOverview();
+    }, OVERVIEW_POLL_MS);
 
     return () => {
       isMounted = false;
@@ -226,23 +235,25 @@ export default function DashboardPage() {
           pChange: typeof data.data?.quote?.pChange === "number" ? data.data.quote.pChange : 0,
         };
 
-        setOverview((prev) => {
-          if (!prev) {
+        startTransition(() => {
+          setOverview((prev) => {
+            if (!prev) {
+              return {
+                indices: [liveRow],
+                mostTraded: [],
+                updatedAt: new Date().toISOString(),
+              };
+            }
+
+            const mergedIndices = prev.indices.map((item) => (item.marketId === liveRow.marketId ? liveRow : item));
+            const hasCurrent = mergedIndices.some((item) => item.marketId === liveRow.marketId);
+
             return {
-              indices: [liveRow],
-              mostTraded: [],
+              ...prev,
+              indices: hasCurrent ? mergedIndices : [...mergedIndices, liveRow],
               updatedAt: new Date().toISOString(),
             };
-          }
-
-          const mergedIndices = prev.indices.map((item) => (item.marketId === liveRow.marketId ? liveRow : item));
-          const hasCurrent = mergedIndices.some((item) => item.marketId === liveRow.marketId);
-
-          return {
-            ...prev,
-            indices: hasCurrent ? mergedIndices : [...mergedIndices, liveRow],
-            updatedAt: new Date().toISOString(),
-          };
+          });
         });
       } catch {
         // Keep previous ticks if one poll fails.
@@ -252,7 +263,12 @@ export default function DashboardPage() {
     };
 
     loadLiveIndexTick();
-    const timer = setInterval(loadLiveIndexTick, 1000);
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      loadLiveIndexTick();
+    }, LIVE_INDEX_POLL_MS);
 
     return () => {
       isMounted = false;
@@ -292,27 +308,29 @@ export default function DashboardPage() {
         const nextChange = typeof data.data?.quote?.change === "number" ? data.data.quote.change : target.change;
         const nextPChange = typeof data.data?.quote?.pChange === "number" ? data.data.quote.pChange : target.pChange;
 
-        setOverview((prev) => {
-          if (!prev) {
-            return prev;
-          }
+        startTransition(() => {
+          setOverview((prev) => {
+            if (!prev) {
+              return prev;
+            }
 
-          return {
-            ...prev,
-            mostTraded: prev.mostTraded.map((row) => {
-              if (row.marketId !== target.marketId) {
-                return row;
-              }
+            return {
+              ...prev,
+              mostTraded: prev.mostTraded.map((row) => {
+                if (row.marketId !== target.marketId) {
+                  return row;
+                }
 
-              return {
-                ...row,
-                ltp: nextLtp,
-                change: nextChange,
-                pChange: nextPChange,
-              };
-            }),
-            updatedAt: new Date().toISOString(),
-          };
+                return {
+                  ...row,
+                  ltp: nextLtp,
+                  change: nextChange,
+                  pChange: nextPChange,
+                };
+              }),
+              updatedAt: new Date().toISOString(),
+            };
+          });
         });
       } catch {
         // Keep previous values if one poll fails.
@@ -322,7 +340,12 @@ export default function DashboardPage() {
     };
 
     loadLiveMostTradedTick();
-    const timer = setInterval(loadLiveMostTradedTick, 1000);
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      loadLiveMostTradedTick();
+    }, LIVE_MOST_TRADED_POLL_MS);
 
     return () => {
       isMounted = false;
@@ -332,6 +355,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     if (searchInput.trim().length < 2) {
       return;
@@ -341,6 +365,7 @@ export default function DashboardPage() {
       try {
         const response = await fetch(`/api/tv-search?q=${encodeURIComponent(searchInput.trim())}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const data = await response.json();
 
@@ -354,10 +379,11 @@ export default function DashboardPage() {
           setSuggestions([]);
         }
       }
-    }, 200);
+    }, 300);
 
     return () => {
       isMounted = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [searchInput]);
