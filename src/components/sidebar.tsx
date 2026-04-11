@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Users,
   Newspaper,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
   { href: "/council", label: "Agent Council", icon: Users },
   { href: "/news-feed", label: "News Feed", icon: Newspaper },
+  { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
 ];
 

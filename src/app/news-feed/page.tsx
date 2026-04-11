@@ -28,6 +28,31 @@ const POLL_MS = 60000;
 const SOURCE_FILTERS: SourceFilter[] = ["ALL", "NSE", "BSE"];
 const NSE_SEGMENT_OPTIONS = ["EQUITIES", "SME", "DEBT", "MF"] as const;
 
+const toTimestamp = (value: string | null | undefined) => {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sortNewsByLatest = (items: NewsItem[]) => {
+  return [...items].sort((a, b) => {
+    const announcedDiff = toTimestamp(b.announced_at) - toTimestamp(a.announced_at);
+    if (announcedDiff !== 0) {
+      return announcedDiff;
+    }
+
+    const fetchedDiff = toTimestamp(b.fetched_at) - toTimestamp(a.fetched_at);
+    if (fetchedDiff !== 0) {
+      return fetchedDiff;
+    }
+
+    return b.id - a.id;
+  });
+};
+
 const formatDate = (value: string | null) => {
   if (!value) {
     return "--";
@@ -79,7 +104,7 @@ export default function NewsFeedPage() {
           throw new Error(message);
         }
 
-        setNews(Array.isArray(payload.results) ? payload.results : []);
+        setNews(Array.isArray(payload.results) ? sortNewsByLatest(payload.results) : []);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to load news";
         setError(message);
