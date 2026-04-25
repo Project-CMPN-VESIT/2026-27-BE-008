@@ -40,9 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# scrapper runtime artifacts
-scrapper/**/__pycache__/
-scrapper/**/*.pyc
-scrapper/logs/
-# Include sanctions.db for team access, exclude others if needed
-!scrapper/data/sanctions.db
+# doc_scrapper runtime artifacts
+doc_Scrapper/**/__pycache__/
+doc_Scrapper/**/*.pyc
+doc_Scrapper/logs/
+doc_Scrapper/output/
+doc_Scrapper/annual_reports/
+doc_Scrapper/.env
+
