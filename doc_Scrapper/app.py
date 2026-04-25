@@ -70,6 +70,7 @@ USER_AGENTS = [
 NSE_BASE    = "https://www.nseindia.com"
 BSE_BASE    = "https://api.bseindia.com/BseIndiaAPI/api"
 SCREENER    = "https://www.screener.in"
+SEBI_BASE   = "https://www.sebi.gov.in"
 
 # Nifty 50 tickers (NSE symbols) for bulk runs
 NIFTY50_TICKERS = [
@@ -819,7 +820,250 @@ def fetch_moneycontrol_data(ticker_nse: str) -> dict:
 
 
 # ─────────────────────────────────────────────
-# 7. PDF DOWNLOADER (for Annual Reports)
+# 7. DRHP / PROSPECTUS FETCHER
+# ─────────────────────────────────────────────
+
+# Keywords that indicate a prospectus-type document
+_DRHP_KEYWORDS = [
+    "drhp", "draft red herring", "red herring prospectus",
+    "rhp", "prospectus", "offer document", "letter of offer",
+    "rights issue offer", "fpo",
+]
+
+
+def _is_prospectus_doc(text: str) -> bool:
+    """Return True if text contains any DRHP/prospectus keyword."""
+    low = text.lower()
+    return any(kw in low for kw in _DRHP_KEYWORDS)
+
+
+def fetch_drhp_data(ticker_nse: str, bse_code: str = None, company_name: str = None) -> dict:
+    """
+    Multi-source DRHP / Prospectus document fetcher:
+      1. BSE corporate-filing API — categories: Offer Docs, Prospectus, Rights
+      2. NSE announcement API    — filter by prospectus keywords
+      3. SEBI offer-document search page (HTML scrape)
+
+    Returns a dict with:
+      - drhp_documents : list of {title, category, url, date, source}
+      - drhp_found     : bool
+    """
+    result = {"drhp_documents": [], "drhp_found": False}
+    docs = []
+
+    # ── Source 1: BSE specific offer-document categories ──
+    if bse_code:
+        bse_headers = {
+            "Referer": "https://www.bseindia.com/",
+            "User-Agent": random.choice(USER_AGENTS),
+        }
+        base = "https://api.bseindia.com/BseIndiaAPI/api"
+
+        # BSE AnnSubCategory strCat values for offer-related docs:
+        # -1 = All, 9 = Rights / Offer docs, 12 = Public Issue / Prospectus
+        for cat_id, cat_name in [(9, "Rights/Offer"), (12, "Public Issue/Prospectus")]:
+            print(f"  [drhp/bse] searching category {cat_name} (bse_code={bse_code})...")
+            try:
+                ann = get_json(
+                    f"{base}/AnnSubCategoryGetData/w",
+                    params={
+                        "pageno": 1, "strCat": str(cat_id), "strPrevDate": "",
+                        "strScrip": bse_code, "strSearch": "P",
+                        "strToDate": "", "strType": "C", "subcategory": "-1",
+                    },
+                    headers=bse_headers
+                )
+                if ann and "Table" in ann:
+                    for x in ann["Table"][:20]:
+                        headline = x.get("NEWSSUB", "")
+                        attachment = x.get("ATTACHMENTNAME", "")
+                        url = (
+                            f"https://www.bseindia.com/xml-data/corpfiling/AttachHis/{attachment}"
+                            if attachment else None
+                        )
+                        docs.append({
+                            "title":    headline,
+                            "category": cat_name,
+                            "url":      url,
+                            "date":     x.get("NewsDate"),
+                            "source":   "BSE",
+                        })
+            except Exception as e:
+                print(f"  [drhp/bse] error for category {cat_id}: {e}")
+
+        # Also scan ALL announcements for prospectus keywords (catch edge cases)
+        print(f"  [drhp/bse] scanning all announcements for prospectus keywords...")
+        try:
+            all_ann = get_json(
+                f"{base}/AnnSubCategoryGetData/w",
+                params={
+                    "pageno": 1, "strCat": "-1", "strPrevDate": "",
+                    "strScrip": bse_code, "strSearch": "P",
+                    "strToDate": "", "strType": "C", "subcategory": "-1",
+                },
+                headers=bse_headers
+            )
+            if all_ann and "Table" in all_ann:
+                existing_titles = {d["title"] for d in docs}
+                for x in all_ann["Table"][:100]:
+                    headline = x.get("NEWSSUB", "")
+                    if headline in existing_titles:
+                        continue
+                    if _is_prospectus_doc(headline):
+                        attachment = x.get("ATTACHMENTNAME", "")
+                        url = (
+                            f"https://www.bseindia.com/xml-data/corpfiling/AttachHis/{attachment}"
+                            if attachment else None
+                        )
+                        docs.append({
+                            "title":    headline,
+                            "category": "Keyword Match",
+                            "url":      url,
+                            "date":     x.get("NewsDate"),
+                            "source":   "BSE",
+                        })
+        except Exception as e:
+            print(f"  [drhp/bse] keyword scan error: {e}")
+
+    # ── Source 2: NSE announcements keyword scan ──
+    print(f"  [drhp/nse] scanning NSE announcements...")
+    try:
+        nse_headers = {
+            "Referer": "https://www.nseindia.com/",
+            "User-Agent": random.choice(USER_AGENTS),
+        }
+        ann = get_json(
+            "https://www.nseindia.com/api/corporate-announcements",
+            params={"index": "equities", "symbol": ticker_nse},
+            headers=nse_headers
+        )
+        if ann and isinstance(ann, list):
+            for a in ann[:200]:
+                subject = a.get("subject", "")
+                desc = a.get("desc", "")
+                if _is_prospectus_doc(subject) or _is_prospectus_doc(desc):
+                    attachment = a.get("attchmntFile", "")
+                    url = (
+                        f"https://www.nseindia.com/{attachment}"
+                        if attachment and not attachment.startswith("http") else attachment
+                    ) or None
+                    docs.append({
+                        "title":    subject,
+                        "category": "NSE Announcement",
+                        "url":      url,
+                        "date":     a.get("sort_date"),
+                        "source":   "NSE",
+                    })
+    except Exception as e:
+        print(f"  [drhp/nse] error: {e}")
+
+    # ── Source 3: SEBI offer-document search ──
+    search_name = (company_name or ticker_nse).split()[0]  # first word of company name
+    print(f"  [drhp/sebi] searching SEBI offer documents for '{search_name}'...")
+    try:
+        sebi_search_url = (
+            f"https://www.sebi.gov.in/sebiweb/other/OtherAction.do"
+            f"?doListing=yes&sid=1&ssid=9&smid=&target=&doSearch=yes"
+            f"&searchText={requests.utils.quote(search_name)}&doSort=&sortOrder="
+        )
+        time.sleep(3)
+        r = SESSION.get(sebi_search_url, timeout=20, headers={
+            "Referer": "https://www.sebi.gov.in/",
+            "User-Agent": random.choice(USER_AGENTS),
+        })
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "lxml")
+            # SEBI lists results in a table — look for PDF links
+            for row in soup.select("table tr"):
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+                row_text = row.get_text(" ", strip=True)
+                if not _is_prospectus_doc(row_text):
+                    continue
+                link_tag = row.find("a", href=True)
+                href = link_tag["href"] if link_tag else None
+                if href and not href.startswith("http"):
+                    href = f"https://www.sebi.gov.in{href}"
+                title_cell = cells[0].get_text(strip=True) or cells[1].get_text(strip=True)
+                docs.append({
+                    "title":    title_cell,
+                    "category": "SEBI Offer Document",
+                    "url":      href,
+                    "date":     cells[-1].get_text(strip=True) if len(cells) > 2 else None,
+                    "source":   "SEBI",
+                })
+    except Exception as e:
+        print(f"  [drhp/sebi] error: {e}")
+
+    # Deduplicate by title
+    seen_titles: set[str] = set()
+    unique_docs = []
+    for d in docs:
+        key = d["title"].lower().strip()
+        if key not in seen_titles:
+            seen_titles.add(key)
+            unique_docs.append(d)
+
+    result["drhp_documents"] = unique_docs
+    result["drhp_found"] = len(unique_docs) > 0
+
+    if unique_docs:
+        print(f"  [drhp] found {len(unique_docs)} prospectus/offer document(s)")
+    else:
+        print(f"  [drhp] no DRHP/prospectus documents found for {ticker_nse}")
+
+    return result
+
+
+def download_drhp_pdfs(
+    ticker_nse: str, drhp_docs: list, output_dir: Path, max_pdfs: int = 5
+) -> list:
+    """
+    Download DRHP/Prospectus PDF files to disk.
+    Returns list of saved local paths.
+    """
+    drhp_dir = output_dir / "drhp"
+    drhp_dir.mkdir(parents=True, exist_ok=True)
+    downloaded = []
+
+    pdf_docs = [d for d in drhp_docs if d.get("url") and (
+        d["url"].lower().endswith(".pdf") or "pdf" in d["url"].lower()
+    )]
+
+    for i, doc in enumerate(pdf_docs[:max_pdfs]):
+        url = doc["url"]
+        safe_title = re.sub(r"[^\w\-]", "_", doc.get("title", f"doc_{i+1}"))[:60]
+        filename = drhp_dir / f"{ticker_nse}_DRHP_{i+1}_{safe_title}.pdf"
+
+        if filename.exists():
+            downloaded.append(str(filename))
+            print(f"  [drhp-pdf] already exists: {filename.name}")
+            continue
+
+        try:
+            print(f"  [drhp-pdf] downloading: {url[:80]}...")
+            time.sleep(2)
+            r = SESSION.get(url, timeout=60, stream=True, headers={
+                "Referer": "https://www.bseindia.com",
+                "User-Agent": random.choice(USER_AGENTS),
+            })
+            if r.status_code == 200 and "pdf" in r.headers.get("Content-Type", "").lower():
+                with open(filename, "wb") as f:
+                    for chunk in r.iter_content(8192):
+                        f.write(chunk)
+                downloaded.append(str(filename))
+                print(f"    saved: {filename.name}")
+            else:
+                print(f"    [drhp-pdf] skipped (status={r.status_code}, type={r.headers.get('Content-Type','')}): {url[:60]}")
+        except Exception as e:
+            print(f"  [drhp-pdf-error] {e}")
+
+    return downloaded
+
+
+# ─────────────────────────────────────────────
+# 8. PDF DOWNLOADER (for Annual Reports)
 # ─────────────────────────────────────────────
 
 def download_annual_reports(ticker_nse: str, ar_links: list, output_dir: Path, max_pdfs: int = 3):
@@ -871,7 +1115,7 @@ def json_cleaner(obj):
 
 # ─────────────────────────────────────────────
 
-def save_outputs(ticker: str, data: dict, output_dir: Path, download_pdfs: bool = False):
+def save_outputs(ticker: str, data: dict, output_dir: Path, download_pdfs: bool = False, download_drhp: bool = False):
     """Save all collected data to JSON + CSV files."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -938,6 +1182,25 @@ def save_outputs(ticker: str, data: dict, output_dir: Path, download_pdfs: bool 
         if download_pdfs:
             dl = download_annual_reports(ticker, ar_links, output_dir, max_pdfs=3)
             data["downloaded_pdfs"] = dl
+
+    # ── DRHP / Prospectus documents ──
+    drhp_docs = data.get("drhp", {}).get("drhp_documents", [])
+    if drhp_docs:
+        drhp_txt = output_dir / f"{ticker}_drhp_documents.txt"
+        with open(drhp_txt, "w", encoding="utf-8") as f:
+            f.write(f"DRHP / PROSPECTUS DOCUMENTS — {ticker}\n")
+            f.write(f"{'='*60}\n")
+            for doc in drhp_docs:
+                f.write(f"[{doc.get('source','?')}] {doc.get('date','')} | {doc.get('category','')}\n")
+                f.write(f"  Title : {doc.get('title','')}\n")
+                f.write(f"  URL   : {doc.get('url') or 'N/A'}\n\n")
+        print(f"  ✓ {drhp_txt}  ({len(drhp_docs)} document(s) found)")
+
+        if download_drhp:
+            dl_drhp = download_drhp_pdfs(ticker, drhp_docs, output_dir, max_pdfs=5)
+            data["downloaded_drhp_pdfs"] = dl_drhp
+    else:
+        print(f"  [drhp] no prospectus documents found for {ticker}")
 
     # ── Insider trading CSV ──
     insider = data.get("nse", {}).get("insider_trading", [])
@@ -1009,6 +1272,7 @@ def save_outputs(ticker: str, data: dict, output_dir: Path, download_pdfs: bool 
 def run_pipeline(
     ticker_nse: str,
     download_pdfs: bool = False,
+    download_drhp: bool = False,
     upload_s3: bool = False,
     s3_bucket: str | None = None,
     s3_prefix: str = "doc-scrapper",
@@ -1044,6 +1308,7 @@ def run_pipeline(
         "nse":            {},
         "bse":            {},
         "moneycontrol":   {},
+        "drhp":           {},
     }
 
     # ── Layer 1: yfinance (quotes, financials, news) ──
@@ -1074,9 +1339,22 @@ def run_pipeline(
     # ── Layer 6: Moneycontrol (supplementary links) ──
     combined["moneycontrol"] = fetch_moneycontrol_data(ticker)
 
+    # ── Layer 7: DRHP / Prospectus documents ──
+    bse_code_for_drhp = bse_code or combined.get("bse", {}).get("bse_code_from_screener")
+    company_name_for_drhp = (
+        combined.get("yfinance", {}).get("profile", {}).get("company_name") or ticker
+    )
+    combined["drhp"] = fetch_drhp_data(
+        ticker, bse_code=bse_code_for_drhp, company_name=company_name_for_drhp
+    )
+
     # ── Save everything ──
     print(f"\n  Saving outputs…")
-    save_outputs(ticker, combined, output_dir, download_pdfs=download_pdfs)
+    save_outputs(
+        ticker, combined, output_dir,
+        download_pdfs=download_pdfs,
+        download_drhp=download_drhp,
+    )
 
     if upload_s3 and s3_bucket:
         try:
@@ -1101,6 +1379,7 @@ def get_bse_code_from_screener_export(screener_export: dict) -> str | None:
 def run_multi(
     tickers: list,
     download_pdfs: bool = False,
+    download_drhp: bool = False,
     delay_between: int = 8,
     upload_s3: bool = False,
     s3_bucket: str | None = None,
@@ -1114,6 +1393,7 @@ def run_multi(
             run_pipeline(
                 ticker,
                 download_pdfs=download_pdfs,
+                download_drhp=download_drhp,
                 upload_s3=upload_s3,
                 s3_bucket=s3_bucket,
                 s3_prefix=s3_prefix,
@@ -1157,6 +1437,7 @@ Examples:
     parser.add_argument("--tickers",       nargs="+", help="NSE ticker symbols, e.g. RELIANCE TCS")
     parser.add_argument("--nifty50",       action="store_true", help="Run for all Nifty 50 stocks")
     parser.add_argument("--download-pdfs", action="store_true", help="Download Annual Report PDFs (latest 3 years)")
+    parser.add_argument("--download-drhp", action="store_true", help="Download DRHP / Prospectus PDFs from BSE, NSE, SEBI")
     parser.add_argument("--delay",         type=int, default=8, help="Seconds to wait between tickers (default: 8)")
     parser.add_argument("--force",         action="store_true", help="Re-fetch even if recent data exists")
     parser.add_argument("--output-dir",    default="output", help="Output directory (default: output/)")
@@ -1191,6 +1472,7 @@ Examples:
     run_multi(
         tickers,
         download_pdfs=args.download_pdfs,
+        download_drhp=args.download_drhp,
         delay_between=args.delay,
         upload_s3=args.upload_s3,
         s3_bucket=args.s3_bucket,
