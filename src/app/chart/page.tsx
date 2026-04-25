@@ -114,6 +114,49 @@ type CompanyProfile = {
   updatedAt: string;
 };
 
+type StockDocArtifact = {
+  name: string;
+  key: string;
+  url: string | null;
+  size: number;
+  lastModified: string | null;
+};
+
+type StockDocData = {
+  symbol: string;
+  available: boolean;
+  source: string;
+  pipelineRunAt: string | null;
+  summaryText: string | null;
+  industry: string | null;
+  sector: string | null;
+  website: string | null;
+  headquarters: string | null;
+  employees: string | null;
+  strengths: string[];
+  concerns: string[];
+  annualReportLinks: Array<{ year?: string; label?: string; url?: string }>;
+  metrics: {
+    currentPrice: number | null;
+    marketCapCr: number | null;
+    peRatio: number | null;
+    pbRatio: number | null;
+    roePct: number | null;
+    revenueGrowthPct: number | null;
+    debtToEquity: number | null;
+  };
+  counts: {
+    announcements: number;
+    corporateActions: number;
+    insiderTrades: number;
+    quarterlyRows: number;
+    shareholdingRows: number;
+    historicalPriceRows: number;
+  };
+  artifacts: StockDocArtifact[];
+  raw: Record<string, unknown> | null;
+};
+
 type ChartMode = "candles" | "line";
 
 type ExchangeOption = {
@@ -277,6 +320,9 @@ export default function AdvancedChartPage() {
   const [error, setError] = useState("");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyProfileLoading, setCompanyProfileLoading] = useState(false);
+  const [stockDocData, setStockDocData] = useState<StockDocData | null>(null);
+  const [stockDocLoading, setStockDocLoading] = useState(false);
+  const [stockDocError, setStockDocError] = useState("");
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -536,6 +582,57 @@ export default function AdvancedChartPage() {
       clearInterval(timer);
     };
   }, [marketId, symbol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const fetchStockDocs = async () => {
+      if (!activeInstrumentSymbol) {
+        return;
+      }
+
+      setStockDocLoading(true);
+      setStockDocError("");
+
+      try {
+        const response = await fetch(
+          `/api/stock-docs?symbol=${encodeURIComponent(activeInstrumentSymbol)}&includeRaw=true`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        const json = await response.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (response.ok && json.ok) {
+          setStockDocData((json.data ?? null) as StockDocData | null);
+          return;
+        }
+
+        setStockDocData(null);
+        setStockDocError(json.error ?? "Unable to load doc pipeline data");
+      } catch {
+        if (!cancelled) {
+          setStockDocData(null);
+          setStockDocError("Unable to connect to stock docs service");
+        }
+      } finally {
+        if (!cancelled) {
+          setStockDocLoading(false);
+        }
+      }
+    };
+
+    setStockDocData(null);
+    fetchStockDocs();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [activeInstrumentSymbol, refreshTick]);
 
   const candleSeries = useMemo(() => {
     if (!chartData?.candles?.length) {
@@ -1159,7 +1256,7 @@ export default function AdvancedChartPage() {
                 ) : companyProfile ? (
                   <div className="space-y-2">
                     <p className="line-clamp-3 text-xs leading-5 text-slate-700 dark:text-slate-300">
-                      {companyProfile.summary ?? "Company overview is currently unavailable from public profile sources."}
+                      {companyProfile.summary || stockDocData?.summaryText || "Company overview is currently unavailable from public profile sources."}
                     </p>
 
                     <div className="grid grid-cols-2 gap-1.5 text-[11px]">
@@ -1177,18 +1274,18 @@ export default function AdvancedChartPage() {
                       </div>
                       <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
                         <div className="text-slate-500">HQ</div>
-                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.headquarters ?? "--"}</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.headquarters || stockDocData?.headquarters || "--"}</div>
                       </div>
                       <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
                         <div className="text-slate-500">Industry</div>
-                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.industry ?? "--"}</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">{companyProfile.industry || stockDocData?.industry || "--"}</div>
                       </div>
                       <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
                         <div className="text-slate-500">Website</div>
                         <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100 truncate">
-                          {companyProfile.website ? (
-                            <a href={companyProfile.website} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
-                              {companyProfile.website}
+                          {(companyProfile.website || stockDocData?.website) ? (
+                            <a href={companyProfile.website || stockDocData?.website!} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+                              {companyProfile.website || stockDocData?.website}
                             </a>
                           ) : (
                             "--"
@@ -1199,6 +1296,115 @@ export default function AdvancedChartPage() {
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">Company profile is unavailable for this symbol right now.</p>
+                )}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-900">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Doc Pipeline Data (S3)</h3>
+                  {stockDocData?.pipelineRunAt && (
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {new Date(stockDocData.pipelineRunAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+
+                {stockDocLoading ? (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Loading S3 stock data...</p>
+                ) : stockDocError ? (
+                  <p className="text-[11px] text-rose-600">{stockDocError}</p>
+                ) : stockDocData?.available ? (
+                  <div className="space-y-2">
+                    <p className="line-clamp-3 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                      {stockDocData.summaryText ?? "No summary text found in uploaded doc pipeline payload."}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Current Price</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{formatNumber(stockDocData.metrics.currentPrice)}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Market Cap (Cr)</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{formatNumber(stockDocData.metrics.marketCapCr)}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">P/E</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{formatNumber(stockDocData.metrics.peRatio)}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">P/B</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{formatNumber(stockDocData.metrics.pbRatio)}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Announcements</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{stockDocData.counts.announcements}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Corporate Actions</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{stockDocData.counts.corporateActions}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Quarterly Rows</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{stockDocData.counts.quarterlyRows}</div>
+                      </div>
+                      <div className="rounded-md border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="text-slate-500">Annual Report Links</div>
+                        <div className="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{stockDocData.annualReportLinks.length}</div>
+                      </div>
+                    </div>
+
+                    {(stockDocData.strengths.length > 0 || stockDocData.concerns.length > 0) && (
+                      <div className="space-y-1 text-[11px]">
+                        {stockDocData.strengths.slice(0, 2).map((item, idx) => (
+                          <p key={`st-${idx}`} className="text-emerald-700 dark:text-emerald-300">+ {item}</p>
+                        ))}
+                        {stockDocData.concerns.slice(0, 2).map((item, idx) => (
+                          <p key={`cn-${idx}`} className="text-rose-700 dark:text-rose-300">- {item}</p>
+                        ))}
+                      </div>
+                    )}
+
+                    {stockDocData.artifacts.length > 0 && (
+                      <div>
+                        <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Uploaded Files</h4>
+                        <div className="max-h-28 overflow-auto rounded-md border border-slate-200 bg-white p-1.5 text-[11px] dark:border-slate-700 dark:bg-slate-950">
+                          {stockDocData.artifacts.slice(0, 8).map((item) => (
+                            <div key={item.key || item.name} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 dark:border-slate-800">
+                              {item.url ? (
+                                <a 
+                                  href={item.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="truncate pr-2 text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                                  title={`Download ${item.name}`}
+                                >
+                                  {item.name}
+                                </a>
+                              ) : (
+                                <span className="truncate pr-2 text-slate-700 dark:text-slate-300">{item.name}</span>
+                              )}
+                              <span className="shrink-0 text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{formatCompact(item.size)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {stockDocData.raw && (
+                      <details className="rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-950">
+                        <summary className="cursor-pointer text-[11px] font-medium text-slate-700 dark:text-slate-300">Show Full JSON Payload</summary>
+                        <pre className="mt-2 max-h-64 overflow-auto text-[10px] leading-4 text-slate-700 dark:text-slate-300">
+                          {JSON.stringify(stockDocData.raw, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">No S3 doc pipeline payload exists for this symbol yet.</p>
                 )}
               </div>
             </div>

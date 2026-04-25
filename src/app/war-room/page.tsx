@@ -57,12 +57,33 @@ type LiveQuote = {
   updatedAt?: string;
 };
 
-const companySymbolMap: Record<string, string> = {
-  "Adani Enterprises Ltd": "NSE_ADANIENT",
-  "Reliance Industries Ltd": "NSE_RELIANCE",
-  "Infosys Ltd": "NSE_INFY",
-  "HDFC Bank Ltd": "NSE_HDFCBANK",
+type StockDocData = {
+  symbol: string;
+  available: boolean;
+  summaryText?: string | null;
+  pipelineRunAt?: string | null;
+  annualReportLinks?: Array<{ year?: string; label?: string; url?: string }>;
+  metrics?: {
+    peRatio?: number | null;
+    pbRatio?: number | null;
+    roePct?: number | null;
+  };
+  counts?: {
+    announcements?: number;
+    quarterlyRows?: number;
+    insiderTrades?: number;
+  };
 };
+
+const nifty50TickerOptions = [
+  "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
+  "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "MARUTI", "ASIANPAINT", "BAJFINANCE",
+  "HCLTECH", "TITAN", "WIPRO", "NTPC", "POWERGRID", "SUNPHARMA", "ULTRACEMCO",
+  "BAJAJFINSV", "NESTLEIND", "TECHM", "M&M", "ADANIENT", "ONGC", "COALINDIA", "JSWSTEEL",
+  "GRASIM", "TATASTEEL", "DRREDDY", "DIVISLAB", "CIPLA", "TATAMOTORS", "HINDALCO",
+  "APOLLOHOSP", "LTIM", "BPCL", "HEROMOTOCO", "INDUSINDBK", "EICHERMOT", "TATACONSUM",
+  "BRITANNIA", "HDFCLIFE", "SBILIFE", "BAJAJ-AUTO", "UPL", "ADANIPORTS"
+];
 
 const initialSessions: Session[] = [
   { id: 1, title: "Adani leverage and covenant risk", tag: "Bearish", time: "2h ago" },
@@ -79,9 +100,11 @@ const nowTime = () =>
 export default function WarRoomPage() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [company, setCompany] = useState("Adani Enterprises Ltd");
+  const [selectedTicker, setSelectedTicker] = useState("ADANIENT");
   const [quote, setQuote] = useState<LiveQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
+  const [stockDocData, setStockDocData] = useState<StockDocData | null>(null);
+  const [stockDocError, setStockDocError] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [activeSessionId, setActiveSessionId] = useState<number>(1);
@@ -106,7 +129,7 @@ export default function WarRoomPage() {
     setMounted(true);
   }, []);
 
-  const activeSymbol = companySymbolMap[company] ?? "NSE_ADANIENT";
+  const activeSymbol = `NSE_${selectedTicker}`;
 
   useEffect(() => {
     let alive = true;
@@ -120,7 +143,7 @@ export default function WarRoomPage() {
       inFlight = true;
 
       try {
-        const response = await fetch(`/api/live-quote?symbol=${activeSymbol}&company=${encodeURIComponent(company)}&_ts=${Date.now()}`, {
+        const response = await fetch(`/api/live-quote?symbol=${activeSymbol}&company=${encodeURIComponent(selectedTicker)}&_ts=${Date.now()}`, {
           cache: "no-store",
         });
         const data = await response.json();
@@ -148,7 +171,49 @@ export default function WarRoomPage() {
       alive = false;
       clearInterval(timer);
     };
-  }, [activeSymbol, company]);
+  }, [activeSymbol, selectedTicker]);
+
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+
+    const loadStockDocData = async () => {
+      try {
+        const response = await fetch(`/api/stock-docs?symbol=${encodeURIComponent(activeSymbol)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = await response.json();
+
+        if (!alive) {
+          return;
+        }
+
+        if (!response.ok || !payload.ok) {
+          setStockDocData(null);
+          setStockDocError(payload.error ?? "Unable to load doc data");
+          return;
+        }
+
+        setStockDocData((payload.data ?? null) as StockDocData | null);
+        setStockDocError("");
+      } catch {
+        if (!alive) {
+          return;
+        }
+        setStockDocData(null);
+        setStockDocError("Unable to connect to doc data service");
+      }
+    };
+
+    setStockDocData(null);
+    loadStockDocData();
+
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, [activeSymbol]);
 
   useEffect(() => {
     if (!msgWrapRef.current) return;
@@ -388,6 +453,15 @@ export default function WarRoomPage() {
                 </span>
               </div>
               <div className="model-pill" onClick={() => showToast("Model switched")}>CYRO Analyst <ChevronDown size={12} /></div>
+              <select
+                value={selectedTicker}
+                onChange={(e) => setSelectedTicker(e.target.value)}
+                className="company-picker"
+              >
+                {nifty50TickerOptions.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
+              </select>
             </div>
             <div className="tb-r">
               <button className="tb-btn" onClick={() => showToast("Search chat")}
@@ -561,9 +635,37 @@ export default function WarRoomPage() {
 
             <div className="card src">
               <div className="lbl"><FileText size={12} /> Source Snippets</div>
-              <button className="src-item">AR 2025, Pg 142</button>
-              <button className="src-item">AR 2025, Pg 267</button>
-              <button className="src-item">Q3 Results, Pg 12</button>
+              {stockDocError ? (
+                <div className="txt">{stockDocError}</div>
+              ) : stockDocData?.available ? (
+                <>
+                  <div className="txt">
+                    {stockDocData.summaryText ?? "Doc pipeline summary is not available for this symbol."}
+                  </div>
+                  <div className="txt">
+                    Announcements: {stockDocData.counts?.announcements ?? 0} · Quarterly Rows: {stockDocData.counts?.quarterlyRows ?? 0}
+                  </div>
+                  <div className="txt">
+                    P/E: {stockDocData.metrics?.peRatio ?? "--"} · P/B: {stockDocData.metrics?.pbRatio ?? "--"} · ROE: {stockDocData.metrics?.roePct ?? "--"}
+                  </div>
+                  {(stockDocData.annualReportLinks ?? []).slice(0, 3).map((item, idx) => (
+                    <a
+                      key={`${item.url ?? "ar"}-${idx}`}
+                      className="src-item"
+                      href={item.url || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {item.year ?? "Annual Report"} {item.label ? `| ${item.label}` : ""}
+                    </a>
+                  ))}
+                  {stockDocData.pipelineRunAt ? (
+                    <div className="txt">Pipeline Run: {new Date(stockDocData.pipelineRunAt).toLocaleString()}</div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="txt">No S3 doc pipeline payload found for this stock yet.</div>
+              )}
             </div>
           </div>
         </aside>
@@ -814,6 +916,16 @@ export default function WarRoomPage() {
           gap: 7px;
           font-size: 12px;
           color: var(--text-2);
+        }
+        .company-picker {
+          border: 1px solid var(--border-faint);
+          background: var(--bg-raised);
+          color: var(--text-2);
+          border-radius: 9px;
+          padding: 6px 9px;
+          font-size: 12px;
+          max-width: 240px;
+          outline: none;
         }
         .sym,
         .price {

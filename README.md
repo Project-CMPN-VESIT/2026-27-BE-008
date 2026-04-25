@@ -186,6 +186,11 @@ Environment variables:
 
 ```env
 MISTRAL_API_KEY=your_key_here
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_DEFAULT_REGION=ap-southeast-2
+S3_BUCKET=finpilot-doc-scrapper
+S3_PREFIX=doc-scrapper
 ```
 
 ## 6) API Surface (Quick)
@@ -198,6 +203,7 @@ Next.js API routes (src/app/api):
 - GET /api/tv-quote
 - GET /api/tv-chart
 - GET /api/company-profile
+- GET /api/stock-docs
 - GET /api/news
 - GET /api/paper-trading/portfolio
 - POST /api/paper-trading/mentor
