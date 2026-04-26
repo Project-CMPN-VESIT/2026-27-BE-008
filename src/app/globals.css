@@ -106,3 +106,57 @@ body.sidebar-collapsed .app-shell {
   background-image: linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+/* ── Markdown Rendering Styles ── */
+.markdown-content {
+  line-height: 1.6;
+}
+.markdown-content p {
+  margin-bottom: 0.75rem;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content strong {
+  font-weight: 600;
+}
+.markdown-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-content li {
+  margin-bottom: 0.25rem;
+}
+.markdown-content h1, .markdown-content h2, .markdown-content h3 {
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-content h1 { font-size: 1.25rem; }
+.markdown-content h2 { font-size: 1.15rem; }
+.markdown-content h3 { font-size: 1.05rem; }
+.markdown-content hr {
+  border-top: 1px solid rgba(148, 163, 184, 0.3);
+  margin: 1rem 0;
+}
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+.markdown-content th, .markdown-content td {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.5rem;
+  text-align: left;
+}
+.markdown-content th {
+  background-color: rgba(148, 163, 184, 0.1);
+  font-weight: 600;
+}

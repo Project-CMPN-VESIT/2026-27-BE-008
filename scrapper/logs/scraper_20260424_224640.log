@@ -1,0 +1,22 @@
+2026-04-24 22:46:41,034 [INFO] db.database: Database initialized at D:\Finpilot\FinPilot\scrapper\data\sanctions.db
+2026-04-24 22:46:41,040 [INFO] run: Initialized 2 sources from config
+2026-04-24 22:46:41,041 [INFO] run: ============================================================
+2026-04-24 22:46:41,041 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-04-24 22:46:41,042 [INFO] run: ============================================================
+2026-04-24 22:46:41,121 [INFO] run: Starting screening API on 0.0.0.0:8000
+2026-04-24 22:46:41,124 [INFO] run: Docs available at http://localhost:8000/docs
+2026-04-24 22:46:41,430 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-04-24 22:46:41,636 [INFO] db.database: Database initialized at D:\Finpilot\FinPilot\scrapper\data\sanctions.db
+2026-04-24 22:46:46,373 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-04-24 22:46:46,405 [INFO] scrapers.un_scraper: Parsed 733 individuals from UN XML
+2026-04-24 22:46:46,409 [INFO] scrapers.un_scraper: Parsed 272 entities from UN XML
+2026-04-24 22:46:47,399 [INFO] scrapers.un_scraper: UN scrape complete: 1005 found, 0 new, 0 errors
+2026-04-24 22:46:47,405 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1005,
+  "records_new": 0,
+  "records_processed": 0,
+  "errors": []
+}
+2026-04-24 22:46:47,405 [INFO] run: Scraping complete!

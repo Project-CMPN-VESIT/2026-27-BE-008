@@ -1,7 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePersistentMessages, clearSessionMessages } from "@/hooks/usePersistentMessages";
 import { useTheme } from "next-themes";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Bell,
   Bookmark,
@@ -31,6 +34,52 @@ import {
   Wallet,
 } from "lucide-react";
 
+type SourceCitation = {
+  agent: string;
+  tool_name: string;
+  source_type: string;
+  label: string;
+  input_args: Record<string, unknown>;
+  excerpt: string;
+  timestamp: string;
+};
+
+type AnalystStatus = {
+  name: string;
+  status: "pending" | "running" | "done" | "error";
+  verdict?: string;
+  confidence?: number;
+  key_points?: string[];
+};
+
+type ScorecardData = {
+  weighted_total: number;
+  verdict: string;
+  agreement: number;
+  conflicts: string[];
+  scores: Record<string, number>;
+};
+
+type DebateCard = {
+  type: "round" | "rebuttal" | "facilitator";
+  round?: number;
+  bull?: string;
+  bear?: string;
+  winner?: string;
+  summary?: string;
+};
+
+type TradePlan = {
+  strategy?: string;
+  entry?: string;
+  stop_loss?: string;
+  target?: string;
+  risk_reward?: string;
+  position?: string;
+};
+
+type CyroMode = "normal" | "reasoning";
+
 type Message = {
   id: number;
   role: "user" | "assistant";
@@ -38,7 +87,73 @@ type Message = {
   time: string;
   liked?: boolean;
   disliked?: boolean;
+  // CYRO-specific fields
+  streaming?: boolean;
+  signal?: "BUY" | "SELL" | "HOLD" | "STRONG_BUY" | string;
+  citations?: SourceCitation[];
+  analystStatuses?: AnalystStatus[];
+  scorecard?: ScorecardData;
+  debateCards?: DebateCard[];
+  tradePlans?: Record<string, TradePlan>;
+  ragUsed?: boolean;
 };
+
+type FiiDiiData = {
+  fii_dii_rows?: Array<{ date?: string; fii_net?: number; dii_net?: number }>;
+  flow_intel?: Record<string, unknown>;
+  market_breadth?: Record<string, unknown>;
+  vix?: number | null;
+};
+
+type OptionsData = {
+  symbol?: string;
+  pcr?: number | null;
+  pcr_interpretation?: string;
+  max_pain?: number | null;
+  iv_rank?: number | null;
+  iv_interpretation?: string;
+};
+
+type RagCheckData = {
+  indexed?: boolean;
+  fresh?: boolean;
+  chunk_count?: number;
+  age_hours?: number;
+  message?: string;
+};
+
+type NewsItem = {
+  title: string;
+  source: string;
+  published_at?: string;
+  url?: string;
+  summary?: string;
+};
+
+type AlertItem = {
+  type: "info" | "warn" | "error";
+  title: string;
+  message: string;
+};
+
+type RightPanelLive = {
+  fiiDii?: FiiDiiData | null;
+  options?: OptionsData | null;
+  ragCheck?: RagCheckData | null;
+  news?: { news: NewsItem[], announcements: NewsItem[] } | null;
+  alerts?: AlertItem[] | null;
+  loading?: boolean;
+};
+
+const nifty50TickerOptions = [
+  "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
+  "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "MARUTI", "ASIANPAINT", "BAJFINANCE",
+  "HCLTECH", "TITAN", "WIPRO", "NTPC", "POWERGRID", "SUNPHARMA", "ULTRACEMCO",
+  "BAJAJFINSV", "NESTLEIND", "TECHM", "M&M", "ADANIENT", "ONGC", "COALINDIA", "JSWSTEEL",
+  "GRASIM", "TATASTEEL", "DRREDDY", "DIVISLAB", "CIPLA", "TATAMOTORS", "HINDALCO",
+  "APOLLOHOSP", "LTIM", "BPCL", "HEROMOTOCO", "INDUSINDBK", "EICHERMOT", "TATACONSUM",
+  "BRITANNIA", "HDFCLIFE", "SBILIFE", "BAJAJ-AUTO", "UPL", "ADANIPORTS"
+];
 
 type Session = {
   id: number;
@@ -75,21 +190,7 @@ type StockDocData = {
   };
 };
 
-const nifty50TickerOptions = [
-  "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
-  "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "MARUTI", "ASIANPAINT", "BAJFINANCE",
-  "HCLTECH", "TITAN", "WIPRO", "NTPC", "POWERGRID", "SUNPHARMA", "ULTRACEMCO",
-  "BAJAJFINSV", "NESTLEIND", "TECHM", "M&M", "ADANIENT", "ONGC", "COALINDIA", "JSWSTEEL",
-  "GRASIM", "TATASTEEL", "DRREDDY", "DIVISLAB", "CIPLA", "TATAMOTORS", "HINDALCO",
-  "APOLLOHOSP", "LTIM", "BPCL", "HEROMOTOCO", "INDUSINDBK", "EICHERMOT", "TATACONSUM",
-  "BRITANNIA", "HDFCLIFE", "SBILIFE", "BAJAJ-AUTO", "UPL", "ADANIPORTS"
-];
-
-const initialSessions: Session[] = [
-  { id: 1, title: "Adani leverage and covenant risk", tag: "Bearish", time: "2h ago" },
-  { id: 2, title: "Infosys margin durability", tag: "Neutral", time: "5h ago" },
-  { id: 3, title: "Reliance growth drivers", tag: "Bullish", time: "1d ago" },
-];
+const initialSessions: Session[] = [];
 
 const nowTime = () =>
   new Date().toLocaleTimeString([], {
@@ -105,14 +206,16 @@ export default function WarRoomPage() {
   const [quoteError, setQuoteError] = useState("");
   const [stockDocData, setStockDocData] = useState<StockDocData | null>(null);
   const [stockDocError, setStockDocError] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessions, setSessions] = useState<Session[]>(initialSessions);
+  // activeSessionId must be declared before usePersistentMessages which uses it
   const [activeSessionId, setActiveSessionId] = useState<number>(1);
+  // Session-persistent messages — survives page reloads, keyed by activeSessionId
+  const [messages, setMessages] = usePersistentMessages<Message>(activeSessionId, []);
+  const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [sessionFilter, setSessionFilter] = useState("");
   const [input, setInput] = useState("");
   const [micOn, setMicOn] = useState(false);
   const [attachName, setAttachName] = useState("");
-  const [activeTab, setActiveTab] = useState<"portfolio" | "news" | "alerts">("portfolio");
+  const [activeTab, setActiveTab] = useState<"news" | "alerts" | "flow" | "source">("source");
   const [quickOn, setQuickOn] = useState<Record<string, boolean>>({
     live: false,
     news: false,
@@ -121,15 +224,132 @@ export default function WarRoomPage() {
   });
   const [toastText, setToastText] = useState("");
   const [toastOn, setToastOn] = useState(false);
+  // CYRO streaming state
+  const [cyroMode, setCyroMode] = useState<CyroMode>("normal");
+  const [isStreaming, setIsStreaming] = useState(false);
+  // @ mention picker state
+  const [atPickerOpen, setAtPickerOpen] = useState(false);
+  const [atPickerFilter, setAtPickerFilter] = useState("");
+  const [taggedTicker, setTaggedTicker] = useState<string | null>(null);
+  // Right panel live data (Week 5)
+  const [rightPanel, setRightPanel] = useState<RightPanelLive>({});
+  const [selectedSource, setSelectedSource] = useState<SourceCitation | null>(null);
+
+  const esRef = useRef<EventSource | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const msgWrapRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
+    // Hydrate state from localStorage after initial render to avoid hydration mismatch
+    try {
+      const rawAct = localStorage.getItem("cyro_active_session");
+      if (rawAct) setActiveSessionId(Number(rawAct) || 1);
+    } catch {}
+    try {
+      const rawSess = localStorage.getItem("cyro_sessions");
+      const parsedSess = rawSess ? (JSON.parse(rawSess) as Session[]) : null;
+      if (Array.isArray(parsedSess) && parsedSess.length > 0) {
+        setSessions(parsedSess);
+      }
+    } catch {}
   }, []);
 
+  // Persist sessions list and active session ID on every change
+  useEffect(() => {
+    if (!mounted) return;
+    try { localStorage.setItem("cyro_sessions", JSON.stringify(sessions)); } catch { /* quota */ }
+  }, [sessions, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try { localStorage.setItem("cyro_active_session", String(activeSessionId)); } catch { /* quota */ }
+  }, [activeSessionId, mounted]);
+
   const activeSymbol = `NSE_${selectedTicker}`;
+
+
+  // ── Week 5: Load right-panel live data whenever ticker changes ──
+  useEffect(() => {
+    let alive = true;
+    setRightPanel({ loading: true });
+
+    const loadRightPanel = async () => {
+      try {
+        const [fiiRes, optRes, ragRes, newsRes, alertsRes] = await Promise.allSettled([
+          fetch(`/api/cyro-market?endpoint=fii-dii&days=5`, { cache: "no-store" }),
+          fetch(`/api/cyro-market?endpoint=options&ticker=${selectedTicker}`, { cache: "no-store" }),
+          fetch(`/api/cyro-market?endpoint=rag-check&ticker=${selectedTicker}`, { cache: "no-store" }),
+          fetch(`/api/cyro-market?endpoint=news&ticker=${selectedTicker}`, { cache: "no-store" }),
+          fetch(`/api/cyro-market?endpoint=alerts&ticker=${selectedTicker}`, { cache: "no-store" }),
+        ]);
+
+        if (!alive) return;
+
+        const fiiData = fiiRes.status === "fulfilled" && fiiRes.value.ok
+          ? (await fiiRes.value.json()).data as FiiDiiData
+          : null;
+        const optData = optRes.status === "fulfilled" && optRes.value.ok
+          ? (await optRes.value.json()).data as OptionsData
+          : null;
+        const ragData = ragRes.status === "fulfilled" && ragRes.value.ok
+          ? (await ragRes.value.json()).data as RagCheckData
+          : null;
+        const newsData = newsRes.status === "fulfilled" && newsRes.value.ok
+          ? (await newsRes.value.json()).data as { news: NewsItem[], announcements: NewsItem[] }
+          : null;
+        const alertsData = alertsRes.status === "fulfilled" && alertsRes.value.ok
+          ? (await alertsRes.value.json()).data.alerts as AlertItem[]
+          : null;
+
+        setRightPanel({ fiiDii: fiiData, options: optData, ragCheck: ragData, news: newsData, alerts: alertsData, loading: false });
+      } catch {
+        if (alive) setRightPanel({ loading: false });
+      }
+    };
+
+    loadRightPanel();
+    // Refresh every 60s
+    const t = setInterval(loadRightPanel, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [selectedTicker]);
+
+  // ── @ mention picker filter ────────────────────────────────────
+  const filteredAtOptions = useMemo(() =>
+    atPickerFilter
+      ? nifty50TickerOptions.filter(t => t.toLowerCase().includes(atPickerFilter.toLowerCase())).slice(0, 8)
+      : nifty50TickerOptions.slice(0, 12),
+  [atPickerFilter]);
+
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    // Detect @ trigger
+    const lastAt = val.lastIndexOf("@");
+    if (lastAt !== -1) {
+      const query = val.slice(lastAt + 1);
+      setAtPickerFilter(query);
+      setAtPickerOpen(true);
+    } else {
+      setAtPickerOpen(false);
+      setAtPickerFilter("");
+    }
+  };
+
+  const selectAtTicker = (ticker: string) => {
+    // Replace the @... fragment at the end of input with @TICKER
+    const lastAt = input.lastIndexOf("@");
+    const newInput = lastAt !== -1
+      ? input.slice(0, lastAt) + `@${ticker} `
+      : input + `@${ticker} `;
+    setInput(newInput);
+    setTaggedTicker(ticker);
+    setSelectedTicker(ticker);
+    setAtPickerOpen(false);
+    setAtPickerFilter("");
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     let alive = true;
@@ -238,29 +458,234 @@ export default function WarRoomPage() {
     return sessions.filter((s) => s.title.toLowerCase().includes(sessionFilter.toLowerCase()));
   }, [sessions, sessionFilter]);
 
-  const sendMsg = (e?: FormEvent) => {
+  const sendMsg = useCallback((e?: FormEvent) => {
     if (e) e.preventDefault();
     const txt = input.trim();
-    if (!txt) return;
+    if (!txt || isStreaming) return;
 
-    const userMsg: Message = {
-      id: Date.now(),
-      role: "user",
-      text: txt,
-      time: nowTime(),
-    };
+    // Close any existing stream
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
 
+    const userMsgId = Date.now();
+    const aiMsgId = userMsgId + 1;
+
+    const userMsg: Message = { id: userMsgId, role: "user", text: txt, time: nowTime() };
     const aiMsg: Message = {
-      id: Date.now() + 1,
+      id: aiMsgId,
       role: "assistant",
-      text: "Received. I can now generate a full research brief with valuation, catalysts, risks, and BUY/HOLD/SELL logic for this request.",
+      text: "",
       time: nowTime(),
+      streaming: true,
+      citations: [],
+      analystStatuses: cyroMode === "reasoning"
+        ? ["TechnicalAnalyst","FundamentalAnalyst","OptionsAnalyst",
+           "NewsMacroAnalyst","SentimentAnalyst","SectorRotationAnalyst","RiskManager"]
+            .map(n => ({ name: n, status: "pending" as const }))
+        : [],
     };
 
     setMessages((prev) => [...prev, userMsg, aiMsg]);
+    // Auto-update session title from first user message (only if still default)
+    setSessions((prev) => prev.map((s) =>
+      s.id === activeSessionId && messages.filter(m => m.role === "user").length === 0
+        ? { ...s, title: txt.slice(0, 50) }
+        : s
+    ));
+
     setInput("");
     setAttachName("");
-  };
+    setTaggedTicker(null);
+
+    setIsStreaming(true);
+
+    let finalTicker = taggedTicker;
+    // Extract @TICKER manually from text if user typed it without selecting from dropdown
+    const atMatch = txt.match(/@([A-Za-z0-9_]+)/);
+    if (atMatch) {
+      finalTicker = atMatch[1].toUpperCase();
+      setSelectedTicker(finalTicker);
+    }
+    
+    const params = new URLSearchParams({
+      message: txt,
+      mode: cyroMode,
+      session_id: String(activeSessionId),
+      ...(finalTicker ? { ticker: finalTicker } : selectedTicker ? { ticker: selectedTicker } : {}),
+    });
+    const url = `/api/cyro-chat?${params.toString()}`;
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    es.onmessage = (ev) => {
+      try {
+        const event = JSON.parse(ev.data) as Record<string, unknown>;
+        const type = event.type as string;
+
+        if (type === "ticker_resolved") {
+          // Update selected ticker if backend resolved a different one
+          const resolved = event.ticker as string;
+          if (resolved && resolved !== "NIFTY") setSelectedTicker(resolved);
+        }
+
+        else if (type === "analyst_start") {
+          const analyst = event.analyst as string;
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            const statuses = (m.analystStatuses ?? []).map((s) =>
+              s.name === analyst ? { ...s, status: "running" as const } : s
+            );
+            return { ...m, analystStatuses: statuses, text: m.text || `🔍 Analysing ${analyst}...` };
+          }));
+        }
+
+        else if (type === "analyst_done") {
+          const analyst = event.analyst as string;
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            const statuses = (m.analystStatuses ?? []).map((s) =>
+              s.name === analyst
+                ? { ...s, status: "done" as const, verdict: event.verdict as string, confidence: event.confidence as number }
+                : s
+            );
+            return { ...m, analystStatuses: statuses };
+          }));
+        }
+
+        else if (type === "source_captured") {
+          const citation = event.citation as SourceCitation;
+          setMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId
+              ? { ...m, citations: [...(m.citations ?? []), citation] }
+              : m
+          ));
+        }
+
+        else if (type === "phase") {
+          const phase = event.phase as string;
+          const label = phase === "debate" ? "⚔️ Bull vs Bear debate..." :
+                        phase === "synthesis" ? "🧠 Synthesising final decision..." :
+                        `📊 ${phase}...`;
+          setMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId ? { ...m, text: label } : m
+          ));
+        }
+
+        else if (type === "scorecard") {
+          const sc = event as unknown as ScorecardData;
+          setMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId ? { ...m, scorecard: sc } : m
+          ));
+        }
+
+        else if (type === "debate_token") {
+          const step = event.step as string;
+          const token = event.token as string;
+          
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            
+            const currentCards = m.debateCards ?? [];
+            let updatedCards = [...currentCards];
+            
+            if (step === "bull_r1" || step === "bear_r1") {
+              let r1Card = updatedCards.find(c => c.type === "round" && c.round === 1);
+              if (!r1Card) {
+                r1Card = { type: "round", round: 1, bull: "", bear: "" };
+                updatedCards.push(r1Card);
+              }
+              if (step === "bull_r1") r1Card.bull = (r1Card.bull || "") + token;
+              if (step === "bear_r1") r1Card.bear = (r1Card.bear || "") + token;
+            } 
+            else if (step === "bull_r2" || step === "bear_r2") {
+              let r2Card = updatedCards.find(c => c.type === "rebuttal" && c.round === 2);
+              if (!r2Card) {
+                r2Card = { type: "rebuttal", round: 2, bull: "", bear: "" };
+                updatedCards.push(r2Card);
+              }
+              if (step === "bull_r2") r2Card.bull = (r2Card.bull || "") + token;
+              if (step === "bear_r2") r2Card.bear = (r2Card.bear || "") + token;
+            }
+            else if (step === "facilitator") {
+              let facCard = updatedCards.find(c => c.type === "facilitator");
+              if (!facCard) {
+                facCard = { type: "facilitator", summary: "", winner: "" };
+                updatedCards.push(facCard);
+              }
+              facCard.summary = (facCard.summary || "") + token;
+              if (facCard.summary.toUpperCase().includes("WINNER: BULL")) facCard.winner = "BULL";
+              else if (facCard.summary.toUpperCase().includes("WINNER: BEAR")) facCard.winner = "BEAR";
+            }
+            
+            return { ...m, debateCards: updatedCards, text: m.text || "⚔️ Bull vs Bear debate underway..." };
+          }));
+        }
+
+        else if (type === "final_decision") {
+          const signal = (event.signal as string) ?? "HOLD";
+          const summary = (event.summary as string) ?? "";
+          const sources = (event.sources_used as SourceCitation[]) ?? [];
+          const tradePlans = (event.trade_plans as Record<string, TradePlan>) ?? {};
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            return {
+              ...m,
+              text: summary,
+              signal,
+              streaming: false,
+              citations: [...(m.citations ?? []), ...sources],
+              tradePlans,
+              ragUsed: !!(event.rag_used),
+            };
+          }));
+        }
+
+        else if (type === "error") {
+          const errMsg = (event.message as string) ?? "Unknown error";
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId) return m;
+            
+            const isBrokerError = errMsg.includes("401") || errMsg.toLowerCase().includes("unauthorized") || errMsg.toLowerCase().includes("fyers");
+            
+            return {
+              ...m,
+              text: isBrokerError 
+                ? `❌ **Broker Connection Failed**\n\nThe CYRO engine encountered an authentication error with your broker. This usually happens when your access token has expired. Please click the **Broker Settings** button in the sidebar to re-authenticate.\n\n_Technical details: ${errMsg}_`
+                : `❌ ${errMsg}`,
+              streaming: false
+            };
+          }));
+          setIsStreaming(false);
+          es.close();
+        }
+
+        else if (type === "done") {
+          setIsStreaming(false);
+          setMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId ? { ...m, streaming: false } : m
+          ));
+          es.close();
+          esRef.current = null;
+        }
+      } catch {
+        // Ignore malformed events
+      }
+    };
+
+    es.onerror = () => {
+      setIsStreaming(false);
+      setMessages((prev) => prev.map((m) =>
+        m.id === aiMsgId && m.streaming
+          ? { ...m, text: m.text || "Connection to CYRO backend lost. Is india-trade-cli running on port 8765?", streaming: false }
+          : m
+      ));
+      es.close();
+      esRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, isStreaming, cyroMode, selectedTicker, activeSessionId]);
 
   const copyMessage = async (id: number) => {
     const msg = messages.find((m) => m.id === id);
@@ -323,6 +748,8 @@ export default function WarRoomPage() {
   };
 
   const newChat = () => {
+    // Clear stored history for the current session before switching
+    clearSessionMessages(activeSessionId);
     setMessages([]);
     const id = Date.now();
     const next: Session = {
@@ -366,6 +793,9 @@ export default function WarRoomPage() {
       showToast("Unable to copy link");
     }
   };
+
+  const latestAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
+  const latestSources = latestAssistantMsg?.citations || [];
 
   const visibleTheme = mounted ? (resolvedTheme === "dark" ? "dark" : "light") : "light";
   const priceUp = (quote?.dayChangePerc ?? 0) >= 0;
@@ -430,6 +860,7 @@ export default function WarRoomPage() {
                   className="xbtn"
                   onClick={(ev) => {
                     ev.stopPropagation();
+                    clearSessionMessages(s.id);
                     setSessions((prev) => prev.filter((x) => x.id !== s.id));
                     showToast("Session removed");
                   }}
@@ -489,8 +920,139 @@ export default function WarRoomPage() {
                     {msg.role === "assistant" ? <span className="av-mark av-cy">CY</span> : <span className="av-mark av-you">YU</span>}
                   </div>
                   <div className="msg-col">
-                    <div className="msg-sender">{msg.role === "assistant" ? "CYRO" : "You"} · {msg.time}</div>
-                    <div className={`bubble ${msg.role === "assistant" ? "ai-bubble" : "user-bubble"}`}>{msg.text}</div>
+                    <div className="msg-sender">
+                      {msg.role === "assistant" ? "CYRO" : "You"} · {msg.time}
+                      {msg.signal && (
+                        <span className={`signal-badge signal-${msg.signal.toLowerCase()}`}>
+                          {msg.signal.replace("_", " ")}
+                        </span>
+                      )}
+                      {msg.streaming && <span className="streaming-dot">●</span>}
+                    </div>
+
+                    {/* Analyst progress pills (reasoning mode) */}
+                    {msg.analystStatuses && msg.analystStatuses.length > 0 && (
+                      <div className="analyst-pills">
+                        {msg.analystStatuses.map((s) => (
+                          <span key={s.name} className={`a-pill a-pill-${s.status}`} title={s.verdict ? `${s.verdict} (${s.confidence}%)` : s.name}>
+                            {s.name.replace("Analyst", "").replace("Manager", " Mgr")}
+                            {s.status === "done" && s.verdict && (
+                              <span className={`a-pill-verdict ${s.verdict?.toLowerCase()}`}> {s.verdict}</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className={`bubble markdown-content ${msg.role === "assistant" ? "ai-bubble" : "user-bubble"}`}>
+                      {msg.text ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.text}
+                        </ReactMarkdown>
+                      ) : (msg.streaming ? <span className="thinking">Thinking...</span> : "")}
+                    </div>
+
+                    {/* Source Citation Cards */}
+                    {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+                      <div className="citations">
+                        <div className="cite-label">Sources used ({msg.citations.length})</div>
+                        <div className="cite-list">
+                          {msg.citations.slice(0, 6).map((c, i) => (
+                            <div key={i} className="cite-card" onClick={() => { setSelectedSource(c); setActiveTab("source"); }}>
+                              <div className="cite-agent">{c.agent}</div>
+                              <div className="cite-source">{c.label}</div>
+                              {c.excerpt && <div className="cite-excerpt">{c.excerpt.slice(0, 120)}…</div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Scorecard (reasoning mode) */}
+                    {msg.role === "assistant" && msg.scorecard && (
+                      <div className="scorecard-card">
+                        <div className="sc-header">
+                          <span className="sc-title">📊 Scorecard</span>
+                          <span className={`sc-verdict sc-${msg.scorecard.verdict.toLowerCase()}`}>{msg.scorecard.verdict}</span>
+                          <span className="sc-agree">{msg.scorecard.agreement.toFixed(0)}% agreement</span>
+                        </div>
+                        <div className="sc-scores">
+                          {Object.entries(msg.scorecard.scores).map(([name, score]) => (
+                            <div key={name} className="sc-row">
+                              <span className="sc-name">{name}</span>
+                              <div className="sc-bar-wrap">
+                                <div className={`sc-bar ${score > 0 ? "bull" : score < 0 ? "bear" : "neut"}`}
+                                  style={{ width: `${Math.min(Math.abs(score), 100)}%` }} />
+                              </div>
+                              <span className={`sc-val ${score > 0 ? "pos" : score < 0 ? "neg" : ""}`}>{score > 0 ? "+" : ""}{score.toFixed(0)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {msg.scorecard.conflicts.length > 0 && (
+                          <div className="sc-conflicts">⚠️ {msg.scorecard.conflicts.join(" | ")}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Debate Cards (reasoning mode) */}
+                    {msg.role === "assistant" && msg.debateCards && msg.debateCards.length > 0 && (
+                      <div className="debate-section">
+                        {msg.debateCards.map((card, i) => (
+                          <div key={i} className={`debate-card dc-${card.type}`}>
+                            {card.type === "round" && (
+                              <>
+                                <div className="dc-label">⚔️ Bull vs Bear — Round {card.round}</div>
+                                <div className="dc-row">
+                                  <div className="dc-side bull">
+                                    <div className="dc-side-label">🟢 Bull</div>
+                                    <div className="dc-text">{card.bull}</div>
+                                  </div>
+                                  <div className="dc-side bear">
+                                    <div className="dc-side-label">🔴 Bear</div>
+                                    <div className="dc-text">{card.bear}</div>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            {card.type === "rebuttal" && (
+                              <>
+                                <div className="dc-label">🔄 Rebuttals — Round {card.round}</div>
+                                <div className="dc-row">
+                                  <div className="dc-side bull"><div className="dc-side-label">Bull Rebuttal</div><div className="dc-text">{card.bull}</div></div>
+                                  <div className="dc-side bear"><div className="dc-side-label">Bear Rebuttal</div><div className="dc-text">{card.bear}</div></div>
+                                </div>
+                              </>
+                            )}
+                            {card.type === "facilitator" && (
+                              <>
+                                <div className="dc-label">⚖️ Facilitator Summary — Winner: <strong>{card.winner}</strong></div>
+                                <div className="dc-text">{card.summary}</div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Trade Plans (reasoning mode final decision) */}
+                    {msg.role === "assistant" && msg.tradePlans && Object.keys(msg.tradePlans).length > 0 && (
+                      <div className="trade-plans">
+                        <div className="tp-label">💼 Trade Plans</div>
+                        <div className="tp-grid">
+                          {Object.entries(msg.tradePlans).map(([key, plan]) => plan && (
+                            <div key={key} className="tp-card">
+                              <div className="tp-profile">{key}</div>
+                              {plan.strategy && <div className="tp-row"><span>Strategy</span><span>{plan.strategy}</span></div>}
+                              {plan.entry && <div className="tp-row"><span>Entry</span><span>{plan.entry}</span></div>}
+                              {plan.stop_loss && <div className="tp-row"><span>Stop</span><span className="neg">{plan.stop_loss}</span></div>}
+                              {plan.target && <div className="tp-row"><span>Target</span><span className="pos">{plan.target}</span></div>}
+                              {plan.risk_reward && <div className="tp-row"><span>R:R</span><span>{plan.risk_reward}</span></div>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className={`msg-foot ${msg.role === "assistant" ? "assistant-foot" : "user-foot"}`}>
                       {msg.role === "assistant" ? (
                         <div className="m-acts assistant">
@@ -514,6 +1076,24 @@ export default function WarRoomPage() {
 
           <form className="input-area" onSubmit={sendMsg}>
             <div className="quick-bar">
+              {/* Mode toggle */}
+              <button
+                type="button"
+                className={`q-pill mode-pill ${cyroMode === "normal" ? "on" : ""}`}
+                onClick={() => setCyroMode("normal")}
+                title="Normal mode: fast single-analyst research (~15s)"
+              >
+                ⚡ Normal
+              </button>
+              <button
+                type="button"
+                className={`q-pill mode-pill ${cyroMode === "reasoning" ? "on reasoning" : ""}`}
+                onClick={() => setCyroMode("reasoning")}
+                title="Reasoning mode: 7 analysts + debate (~3min)"
+              >
+                🧠 Deep
+              </button>
+              <div className="q-divider" />
               <button
                 type="button"
                 className={`q-pill ${quickOn.live ? "on" : ""}`}
@@ -548,23 +1128,57 @@ export default function WarRoomPage() {
 
             {attachName ? <div className="att-prev">{attachName}</div> : null}
 
+            {/* @ mention picker dropdown */}
+            {atPickerOpen && (
+              <div className="at-picker">
+                <div className="at-picker-hint">@ Tag a stock</div>
+                {filteredAtOptions.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="at-item"
+                    onMouseDown={(e) => { e.preventDefault(); selectAtTicker(t); }}
+                  >
+                    <span className="at-sym">{t}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="input-shell">
               <button type="button" className="in-left" onClick={onAttach}>
                 <Plus size={18} />
               </button>
               <input
+                ref={inputRef}
                 className="msg-inp"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.key === "Escape") { setAtPickerOpen(false); return; }
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    sendMsg();
+                    if (!atPickerOpen) sendMsg();
                   }
                 }}
-                placeholder="Ask CYRO about a stock..."
+                placeholder="Ask CYRO about a stock... (type @ to tag a ticker)"
               />
               <div className="inp-right">
+                {isStreaming && (
+                  <button
+                    type="button"
+                    className="r-btn stop-btn"
+                    title="Stop"
+                    onClick={() => {
+                      esRef.current?.close();
+                      esRef.current = null;
+                      setIsStreaming(false);
+                      showToast("Stopped");
+                    }}
+                  >
+                    ■
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`r-btn ${micOn ? "rec" : ""}`}
@@ -573,7 +1187,7 @@ export default function WarRoomPage() {
                     showToast(!micOn ? "Listening..." : "Mic stopped");
                   }}
                 ><Mic size={15} /></button>
-                <button type="submit" className={`send-btn ${input.trim() ? "" : "off"}`}><Send size={14} /></button>
+                <button type="submit" disabled={isStreaming} className={`send-btn ${input.trim() && !isStreaming ? "" : "off"}`}><Send size={14} /></button>
               </div>
             </div>
 
@@ -591,82 +1205,157 @@ export default function WarRoomPage() {
 
         <aside className="rpanel">
           <div className="rp-tabs">
-            <button className={`rp-tab ${activeTab === "portfolio" ? "on" : ""}`} onClick={() => setActiveTab("portfolio")}>Portfolio</button>
+            <button className={`rp-tab ${activeTab === "source" ? "on" : ""}`} onClick={() => setActiveTab("source")}>Source</button>
+            <button className={`rp-tab ${activeTab === "flow" ? "on" : ""}`} onClick={() => setActiveTab("flow")}>Flow</button>
             <button className={`rp-tab ${activeTab === "news" ? "on" : ""}`} onClick={() => setActiveTab("news")}>News</button>
             <button className={`rp-tab ${activeTab === "alerts" ? "on" : ""}`} onClick={() => setActiveTab("alerts")}>Alerts</button>
           </div>
           <div className="rp-body">
-            {activeTab === "portfolio" ? (
+
+
+            {/* Week 5: Flow Intelligence Tab */}
+            {activeTab === "flow" ? (
               <>
-                <div className="card big">
-                  <div className="lbl"><Wallet size={12} /> Portfolio Value</div>
-                  <div className="val">Rs 10,24,500</div>
-                </div>
-                <div className="card"><div className="lbl">Risk Heat</div><div className="txt">Elevated leverage concentration</div></div>
-                <div className="card"><div className="lbl">Momentum</div><div className="txt">{quote?.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "Pending"}</div></div>
+                {rightPanel.loading && <div className="txt">Loading flow data…</div>}
+                {/* VIX */}
+                {rightPanel.fiiDii?.vix != null && (
+                  <div className="card">
+                    <div className="lbl">🌡️ India VIX</div>
+                    <div className="val">{rightPanel.fiiDii.vix.toFixed(2)}</div>
+                  </div>
+                )}
+                {/* FII/DII last 3 rows */}
+                {(rightPanel.fiiDii?.fii_dii_rows ?? []).slice(0, 3).map((row, i) => (
+                  <div key={i} className="card">
+                    <div className="lbl">📊 FII/DII {row.date ?? ""}</div>
+                    <div className="txt">
+                      FII: <span className={`${(row.fii_net ?? 0) > 0 ? "pos" : "neg"}`}>{(row.fii_net ?? 0) > 0 ? "+" : ""}{row.fii_net?.toFixed(0)} Cr</span>
+                      {" · "}
+                      DII: <span className={`${(row.dii_net ?? 0) > 0 ? "pos" : "neg"}`}>{(row.dii_net ?? 0) > 0 ? "+" : ""}{row.dii_net?.toFixed(0)} Cr</span>
+                    </div>
+                  </div>
+                ))}
+                {/* Options data */}
+                {rightPanel.options && (
+                  <div className="card">
+                    <div className="lbl">📈 Options — {selectedTicker}</div>
+                    <div className="txt">
+                      PCR: <strong>{rightPanel.options.pcr?.toFixed(2) ?? "--"}</strong> · {rightPanel.options.pcr_interpretation}
+                    </div>
+                    {rightPanel.options.max_pain != null && (
+                      <div className="txt">Max Pain: Rs {rightPanel.options.max_pain.toFixed(2)}</div>
+                    )}
+                    {rightPanel.options.iv_rank != null && (
+                      <div className="txt">IV Rank: {rightPanel.options.iv_rank} — {rightPanel.options.iv_interpretation}</div>
+                    )}
+                  </div>
+                )}
+                {!rightPanel.loading && !rightPanel.fiiDii && (
+                  <div className="txt">Flow data unavailable (CYRO backend offline?)</div>
+                )}
               </>
             ) : null}
-
-            {activeTab === "news" ? (
-              <>
-                <div className="card">
-                  <div className="lbl"><Newspaper size={12} /> Market Pulse</div>
-                  <div className="txt">Rate-sensitive sectors remain reactive to macro commentary.</div>
-                </div>
-                <div className="card">
-                  <div className="lbl"><Sparkles size={12} /> Filing Cue</div>
-                  <div className="txt">Cash flow improves while refinancing watch stays active.</div>
-                </div>
-              </>
-            ) : null}
-
             {activeTab === "alerts" ? (
               <>
-                <div className="card warn">
-                  <div className="lbl"><Bell size={12} /> Risk Alert</div>
-                  <div className="txt">Debt maturity concentration may pressure near-term liquidity.</div>
-                </div>
-                <div className="card info">
-                  <div className="lbl"><Shield size={12} /> Compliance Watch</div>
-                  <div className="txt">Track filing cadence and management disclosure consistency.</div>
+                {rightPanel.loading && <div className="txt">Loading alerts…</div>}
+                {rightPanel.alerts && rightPanel.alerts.length > 0 ? (
+                  rightPanel.alerts.map((alert, i) => (
+                    <div key={i} className={`card ${alert.type === 'warn' ? 'warn' : 'info'}`}>
+                      <div className="lbl">
+                        {alert.type === 'warn' ? <Bell size={12} /> : <Shield size={12} />} {alert.title}
+                      </div>
+                      <div className="txt">{alert.message}</div>
+                    </div>
+                  ))
+                ) : (
+                  !rightPanel.loading && <div className="txt">No active alerts for {selectedTicker}.</div>
+                )}
+              </>
+            ) : null}
+            {activeTab === "news" ? (
+              <>
+                {rightPanel.loading && <div className="txt">Loading news…</div>}
+                {rightPanel.news?.announcements && rightPanel.news.announcements.length > 0 && (
+                  <div className="card">
+                    <div className="lbl">📣 Recent Announcements</div>
+                    {rightPanel.news.announcements.map((a, i) => (
+                      <div key={i} className="src-item" style={{ cursor: "default", border: "none", padding: "4px 0", background: "transparent" }}>
+                        <strong style={{color: "var(--text-1)"}}>{a.title}</strong>
+                        {a.summary && <div className="txt" style={{marginTop: "2px"}}>{a.summary}</div>}
+                        <div className="txt" style={{fontSize: "9px", color: "var(--text-3)"}}>{a.published_at}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {rightPanel.news?.news && rightPanel.news.news.length > 0 && (
+                  <div className="card">
+                    <div className="lbl"><Newspaper size={12} /> Latest News</div>
+                    {rightPanel.news.news.map((n, i) => (
+                      <a key={i} href={n.url || "#"} target="_blank" rel="noreferrer" className="src-item" style={{ display: "block", cursor: n.url ? "pointer" : "default" }}>
+                        <strong style={{color: "var(--text-1)"}}>{n.title}</strong>
+                        {n.summary && <div className="txt" style={{marginTop: "2px"}}>{n.summary}</div>}
+                        <div className="txt" style={{fontSize: "9px", color: "var(--text-3)", marginTop: "4px"}}>{n.source} {n.published_at ? `· ${n.published_at}` : ""}</div>
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {!rightPanel.loading && !rightPanel.news?.news?.length && !rightPanel.news?.announcements?.length && (
+                  <div className="txt">No recent news or announcements found.</div>
+                )}
+              </>
+            ) : null}
+            {activeTab === "source" ? (
+              <>
+                {selectedSource ? (
+                  <div className="card">
+                    <div className="lbl"><FileText size={12} /> Source Details</div>
+                    <div className="txt"><strong>Agent:</strong> {selectedSource.agent}</div>
+                    <div className="txt"><strong>Tool:</strong> {selectedSource.tool_name}</div>
+                    <div className="txt"><strong>Type:</strong> {selectedSource.source_type}</div>
+                    <div className="txt"><strong>Label:</strong> {selectedSource.label}</div>
+                    {selectedSource.input_args && Object.keys(selectedSource.input_args).length > 0 && (
+                      <div className="txt">
+                        <strong>Input Args:</strong>
+                        <pre style={{ background: 'var(--bg-surface)', padding: '6px', borderRadius: '4px', fontSize: '10px', overflowX: 'auto', marginTop: '4px' }}>
+                          {JSON.stringify(selectedSource.input_args, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {selectedSource.excerpt && (
+                      <div className="txt">
+                        <strong>Excerpt:</strong>
+                        <div style={{ marginTop: '4px', padding: '6px', background: 'var(--bg-surface)', borderRadius: '4px', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', fontSize: '11px' }}>
+                          {selectedSource.excerpt}
+                        </div>
+                      </div>
+                    )}
+                    {selectedSource.timestamp && (
+                      <div className="txt" style={{ fontSize: '10px', color: 'var(--text-3)', marginTop: '8px' }}>
+                        Retrieved at: {selectedSource.timestamp}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="txt" style={{ marginBottom: '10px' }}>Click on a source snippet in the chat to view complete details here.</div>
+                )}
+
+                <div className="card src">
+                  <div className="lbl"><FileText size={12} /> Source Snippets</div>
+                  {latestSources.length > 0 ? (
+                    latestSources.map((c, i) => (
+                      <div key={i} className="src-item" onClick={() => setSelectedSource(c)}>
+                        <strong>{c.agent}</strong> | {c.label}
+                        <div className="txt" style={{ marginTop: '4px', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: 'var(--text-3)' }}>
+                          {c.excerpt ? c.excerpt.slice(0, 150) + "..." : "No excerpt available"}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="txt">No source snippets used in the latest response.</div>
+                  )}
                 </div>
               </>
             ) : null}
-
-            <div className="card src">
-              <div className="lbl"><FileText size={12} /> Source Snippets</div>
-              {stockDocError ? (
-                <div className="txt">{stockDocError}</div>
-              ) : stockDocData?.available ? (
-                <>
-                  <div className="txt">
-                    {stockDocData.summaryText ?? "Doc pipeline summary is not available for this symbol."}
-                  </div>
-                  <div className="txt">
-                    Announcements: {stockDocData.counts?.announcements ?? 0} · Quarterly Rows: {stockDocData.counts?.quarterlyRows ?? 0}
-                  </div>
-                  <div className="txt">
-                    P/E: {stockDocData.metrics?.peRatio ?? "--"} · P/B: {stockDocData.metrics?.pbRatio ?? "--"} · ROE: {stockDocData.metrics?.roePct ?? "--"}
-                  </div>
-                  {(stockDocData.annualReportLinks ?? []).slice(0, 3).map((item, idx) => (
-                    <a
-                      key={`${item.url ?? "ar"}-${idx}`}
-                      className="src-item"
-                      href={item.url || "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {item.year ?? "Annual Report"} {item.label ? `| ${item.label}` : ""}
-                    </a>
-                  ))}
-                  {stockDocData.pipelineRunAt ? (
-                    <div className="txt">Pipeline Run: {new Date(stockDocData.pipelineRunAt).toLocaleString()}</div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="txt">No S3 doc pipeline payload found for this stock yet.</div>
-              )}
-            </div>
           </div>
         </aside>
       </div>
@@ -1026,6 +1715,46 @@ export default function WarRoomPage() {
           padding: 2px 0;
           border-radius: 0;
         }
+        .markdown-content {
+          white-space: normal;
+          word-break: break-word;
+        }
+        .markdown-content p {
+          margin: 0 0 0.75rem 0;
+        }
+        .markdown-content p:last-child {
+          margin-bottom: 0;
+        }
+        .markdown-content ul,
+        .markdown-content ol {
+          margin: 0 0 0.75rem 0;
+          padding-left: 1.25rem;
+        }
+        .markdown-content li {
+          margin-bottom: 0.25rem;
+        }
+        .markdown-content li > p {
+          margin: 0;
+        }
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3 {
+          margin: 1.25rem 0 0.5rem 0;
+          font-weight: 700;
+          line-height: 1.3;
+        }
+        .markdown-content h1:first-child,
+        .markdown-content h2:first-child,
+        .markdown-content h3:first-child {
+          margin-top: 0;
+        }
+        .markdown-content code {
+          background: var(--bg-raised);
+          padding: 2px 4px;
+          border-radius: 4px;
+          font-family: ui-monospace, monospace;
+          font-size: 0.9em;
+        }
         .user-bubble {
           background: var(--accent);
           color: #fff;
@@ -1114,6 +1843,141 @@ export default function WarRoomPage() {
           color: var(--accent);
           border-color: var(--border-mid);
         }
+        .q-divider {
+          width: 1px;
+          height: 16px;
+          background: var(--border-faint);
+          margin: 0 2px;
+          align-self: center;
+        }
+        .mode-pill {
+          font-weight: 700;
+          letter-spacing: 0.01em;
+        }
+        .mode-pill.on.reasoning {
+          background: rgba(139, 92, 246, 0.15);
+          color: #a78bfa;
+          border-color: rgba(139, 92, 246, 0.3);
+        }
+        /* BUY/SELL/HOLD signal badge */
+        .signal-badge {
+          display: inline-block;
+          margin-left: 8px;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          vertical-align: middle;
+        }
+        .signal-buy, .signal-strong_buy { background: rgba(16,185,129,0.15); color: #10b981; }
+        .signal-sell { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .signal-hold { background: rgba(234,179,8,0.15); color: #eab308; }
+        /* Streaming indicator */
+        .streaming-dot {
+          display: inline-block;
+          margin-left: 6px;
+          color: var(--accent);
+          animation: pulse 1.2s infinite;
+          font-size: 8px;
+          vertical-align: middle;
+        }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        .thinking { color: var(--text-3); font-style: italic; font-size: 13px; }
+        /* Stop button */
+        .stop-btn {
+          font-size: 12px;
+          background: rgba(239,68,68,0.12) !important;
+          color: #ef4444 !important;
+          border: 1px solid rgba(239,68,68,0.25) !important;
+        }
+        /* Analyst progress pills */
+        .analyst-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin: 6px 0 4px;
+        }
+        .a-pill {
+          font-size: 10px;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-weight: 600;
+          border: 1px solid var(--border-faint);
+          background: var(--bg-raised);
+          color: var(--text-3);
+          transition: all 0.2s;
+        }
+        .a-pill-running {
+          border-color: var(--accent);
+          color: var(--accent);
+          background: var(--accent-dim);
+          animation: pulse 1.5s infinite;
+        }
+        .a-pill-done {
+          border-color: rgba(16,185,129,0.3);
+          background: rgba(16,185,129,0.08);
+          color: #10b981;
+        }
+        .a-pill-error {
+          border-color: rgba(239,68,68,0.3);
+          color: #ef4444;
+        }
+        .a-pill-verdict { font-size: 9px; opacity: 0.85; }
+        /* Citation cards */
+        .citations {
+          margin-top: 8px;
+          border-top: 1px solid var(--border-faint);
+          padding-top: 8px;
+        }
+        .cite-label {
+          font-size: 9px;
+          color: var(--text-3);
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin-bottom: 6px;
+        }
+        .cite-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        .cite-card {
+          background: var(--bg-raised);
+          border: 1px solid var(--border-faint);
+          border-radius: 7px;
+          padding: 5px 8px;
+          max-width: 220px;
+          min-width: 120px;
+          cursor: pointer;
+          transition: background 0.15s, border-color 0.15s;
+        }
+        .cite-card:hover {
+          background: var(--bg-hover);
+          border-color: var(--border-mid);
+        }
+        .cite-agent {
+          font-size: 9px;
+          color: var(--accent);
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .cite-source {
+          font-size: 10px;
+          color: var(--text-2);
+          font-weight: 600;
+          margin-top: 1px;
+        }
+        .cite-excerpt {
+          font-size: 9px;
+          color: var(--text-3);
+          margin-top: 3px;
+          line-height: 1.4;
+          font-family: ui-monospace, monospace;
+        }
         .att-prev {
           border: 1px solid var(--border-faint);
           background: var(--bg-raised);
@@ -1201,7 +2065,7 @@ export default function WarRoomPage() {
         .rp-tabs {
           border-bottom: 1px solid var(--border-faint);
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           background: var(--bg-raised);
         }
         .rp-tab {
@@ -1305,6 +2169,154 @@ export default function WarRoomPage() {
             display: none;
           }
         }
+
+        /* ─ @ mention picker ──────────────────────────────────── */
+        .at-picker {
+          position: absolute;
+          bottom: 100%;
+          left: 0;
+          right: 0;
+          margin-bottom: 4px;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-mid);
+          border-radius: 12px;
+          padding: 6px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          z-index: 20;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+          max-height: 140px;
+          overflow-y: auto;
+        }
+        .at-picker-hint {
+          width: 100%;
+          font-size: 10px;
+          color: var(--text-3);
+          padding: 2px 4px 4px;
+          border-bottom: 1px solid var(--border-faint);
+          margin-bottom: 2px;
+        }
+        .at-item {
+          background: var(--bg-raised);
+          border: 1px solid var(--border-faint);
+          border-radius: 6px;
+          padding: 4px 8px;
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--accent);
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .at-item:hover {
+          background: var(--accent-dim);
+          border-color: var(--accent);
+        }
+        .input-area {
+          position: relative;
+        }
+
+        /* ─ Scorecard card ────────────────────────────────────── */
+        .scorecard-card {
+          margin-top: 10px;
+          background: var(--bg-raised);
+          border: 1px solid var(--border-mid);
+          border-radius: 12px;
+          padding: 12px;
+        }
+        .sc-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .sc-title { font-size: 12px; font-weight: 600; color: var(--text-1); }
+        .sc-verdict {
+          font-size: 10px;
+          font-weight: 700;
+          border-radius: 4px;
+          padding: 2px 6px;
+          text-transform: uppercase;
+        }
+        .sc-verdict.sc-strong_buy, .sc-verdict.sc-buy { background: rgba(16,185,129,0.15); color: var(--green); }
+        .sc-verdict.sc-sell, .sc-verdict.sc-strong_sell { background: rgba(239,68,68,0.15); color: var(--red); }
+        .sc-verdict.sc-hold { background: rgba(139,157,200,0.15); color: var(--text-2); }
+        .sc-agree { margin-left: auto; font-size: 10px; color: var(--text-3); }
+        .sc-scores { display: flex; flex-direction: column; gap: 5px; }
+        .sc-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+        .sc-name { width: 120px; color: var(--text-2); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sc-bar-wrap { flex: 1; background: var(--bg-surface); border-radius: 4px; height: 5px; overflow: hidden; }
+        .sc-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .sc-bar.bull { background: var(--green); }
+        .sc-bar.bear { background: var(--red); }
+        .sc-bar.neut { background: var(--text-3); }
+        .sc-val { width: 28px; text-align: right; font-weight: 600; flex-shrink: 0; }
+        .sc-conflicts { margin-top: 8px; font-size: 10px; color: var(--red); background: rgba(239,68,68,0.08); border-radius: 6px; padding: 4px 8px; }
+
+        /* ─ Debate cards ──────────────────────────────────────── */
+        .debate-section { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .debate-card {
+          background: var(--bg-raised);
+          border: 1px solid var(--border-mid);
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 12px;
+        }
+        .dc-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--text-2);
+          margin-bottom: 8px;
+        }
+        .dc-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .dc-side { background: var(--bg-surface); border-radius: 8px; padding: 8px; border: 1px solid var(--border-faint); }
+        .dc-side.bull { border-color: rgba(16,185,129,0.25); }
+        .dc-side.bear { border-color: rgba(239,68,68,0.25); }
+        .dc-side-label { font-size: 10px; font-weight: 700; margin-bottom: 4px; color: var(--text-3); }
+        .dc-side.bull .dc-side-label { color: var(--green); }
+        .dc-side.bear .dc-side-label { color: var(--red); }
+        .dc-text { font-size: 11px; line-height: 1.5; color: var(--text-2); }
+        .dc-facilitator .dc-text { font-size: 11px; line-height: 1.6; color: var(--text-1); }
+
+        /* ─ Trade plans grid ──────────────────────────────────── */
+        .trade-plans { margin-top: 10px; }
+        .tp-label { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+        .tp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .tp-card {
+          background: var(--bg-raised);
+          border: 1px solid var(--border-mid);
+          border-radius: 10px;
+          padding: 8px;
+          font-size: 11px;
+        }
+        .tp-profile {
+          font-weight: 700;
+          color: var(--accent);
+          font-size: 10px;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+          border-bottom: 1px solid var(--border-faint);
+          padding-bottom: 4px;
+        }
+        .tp-row { display: flex; justify-content: space-between; gap: 4px; margin-top: 3px; color: var(--text-2); }
+        .tp-row span:first-child { color: var(--text-3); }
+        .pos { color: var(--green); }
+        .neg { color: var(--red); }
+
+        /* ─ Right panel action button ─────────────────────────── */
+        .rp-action-btn {
+          margin-top: 6px;
+          width: 100%;
+          padding: 6px;
+          font-size: 11px;
+          border-radius: 7px;
+          border: 1px solid var(--accent);
+          background: var(--accent-dim);
+          color: var(--accent);
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .rp-action-btn:hover { background: var(--accent); color: #fff; }
       `}</style>
     </div>
   );

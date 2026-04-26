@@ -1,0 +1,19 @@
+2026-03-21 12:26:14,982 [INFO] db.database: Database initialized at D:\scrapper\data\sanctions.db
+2026-03-21 12:26:15,011 [INFO] run: Initialized 2 sources from config
+2026-03-21 12:26:15,011 [INFO] run: ============================================================
+2026-03-21 12:26:15,011 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-03-21 12:26:15,011 [INFO] run: ============================================================
+2026-03-21 12:26:15,193 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-03-21 12:26:19,350 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-03-21 12:26:19,376 [INFO] scrapers.un_scraper: Parsed 730 individuals from UN XML
+2026-03-21 12:26:19,382 [INFO] scrapers.un_scraper: Parsed 272 entities from UN XML
+2026-03-21 12:27:06,534 [INFO] scrapers.un_scraper: UN scrape complete: 1002 found, 1002 new, 0 errors
+2026-03-21 12:27:06,547 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1002,
+  "records_new": 1002,
+  "records_processed": 1002,
+  "errors": []
+}
+2026-03-21 12:27:06,548 [INFO] run: Scraping complete!

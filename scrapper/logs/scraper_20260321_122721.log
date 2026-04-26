@@ -1,0 +1,24 @@
+2026-03-21 12:27:21,495 [INFO] db.database: Database initialized at D:\scrapper\data\sanctions.db
+2026-03-21 12:27:21,497 [INFO] run: Initialized 2 sources from config
+2026-03-21 12:27:21,499 [INFO] run: ============================================================
+2026-03-21 12:27:21,499 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-03-21 12:27:21,499 [INFO] run: ============================================================
+2026-03-21 12:27:21,802 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-03-21 12:27:22,478 [INFO] scrapers.rbi_scraper: Found 3 unique circulars on index page
+2026-03-21 12:27:22,480 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/../Scripts/NotificationUser.aspx
+2026-03-21 12:27:22,943 [INFO] scrapers.rbi_scraper:   [1/3] NEW: Notifications
+2026-03-21 12:27:22,943 [INFO] scrapers.rbi_scraper:   Waiting 4.1s before next request...
+2026-03-21 12:27:27,034 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx
+2026-03-21 12:27:27,153 [INFO] scrapers.rbi_scraper:   [2/3] SKIP (already exists): Notifications
+2026-03-21 12:27:27,153 [INFO] scrapers.rbi_scraper:   Waiting 2.9s before next request...
+2026-03-21 12:27:30,078 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13325&Mode=0
+2026-03-21 12:27:30,661 [INFO] scrapers.rbi_scraper:   [3/3] NEW: DOR.ACC.REC.No.426/21.02.067/2025-26
+2026-03-21 12:27:30,682 [INFO] scrapers.rbi_scraper: RBI scrape complete: 3 found, 2 new, 0 errors
+2026-03-21 12:27:30,688 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 3,
+  "records_new": 2,
+  "errors": []
+}
+2026-03-21 12:27:30,688 [INFO] run: Scraping complete!
