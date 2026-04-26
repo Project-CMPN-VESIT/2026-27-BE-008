@@ -1,0 +1,5 @@
+2026-04-26 22:01:36,020 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
+2026-04-26 22:01:36,020 [INFO] run: Docs available at http://localhost:8003/docs
+2026-04-26 22:01:36,852 [INFO] screener.db.session: Initialized database schema at sqlite:///D:\Desktop\FinPilot\scrapper\screener\db\../../data/screener.db
+2026-04-26 22:01:50,623 [INFO] screener.engine: Executing on Screener.in: Price to Earning < 20 AND Market Capitalization > 1000000000
+2026-04-26 22:01:51,062 [ERROR] screener.engine: Authentication required by Screener.in. Please set SCREENER_COOKIE in .env

@@ -1,0 +1,25 @@
+2026-04-26 22:19:33,000 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-04-26 22:19:33,009 [INFO] run: Initialized 2 sources from config
+2026-04-26 22:19:33,010 [INFO] run: ============================================================
+2026-04-26 22:19:33,010 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-04-26 22:19:33,010 [INFO] run: ============================================================
+2026-04-26 22:19:33,053 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
+2026-04-26 22:19:33,054 [INFO] run: Docs available at http://localhost:8003/docs
+2026-04-26 22:19:33,057 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
+2026-04-26 22:19:33,058 [INFO] run: Docs available at http://localhost:8000/docs
+2026-04-26 22:19:33,333 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-04-26 22:19:33,441 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-04-26 22:19:33,953 [INFO] screener.db.session: Initialized database schema at sqlite:///D:\Desktop\FinPilot\scrapper\screener\db\../../data/screener.db
+2026-04-26 22:19:43,362 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-04-26 22:19:43,494 [INFO] scrapers.un_scraper: Parsed 733 individuals from UN XML
+2026-04-26 22:19:43,504 [INFO] scrapers.un_scraper: Parsed 272 entities from UN XML
+2026-04-26 22:19:52,061 [INFO] scrapers.un_scraper: UN scrape complete: 1005 found, 0 new, 0 errors
+2026-04-26 22:19:52,070 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1005,
+  "records_new": 0,
+  "records_processed": 0,
+  "errors": []
+}
+2026-04-26 22:19:52,070 [INFO] run: Scraping complete!
