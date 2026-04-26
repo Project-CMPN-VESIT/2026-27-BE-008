@@ -14,6 +14,7 @@ $activateScript = Join-Path $repoRoot ".venv\Scripts\Activate.ps1"
 $envFile = Join-Path $repoRoot ".env"
 
 $frontendDir = $repoRoot
+$indiaTradeCliDir = Join-Path $repoRoot "india-trade-cli"
 $newsFeedDir = Join-Path $repoRoot "news-feed"
 $paperTradingDir = Join-Path $repoRoot "paper-trading"
 $scrapperDir = Join-Path $repoRoot "scrapper"
@@ -26,7 +27,7 @@ if (-not (Test-Path $activateScript)) {
     throw "Activation script not found at $activateScript."
 }
 
-foreach ($path in @($frontendDir, $newsFeedDir, $paperTradingDir, $scrapperDir)) {
+foreach ($path in @($frontendDir, $indiaTradeCliDir, $newsFeedDir, $paperTradingDir, $scrapperDir)) {
     if (-not (Test-Path $path)) {
         throw "Required directory not found: $path"
     }
@@ -117,6 +118,12 @@ $safePython = $pythonExe.Replace("'", "''")
 $unSleepSeconds = [Math]::Max(60, $UnScrapeIntervalMinutes * 60)
 
 $frontendCommand = "npm run dev"
+
+$indiaTradeCliCommand = @"
+& '$safeActivate'
+& '$safePython' -m web.api
+"@
+
 $newsFeedCommand = @"
 & '$safeActivate'
 & '$safePython' run.py
@@ -130,6 +137,11 @@ $paperTradingCommand = @"
 $regulatoryApiCommand = @"
 & '$safeActivate'
 & '$safePython' run.py serve
+"@
+
+$screenerApiCommand = @"
+& '$safeActivate'
+& '$safePython' run.py serve-screener
 "@
 
 if ($UnScrapeOnce) {
@@ -152,14 +164,18 @@ while (`$true) {
 }
 
 Start-ServiceTerminal -Title "FinPilot Frontend (3000)" -WorkingDirectory $frontendDir -Command $frontendCommand
+Start-ServiceTerminal -Title "FinPilot CYRO Engine (8765)" -WorkingDirectory $indiaTradeCliDir -Command $indiaTradeCliCommand
 Start-ServiceTerminal -Title "FinPilot News Feed Backend (8002)" -WorkingDirectory $newsFeedDir -Command $newsFeedCommand
 Start-ServiceTerminal -Title "FinPilot Paper Trading Backend (8001)" -WorkingDirectory $paperTradingDir -Command $paperTradingCommand
 Start-ServiceTerminal -Title "FinPilot Regulatory API (8000)" -WorkingDirectory $scrapperDir -Command $regulatoryApiCommand
+Start-ServiceTerminal -Title "FinPilot Screener API (8003)" -WorkingDirectory $scrapperDir -Command $screenerApiCommand
 Start-ServiceTerminal -Title "FinPilot UN Sanctions Scraper" -WorkingDirectory $scrapperDir -Command $unScraperCommand
 
 Write-Host "Launched all services in separate terminals:" -ForegroundColor Green
 Write-Host "1. Frontend            -> http://localhost:3000"
-Write-Host "2. News Feed backend   -> http://localhost:8002"
-Write-Host "3. Paper Trading       -> http://localhost:8001"
-Write-Host "4. Regulatory API      -> http://localhost:8000"
-Write-Host "5. UN scraper          -> scrape once at startup, then recurring scrape --source un"
+Write-Host "2. CYRO Engine         -> http://localhost:8765"
+Write-Host "3. News Feed backend   -> http://localhost:8002"
+Write-Host "4. Paper Trading       -> http://localhost:8001"
+Write-Host "5. Regulatory API      -> http://localhost:8000"
+Write-Host "6. Screener API        -> http://localhost:8003"
+Write-Host "7. UN scraper          -> scrape once at startup, then recurring scrape --source un"

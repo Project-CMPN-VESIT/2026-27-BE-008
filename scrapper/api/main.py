@@ -35,14 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB
+# Initialize sanctions DB
 db = Database()
-
-# Include Screener Router
-from screener.api.routes import router as screener_router
-from screener.db.session import init_db
-init_db() # Initialize the screener DB
-app.include_router(screener_router)
 
 # --- Request/Response Models ---
 

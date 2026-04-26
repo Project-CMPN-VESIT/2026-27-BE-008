@@ -1,0 +1,4 @@
+2026-04-26 21:07:21,091 [INFO] run: Starting screening API on 0.0.0.0:8000
+2026-04-26 21:07:21,091 [INFO] run: Docs available at http://localhost:8000/docs
+2026-04-26 21:07:21,463 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-04-26 21:07:21,861 [INFO] screener.db.session: Initialized database schema at sqlite:///D:\Desktop\FinPilot\scrapper\screener\db\../../data/screener.db

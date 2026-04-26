@@ -6,6 +6,7 @@ import { QueryBuilder, METRICS } from "@/components/screener/QueryBuilder";
 import { ResultsTable } from "@/components/screener/ResultsTable";
 import { ComparePanel } from "@/components/screener/ComparePanel";
 import { useAuth } from "@/lib/auth-context";
+import { screenerApiUrl } from "@/lib/screener-api";
 
 type ScreenResult = {
   symbol: string;
@@ -45,7 +46,7 @@ export default function ScreenerPage() {
     if (!user) return;
     const fetchScreens = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/screener/screens?user_id=${user.id}`);
+        const res = await fetch(screenerApiUrl(`/api/v1/screener/screens?user_id=${user.id}`));
         const data = await res.json();
         if (data.success && data.screens) {
           const userScreens = data.screens.map((s: any) => ({ name: s.name, ast: s.query_ast }));
@@ -65,7 +66,7 @@ export default function ScreenerPage() {
     }
     
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/screener/screens`, {
+      const res = await fetch(screenerApiUrl("/api/v1/screener/screens"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -93,7 +94,7 @@ export default function ScreenerPage() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:8000/api/v1/screener/run", {
+      const res = await fetch(screenerApiUrl("/api/v1/screener/run"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query_ast: queryAst, limit: 100 })

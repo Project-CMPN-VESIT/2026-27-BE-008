@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createChart, IChartApi, LineSeries } from "lightweight-charts";
 import { Activity, BarChart3, Users, DollarSign } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { screenerApiUrl } from "@/lib/screener-api";
 import { Building2, Info } from "lucide-react";
 
 // Static company business summaries — will be replaced by live API in future
@@ -63,7 +64,7 @@ export default function CompanyPage() {
     }
     setIsSavingAlert(true);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/screener/alerts", {
+      const res = await fetch(screenerApiUrl("/api/v1/screener/alerts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

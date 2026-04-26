@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Swords,
   Shield,
+  Search,
   BarChart3,
   AlertTriangle,
   Users,
@@ -22,12 +23,13 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/war-room", label: "War Room", icon: Swords },
   { href: "/regulatory", label: "SEBI Shield", icon: Shield },
-  { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },
-  { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
-  { href: "/council", label: "Agent Council", icon: Users },
+  { href: "/screener", label: "Screener", icon: Search },
   { href: "/news-feed", label: "News Feed", icon: Newspaper },
   { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
+  { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },
+  { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
+  { href: "/council", label: "Agent Council", icon: Users },
 ];
 
 export function Sidebar() {

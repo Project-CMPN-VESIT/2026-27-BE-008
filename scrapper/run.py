@@ -8,7 +8,8 @@ Usage:
     python run.py scrape --source rbi --max 5   # Scrape only 5 RBI circulars
     python run.py extract                   # Run AI extraction on unprocessed records
     python run.py extract --max 10          # Extract up to 10 records
-    python run.py serve                     # Start the FastAPI screening API
+    python run.py serve                     # Start the SEBI Shield API
+    python run.py serve-screener            # Start the dedicated Discovery Screener API
     python run.py stats                     # Show database stats
 """
 
@@ -109,17 +110,36 @@ def cmd_extract(args):
 
 
 def cmd_serve(args):
-    """Start the FastAPI screening server."""
+    """Start the FastAPI SEBI Shield server."""
     import uvicorn
 
     host = args.host or "0.0.0.0"
     port = args.port or 8000
 
-    logger.info(f"Starting screening API on {host}:{port}")
+    logger.info(f"Starting SEBI Shield API on {host}:{port}")
     logger.info(f"Docs available at http://localhost:{port}/docs")
 
     uvicorn.run(
         "api.main:app",
+        host=host,
+        port=port,
+        reload=False,
+        log_level="info",
+    )
+
+
+def cmd_serve_screener(args):
+    """Start the dedicated FastAPI Discovery Screener server."""
+    import uvicorn
+
+    host = args.host or "0.0.0.0"
+    port = args.port or 8003
+
+    logger.info(f"Starting Discovery Screener API on {host}:{port}")
+    logger.info(f"Docs available at http://localhost:{port}/docs")
+
+    uvicorn.run(
+        "screener.main:app",
         host=host,
         port=port,
         reload=False,
@@ -165,7 +185,8 @@ Examples:
   python run.py scrape --source rbi --max 5  Scrape only first 5 RBI circulars
   python run.py extract                   Run AI extraction on new records
   python run.py extract --max 10          Extract up to 10 records
-  python run.py serve                     Start the screening API server
+    python run.py serve                     Start the SEBI Shield API server (default port 8000)
+    python run.py serve-screener            Start the Discovery Screener API server (default port 8003)
   python run.py stats                     Show database statistics
   python run.py pipeline --source rbi --max 5  Full pipeline: scrape + extract + stats
         """,
@@ -185,10 +206,15 @@ Examples:
     extract_parser.add_argument("--max", type=int, default=None,
                                  help="Max records to process")
 
-    # serve command
-    serve_parser = subparsers.add_parser("serve", help="Start API server")
+    # serve command (SEBI Shield API)
+    serve_parser = subparsers.add_parser("serve", help="Start SEBI Shield API server")
     serve_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     serve_parser.add_argument("--port", type=int, default=8000, help="Port to listen on")
+
+    # serve-screener command (dedicated Discovery Screener API)
+    screener_parser = subparsers.add_parser("serve-screener", help="Start dedicated Discovery Screener API server")
+    screener_parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    screener_parser.add_argument("--port", type=int, default=8003, help="Port to listen on")
 
     # stats command
     subparsers.add_parser("stats", help="Show database stats")
@@ -208,6 +234,7 @@ Examples:
         "scrape": cmd_scrape,
         "extract": cmd_extract,
         "serve": cmd_serve,
+        "serve-screener": cmd_serve_screener,
         "stats": cmd_stats,
         "pipeline": cmd_pipeline,
     }

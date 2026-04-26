@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, AlertTriangle, Crown, TrendingDown } from "lucide-react";
+import { screenerApiUrl } from "@/lib/screener-api";
 
 type CompanyMetrics = {
   symbol: string;
@@ -42,7 +43,7 @@ export default function ComparePage() {
 
     const fetchCompareData = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/v1/screener/run", {
+        const res = await fetch(screenerApiUrl("/api/v1/screener/run"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

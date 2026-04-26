@@ -1,0 +1,45 @@
+2026-04-26 21:09:33,068 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-04-26 21:09:33,078 [INFO] run: Initialized 2 sources from config
+2026-04-26 21:09:33,078 [INFO] run: ============================================================
+2026-04-26 21:09:33,079 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-04-26 21:09:33,079 [INFO] run: ============================================================
+2026-04-26 21:09:33,301 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-04-26 21:09:34,123 [INFO] scrapers.rbi_scraper: Found 0 unique circulars on index page
+2026-04-26 21:09:34,150 [INFO] scrapers.rbi_scraper: RBI scrape complete: 0 found, 0 new, 0 errors
+2026-04-26 21:09:34,151 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 0,
+  "records_new": 0,
+  "errors": []
+}
+2026-04-26 21:09:34,152 [INFO] run: ============================================================
+2026-04-26 21:09:34,152 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-04-26 21:09:34,153 [INFO] run: ============================================================
+2026-04-26 21:09:34,328 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-04-26 21:09:39,391 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-04-26 21:09:39,417 [INFO] scrapers.un_scraper: Parsed 733 individuals from UN XML
+2026-04-26 21:09:39,425 [INFO] scrapers.un_scraper: Parsed 272 entities from UN XML
+2026-04-26 21:09:43,155 [INFO] scrapers.un_scraper: UN scrape complete: 1005 found, 0 new, 0 errors
+2026-04-26 21:09:43,161 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1005,
+  "records_new": 0,
+  "records_processed": 0,
+  "errors": []
+}
+2026-04-26 21:09:43,162 [INFO] run: Scraping complete!
+2026-04-26 21:09:43,204 [ERROR] run: Command failed: cannot import name 'Mistral' from 'mistralai' (unknown location)
+Traceback (most recent call last):
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 216, in main
+    commands[args.command](args)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 152, in cmd_pipeline
+    cmd_extract(args)
+    ~~~~~~~~~~~^^^^^^
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 98, in cmd_extract
+    from extraction.mistral_extractor import process_unprocessed_records
+  File "D:\Desktop\FinPilot\scrapper\extraction\mistral_extractor.py", line 13, in <module>
+    from mistralai import Mistral
+ImportError: cannot import name 'Mistral' from 'mistralai' (unknown location)
