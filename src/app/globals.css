@@ -40,7 +40,7 @@ body.sidebar-collapsed .app-shell {
   }
 }
 
-/* ── Light mode professional card styling ── */
+/* â”€â”€ Light mode professional card styling â”€â”€ */
 :root:not(:where(.dark, .dark *)) .bg-white {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
 }
@@ -107,7 +107,7 @@ body.sidebar-collapsed .app-shell {
   background-size: 32px 32px;
 }
 
-/* ── Markdown Rendering Styles ── */
+/* â”€â”€ Markdown Rendering Styles â”€â”€ */
 .markdown-content {
   line-height: 1.6;
 }

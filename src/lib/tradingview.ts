@@ -86,8 +86,6 @@ export type TvCandle = {
 };
 
 const allowedExchanges = new Set(["NSE", "BSE"]);
-
-const QUOTE_CACHE_TTL_MS = 900;
 const CANDLE_CACHE_TTL_MS = 45000;
 
 type CachedEntry<T> = {
@@ -95,7 +93,6 @@ type CachedEntry<T> = {
   fetchedAt: number;
 };
 
-const quoteCache = new Map<string, CachedEntry<TvLiveQuote>>();
 const candleCache = new Map<string, CachedEntry<TvCandle[]>>();
 
 const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
@@ -170,67 +167,277 @@ export async function resolveMarket(input: string): Promise<TvStockSummary | nul
   return exact ?? results[0];
 }
 
-export async function getLiveQuote(marketId: string): Promise<TvLiveQuote> {
-  const cached = quoteCache.get(marketId);
-  if (cached && Date.now() - cached.fetchedAt < QUOTE_CACHE_TTL_MS) {
-    return cached.value;
+// =========================================================================
+// MARKET DATA SERVICE LAYER
+// =========================================================================
+
+export type NormalizedQuote = {
+  symbol: string;
+  ltp: number;
+  change: number;
+  pChange: number;
+  dayHigh?: number;
+  dayLow?: number;
+  volume?: number;
+  marketCap?: number;
+  updatedAt: number;
+  // Extras
+  peRatio?: number;
+  pbRatio?: number;
+  roe?: number;
+  eps?: number;
+  dividendYield?: number;
+  bookValue?: number;
+  faceValue?: number;
+  debtToEquity?: number;
+  revenueTtm?: number;
+  netProfitTtm?: number;
+  operatingProfitTtm?: number;
+  totalAssets?: number;
+  totalLiabilities?: number;
+};
+
+class MarketDataService {
+  private client: any = null;
+  private quoteSession: any = null;
+  private markets = new Map<string, any>();
+  private store = new Map<string, NormalizedQuote>();
+  private activeSubscriptions = new Set<string>();
+  private listeners = new Set<(quote: NormalizedQuote) => void>();
+  
+  public isConnected = false;
+  public lastUpdateTimestamp = 0;
+  
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private staleCheckTimer: NodeJS.Timeout | null = null;
+  private STALE_THRESHOLD_MS = 60000; // 1 minute
+
+  constructor() {
+    this.startStaleCheck();
   }
 
-  const client = new TradingView.Client();
+  public addListener(callback: (quote: NormalizedQuote) => void) {
+    this.listeners.add(callback);
+  }
 
-  try {
-    const quoteData = await withTimeout<QuotePacket>(
-      new Promise((resolve, reject) => {
-        const quoteSession = new client.Session.Quote({ fields: "all" });
-        const market = new quoteSession.Market(marketId);
+  public removeListener(callback: (quote: NormalizedQuote) => void) {
+    this.listeners.delete(callback);
+  }
 
+  private connect() {
+    if (this.client) {
+      this.client.end();
+    }
+    
+    this.client = new TradingView.Client();
+    this.quoteSession = new this.client.Session.Quote({ fields: "all" });
+    this.isConnected = true;
+    
+    // Handle global client errors/disconnects
+    this.client.onError((...error: any[]) => {
+      console.error("[MarketDataService] Client error:", error);
+      this.scheduleReconnect();
+    });
+
+    this.client.onDisconnected(() => {
+      console.warn("[MarketDataService] Client disconnected");
+      this.isConnected = false;
+      this.scheduleReconnect();
+    });
+
+    // Restore active subscriptions on connect
+    this.markets.clear();
+    const toSubscribe = Array.from(this.activeSubscriptions);
+    if (toSubscribe.length > 0) {
+      this.subscribe(toSubscribe);
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.isConnected = false;
+    this.reconnectTimer = setTimeout(() => {
+      console.log("[MarketDataService] Reconnecting...");
+      this.connect();
+    }, 5000);
+  }
+
+  public subscribe(symbols: string[]) {
+    if (!this.client || !this.isConnected) {
+      this.connect();
+    }
+
+    symbols.forEach(symbol => {
+      this.activeSubscriptions.add(symbol);
+      
+      if (!this.markets.has(symbol) && this.quoteSession) {
+        const market = new this.quoteSession.Market(symbol);
+        
         market.onData((packet: QuotePacket) => {
-          if (typeof packet?.lp === "number") {
-            resolve(packet);
-          }
+          this.handleData(symbol, packet);
         });
 
-        market.onError((...error: unknown[]) => {
-          reject(new Error(`TradingView quote error: ${error.join(" ")}`));
+        market.onError((...err: any[]) => {
+          console.error(`[MarketDataService] Error on ${symbol}:`, err);
         });
-      }),
-      3500,
-      "TradingView quote timeout"
-    );
 
-    const quote = {
-      ltp: quoteData.lp ?? 0,
-      change: quoteData.ch ?? 0,
-      pChange: quoteData.chp ?? 0,
-      dayHigh: quoteData.high_price,
-      dayLow: quoteData.low_price,
-      volume: quoteData.volume,
-      marketCap: quoteData.market_cap_basic,
-      peRatio: quoteData.price_earnings_ttm,
-      pbRatio: quoteData.price_book_fq,
-      roe: quoteData.return_on_equity,
-      eps: quoteData.earnings_per_share_basic_ttm,
-      dividendYield: quoteData.dividend_yield_recent,
-      bookValue: quoteData.book_value_per_share,
-      faceValue: quoteData.face_value,
-      debtToEquity: quoteData.debt_to_equity,
-      revenueTtm: quoteData.total_revenue,
-      netProfitTtm: quoteData.net_income,
-      operatingProfitTtm: quoteData.operating_income,
-      totalAssets: quoteData.total_assets,
-      totalLiabilities: quoteData.total_liabilities,
+        this.markets.set(symbol, market);
+      }
+    });
+  }
+
+  public unsubscribe(symbols: string[]) {
+    symbols.forEach(symbol => {
+      this.activeSubscriptions.delete(symbol);
+      const market = this.markets.get(symbol);
+      if (market) {
+        // According to the library, closing the market or removing it
+        market.close();
+        this.markets.delete(symbol);
+      }
+    });
+    
+    if (this.activeSubscriptions.size === 0) {
+      this.cleanup();
+    }
+  }
+
+  private handleData(symbol: string, packet: QuotePacket) {
+    if (packet.lp === undefined && !this.store.has(symbol)) {
+      // Ignore initial empty packets if we don't have existing data
+      return;
+    }
+
+    const now = Date.now();
+    this.lastUpdateTimestamp = now;
+
+    const existing = this.store.get(symbol) || {
+      symbol,
+      ltp: 0,
+      change: 0,
+      pChange: 0,
+      updatedAt: now,
     };
 
-    quoteCache.set(marketId, { value: quote, fetchedAt: Date.now() });
-    return quote;
-  } catch (error) {
-    if (cached) {
-      return cached.value;
-    }
-    throw error;
-  } finally {
-    await client.end();
+    const updated: NormalizedQuote = {
+      symbol,
+      ltp: packet.lp ?? existing.ltp,
+      change: packet.ch ?? existing.change,
+      pChange: packet.chp ?? existing.pChange,
+      dayHigh: packet.high_price ?? existing.dayHigh,
+      dayLow: packet.low_price ?? existing.dayLow,
+      volume: packet.volume ?? existing.volume,
+      marketCap: packet.market_cap_basic ?? existing.marketCap,
+      updatedAt: now,
+      
+      peRatio: packet.price_earnings_ttm ?? existing.peRatio,
+      pbRatio: packet.price_book_fq ?? existing.pbRatio,
+      roe: packet.return_on_equity ?? existing.roe,
+      eps: packet.earnings_per_share_basic_ttm ?? existing.eps,
+      dividendYield: packet.dividend_yield_recent ?? existing.dividendYield,
+      bookValue: packet.book_value_per_share ?? existing.bookValue,
+      faceValue: packet.face_value ?? existing.faceValue,
+      debtToEquity: packet.debt_to_equity ?? existing.debtToEquity,
+      revenueTtm: packet.total_revenue ?? existing.revenueTtm,
+      netProfitTtm: packet.net_income ?? existing.netProfitTtm,
+      operatingProfitTtm: packet.operating_income ?? existing.operatingProfitTtm,
+      totalAssets: packet.total_assets ?? existing.totalAssets,
+      totalLiabilities: packet.total_liabilities ?? existing.totalLiabilities,
+    };
+
+    this.store.set(symbol, updated);
+
+    // Notify listeners
+    this.listeners.forEach(listener => listener(updated));
   }
+
+  public getLatest(symbol: string): NormalizedQuote | undefined {
+    return this.store.get(symbol);
+  }
+
+  private startStaleCheck() {
+    this.staleCheckTimer = setInterval(() => {
+      const now = Date.now();
+      let allStale = true;
+      let hasData = false;
+      
+      for (const [symbol, quote] of this.store.entries()) {
+        hasData = true;
+        if (now - quote.updatedAt > this.STALE_THRESHOLD_MS) {
+          console.warn(`[MarketDataService] Data for ${symbol} is stale (last updated ${now - quote.updatedAt}ms ago)`);
+        } else {
+          allStale = false;
+        }
+      }
+      
+      // If we have active subs, data, and ALL data is stale, we might be disconnected silently
+      if (this.activeSubscriptions.size > 0 && hasData && allStale && this.isConnected) {
+        console.warn("[MarketDataService] All data is stale. Forcing reconnect...");
+        this.scheduleReconnect();
+      }
+    }, 30000); // Check every 30s
+  }
+
+  public cleanup() {
+    if (this.client) {
+      this.client.end();
+      this.client = null;
+    }
+    this.quoteSession = null;
+    this.isConnected = false;
+    this.markets.clear();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  public shutdown() {
+    this.cleanup();
+    if (this.staleCheckTimer) {
+      clearInterval(this.staleCheckTimer);
+      this.staleCheckTimer = null;
+    }
+  }
+}
+
+export const marketDataService = new MarketDataService();
+
+// =========================================================================
+// BACKWARDS COMPATIBILITY LAYER
+// =========================================================================
+
+export async function getLiveQuote(marketId: string): Promise<TvLiveQuote> {
+  const existing = marketDataService.getLatest(marketId);
+  // If we already have a reasonably fresh quote (within 2 secs), return it
+  if (existing && (Date.now() - existing.updatedAt < 2000)) {
+    return existing;
+  }
+
+  // Subscribe temporarily to get the latest quote
+  marketDataService.subscribe([marketId]);
+
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const timeout = 3500;
+    
+    const checkInterval = setInterval(() => {
+      const quote = marketDataService.getLatest(marketId);
+      if (quote && quote.ltp > 0 && quote.updatedAt > startTime) {
+        clearInterval(checkInterval);
+        resolve(quote);
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        if (quote && quote.ltp > 0) {
+           resolve(quote); // return old quote on timeout if we have one
+        } else {
+           reject(new Error("TradingView quote timeout via MarketDataService"));
+        }
+      }
+    }, 50);
+  });
 }
 
 const formatPointTime = (unix: number) => {

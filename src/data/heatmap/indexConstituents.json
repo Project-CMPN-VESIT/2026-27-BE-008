@@ -1,0 +1,3536 @@
+[
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ADANIENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ADANIPORTS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "APOLLOHOSP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ASIANPAINT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "AXISBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "BAJFINANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "BAJAJFINSV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "BEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "BHARTIARTL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "CIPLA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "COALINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "DRREDDY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "EICHERMOT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ETERNAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "GRASIM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "HCLTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "HDFCBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "HDFCLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "HINDALCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ICICIBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "INFY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "INDIGO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "JSWSTEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "JIOFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "KOTAKBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "LT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "M&M",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "MAXHEALTH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "NTPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ONGC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "POWERGRID",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "RELIANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "SBILIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "SHRIRAMFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "SUNPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TCS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TATACONSUM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TMPV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TATASTEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TECHM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TITAN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "TRENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "ULTRACEMCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ADANIENSOL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ADANIGREEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ADANIPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "AMBUJACEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "DMART",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "BAJAJHLDNG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "BANKBARODA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "BPCL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "BOSCHLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "CGPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "CANBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "CHOLAFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "CUMMINSIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "DLF",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "DIVISLAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "GAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "GODREJCP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "HDFCAMC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "HAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "HINDZINC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "HYUNDAI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "INDHOTEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "IOC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "IRFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "JINDALSTEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "LTM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "LODHA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "MAZDOCK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "MUTHOOTFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "PIDILITIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "PFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "PNB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "RECLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "MOTHERSON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "SHREECEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ENRIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "SIEMENS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "SOLARINDS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "TVSMOTOR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "TATACAP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "TMCV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "TATAPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "TORNTPHARM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "UNIONBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "UNITDSPR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "VBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "VEDL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ADANIENSOL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ADANIENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ADANIGREEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ADANIPORTS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ADANIPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "AMBUJACEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "APOLLOHOSP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "VBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "VEDL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "360ONE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "APLAPOLLO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "AUBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ADANIENSOL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ADANIENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ADANIGREEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ADANIPORTS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "WAAREEENER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "YESBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "360ONE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "3MINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ACC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ACMESOLAR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "AIAENG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "APLAPOLLO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "AUBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ZENSARTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ZYDUSWELL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "stock_symbol": "ECLERX",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "360ONE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "3MINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "ACC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "AIAENG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "APLAPOLLO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "AUBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "AWL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "ABBOTINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "IDEA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "VOLTAS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "WAAREEENER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "stock_symbol": "YESBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ACMESOLAR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "AADHARHFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "AARTIIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "AAVAS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ACE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ACUTAAS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ABFRL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ABLBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ZENTEC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ZENSARTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ZYDUSWELL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "stock_symbol": "ECLERX",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "AUBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "AXISBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "BANKBARODA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "CANBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "FEDERALBNK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "HDFCBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "ICICIBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "IDFCFIRSTB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "INDUSINDBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "KOTAKBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "PNB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "UNIONBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "stock_symbol": "YESBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "COFORGE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "HCLTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "INFY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "LTM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "MPHASIS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "OFSS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "PERSISTENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "TCS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "TECHM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "ASHOKLEY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "BHARATFORG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "BOSCHLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "EICHERMOT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "EXIDEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "HEROMOTOCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "M&M",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "MOTHERSON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "SONACOMS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "TVSMOTOR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "TMPV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "TIINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "stock_symbol": "UNOMINDA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "AXISBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "BSE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "BAJFINANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "BAJAJFINSV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "CHOLAFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "HDFCBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "HDFCLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "ICICIBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "ICICIGI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "JIOFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "KOTAKBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "LICHSGFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "MFSL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "MUTHOOTFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "PFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "RECLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "SBICARD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "SBILIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "SHRIRAMFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "ABBOTINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "AJANTPHARM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "ALKEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "AUROPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "BIOCON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "CIPLA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "DIVISLAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "DRREDDY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "GLAND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "GLENMARK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "IPCALAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "LAURUSLABS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "LUPIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "MANKIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "PPLPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "SAILIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "SUNPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "TORNTPHARM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "WOCKPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "ABBOTINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "ALKEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "APOLLOHOSP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "AUROPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "BIOCON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "CIPLA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "DIVISLAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "DRREDDY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "FORTIS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "GLENMARK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "IPCALAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "LAURUSLABS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "LUPIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "MANKIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "MAXHEALTH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "PPLPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "SUNPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "SYNGENE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "TORNTPHARM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "COLPAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "DABUR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "EMAMILTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "GODREJCP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "MARICO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "PATANJALI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "RADICO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "TATACONSUM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "UBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "UNITDSPR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "stock_symbol": "VBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "APLAPOLLO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "ADANIENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "HINDALCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "HINDCOPPER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "HINDZINC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "JSWSTEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "JSL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "JINDALSTEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "LLOYDSME",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "NMDC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "NATIONALUM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "SAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "TATASTEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "VEDL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "stock_symbol": "WELCORP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "ATGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "AEGISLOG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "AEGISVOPAK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "BPCL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "CASTROLIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "CHENNPETRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "GAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "HINDPETRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "IOC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "IGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "MGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "ONGC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "OIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "PETRONET",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "stock_symbol": "RELIANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "ABREL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "ANANTRAJ",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "BRIGADE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "DLF",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "GODREJPROP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "LODHA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "OBEROIRLTY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "PHOENIXLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "PRESTIGE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "stock_symbol": "SOBHA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "BANKBARODA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "BANKINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "MAHABANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "CANBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "CENTRALBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "INDIANB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "IOB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "PSB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "PNB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "UCOBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "stock_symbol": "UNIONBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "AXISBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "BANDHANBNK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "FEDERALBNK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "HDFCBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "ICICIBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "IDFCFIRSTB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "INDUSINDBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "KOTAKBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "RBLBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "stock_symbol": "YESBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "AMBER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "BATAINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "BLUESTARCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "CROMPTON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "DIXON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "HAVELLS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "KAJARIACER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "KALYANKJIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "LGEINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "PGEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "TITAN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "VOLTAS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "stock_symbol": "WHIRLPOOL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "DBCORP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "HATHWAY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "NAZARA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "NETWORK18",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "PVRINOX",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "PFOCUS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "SAREGAMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "SUNTV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "TIPSMUSIC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "stock_symbol": "ZEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ADANIENSOL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ADANIGREEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ADANIPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ATGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "AEGISLOG",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "BHEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "BPCL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "CESC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "CGPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "CASTROLIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "COALINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "GAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "GVT&D",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "HINDPETRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "POWERINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "IOC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "IGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "INOXWIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "JSWENERGY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "JPPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "MGL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "NHPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "NLCINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "NTPCGREEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "NTPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "NAVA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ONGC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "OIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "PETRONET",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "POWERGRID",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "RELIANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "RPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "SJVN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "ENRIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "SIEMENS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "SUZLON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "TATAPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "THERMAX",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "stock_symbol": "TORNTPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "BEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "BHEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "BPCL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "COALINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "CONCOR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "GAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "HAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "HINDPETRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "IOC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "IRCTC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "IRFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "NHPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "NMDC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "NTPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "ONGC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "OIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "PFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "POWERGRID",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "RECLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "stock_symbol": "RVNL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "3MINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "AWL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "ABBOTINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "AMBUJACEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "ASHOKLEY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "BOSCHLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "CRISIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "CASTROLIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "COHANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "COLPAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "CUMMINSIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "ESCORTS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "GLAND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "POWERINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "HYUNDAI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "LINDEINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "NAM-INDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "OFSS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "SCHAEFFLER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "ENRIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "SIEMENS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "TIMKEN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "UBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "UNITDSPR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "stock_symbol": "VEDL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "ADANIPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "APOLLOHOSP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "ASIANPAINT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "DMART",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "BHARTIARTL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "DLF",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "DIXON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "EICHERMOT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "ETERNAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "GODREJCP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "HAVELLS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "HEROMOTOCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "INDHOTEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "NAUKRI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "INDIGO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "M&M",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "MAXHEALTH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "TVSMOTOR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "TATACONSUM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "TATAPOWER",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "TITAN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "TRENT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "UNITDSPR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "stock_symbol": "VBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "APOLLOHOSP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "ASIANPAINT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "BAJAJFINSV",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "BHARTIARTL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "CIPLA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "DRREDDY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "HCLTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "HDFCBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "ICICIBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "INFY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "KOTAKBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "LT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "NTPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "PIDILITIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "RELIANCE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "SBILIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "SHREECEM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "SUNPHARMA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "TCS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "TITAN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "TORNTPHARM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "ULTRACEMCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "ABB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "ASIANPAINT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "BEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "BOSCHLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "COALINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "DIVISLAB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "DRREDDY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "EICHERMOT",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "GODREJCP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "HCLTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "HDFCAMC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "HAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "HINDZINC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "INFY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "LTM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "MARUTI",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "MAZDOCK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "NESTLEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "PIDILITIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "SOLARINDS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "TCS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "TECHM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "UNITDSPR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "VBL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "stock_symbol": "ZYDUSLIFE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "ANGELONE",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "ASHOKLEY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "BAJAJ-AUTO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "BANKBARODA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "BANKINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "MAHABANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "BPCL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "BRITANNIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "CANBK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "COALINDIA",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "COLPAL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "CUMMINSIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "GAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "GODREJCP",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HCLTECH",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HDFCAMC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HEROMOTOCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HINDPETRO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HINDUNILVR",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HINDZINC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "HUDCO",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "ITC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "INDIANB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "IOC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "IRFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "INFY",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "M&MFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "MPHASIS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "NHPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "NMDC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "NTPC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "NATIONALUM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "ONGC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "OIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "OFSS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "PAGEIND",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "PFC",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "POWERGRID",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "PNB",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "RECLTD",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "REDINGTON",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "SHRIRAMFIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "SBIN",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "SAIL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "TCS",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "TATASTEEL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "TECHM",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "UNIONBANK",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "VEDL",
+    "index_weight": null
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "stock_symbol": "WIPRO",
+    "index_weight": null
+  }
+]

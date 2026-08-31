@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Zap,
   Activity,
+  Map
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/regulatory", label: "SEBI Shield", icon: Shield },
   { href: "/screener", label: "Screener", icon: Search },
   { href: "/news-feed", label: "News Feed", icon: Newspaper },
+  { href: "/heatmap", label: "Heatmap", icon: Map },
   { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
   { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },

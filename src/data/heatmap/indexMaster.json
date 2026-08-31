@@ -1,0 +1,198 @@
+[
+  {
+    "index_id": "IDX_1",
+    "index_symbol": "Nifty 50",
+    "index_name": "Nifty 50",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty 50"
+  },
+  {
+    "index_id": "IDX_2",
+    "index_symbol": "Nifty Next 50",
+    "index_name": "Nifty Next 50",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty Next 50"
+  },
+  {
+    "index_id": "IDX_3",
+    "index_symbol": "Nifty 100",
+    "index_name": "Nifty 100",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty 100"
+  },
+  {
+    "index_id": "IDX_4",
+    "index_symbol": "Nifty 200",
+    "index_name": "Nifty 200",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty 200"
+  },
+  {
+    "index_id": "IDX_5",
+    "index_symbol": "Nifty 500",
+    "index_name": "Nifty 500",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty 500"
+  },
+  {
+    "index_id": "IDX_6",
+    "index_symbol": "Nifty Midcap 150",
+    "index_name": "Nifty Midcap 150",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty Midcap 150"
+  },
+  {
+    "index_id": "IDX_7",
+    "index_symbol": "Nifty Smallcap 250",
+    "index_name": "Nifty Smallcap 250",
+    "category": "Broad Market",
+    "description": "Broad Market Index: Nifty Smallcap 250"
+  },
+  {
+    "index_id": "IDX_8",
+    "index_symbol": "Nifty Bank",
+    "index_name": "Nifty Bank",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Bank"
+  },
+  {
+    "index_id": "IDX_9",
+    "index_symbol": "Nifty IT",
+    "index_name": "Nifty IT",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty IT"
+  },
+  {
+    "index_id": "IDX_10",
+    "index_symbol": "Nifty Auto",
+    "index_name": "Nifty Auto",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Auto"
+  },
+  {
+    "index_id": "IDX_11",
+    "index_symbol": "Nifty Financial Services",
+    "index_name": "Nifty Financial Services",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Financial Services"
+  },
+  {
+    "index_id": "IDX_12",
+    "index_symbol": "Nifty Pharma",
+    "index_name": "Nifty Pharma",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Pharma"
+  },
+  {
+    "index_id": "IDX_13",
+    "index_symbol": "Nifty Healthcare",
+    "index_name": "Nifty Healthcare",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Healthcare"
+  },
+  {
+    "index_id": "IDX_14",
+    "index_symbol": "Nifty FMCG",
+    "index_name": "Nifty FMCG",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty FMCG"
+  },
+  {
+    "index_id": "IDX_15",
+    "index_symbol": "Nifty Metal",
+    "index_name": "Nifty Metal",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Metal"
+  },
+  {
+    "index_id": "IDX_16",
+    "index_symbol": "Nifty Oil & Gas",
+    "index_name": "Nifty Oil & Gas",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Oil & Gas"
+  },
+  {
+    "index_id": "IDX_17",
+    "index_symbol": "Nifty Realty",
+    "index_name": "Nifty Realty",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Realty"
+  },
+  {
+    "index_id": "IDX_18",
+    "index_symbol": "Nifty PSU Bank",
+    "index_name": "Nifty PSU Bank",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty PSU Bank"
+  },
+  {
+    "index_id": "IDX_19",
+    "index_symbol": "Nifty Private Bank",
+    "index_name": "Nifty Private Bank",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Private Bank"
+  },
+  {
+    "index_id": "IDX_20",
+    "index_symbol": "Nifty Consumer Durables",
+    "index_name": "Nifty Consumer Durables",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Consumer Durables"
+  },
+  {
+    "index_id": "IDX_21",
+    "index_symbol": "Nifty Media",
+    "index_name": "Nifty Media",
+    "category": "Sectoral",
+    "description": "Sectoral Index: Nifty Media"
+  },
+  {
+    "index_id": "IDX_22",
+    "index_symbol": "Nifty Energy",
+    "index_name": "Nifty Energy",
+    "category": "Thematic",
+    "description": "Thematic Index: Nifty Energy"
+  },
+  {
+    "index_id": "IDX_23",
+    "index_symbol": "Nifty PSE",
+    "index_name": "Nifty PSE",
+    "category": "Thematic",
+    "description": "Thematic Index: Nifty PSE"
+  },
+  {
+    "index_id": "IDX_24",
+    "index_symbol": "Nifty MNC",
+    "index_name": "Nifty MNC",
+    "category": "Thematic",
+    "description": "Thematic Index: Nifty MNC"
+  },
+  {
+    "index_id": "IDX_25",
+    "index_symbol": "Nifty India Consumption",
+    "index_name": "Nifty India Consumption",
+    "category": "Thematic",
+    "description": "Thematic Index: Nifty India Consumption"
+  },
+  {
+    "index_id": "IDX_26",
+    "index_symbol": "Nifty100 Low Volatility 30",
+    "index_name": "Nifty100 Low Volatility 30",
+    "category": "Strategy",
+    "description": "Strategy Index: Nifty100 Low Volatility 30"
+  },
+  {
+    "index_id": "IDX_27",
+    "index_symbol": "Nifty100 Quality 30",
+    "index_name": "Nifty100 Quality 30",
+    "category": "Strategy",
+    "description": "Strategy Index: Nifty100 Quality 30"
+  },
+  {
+    "index_id": "IDX_28",
+    "index_symbol": "Nifty Dividend Opportunities 50",
+    "index_name": "Nifty Dividend Opportunities 50",
+    "category": "Strategy",
+    "description": "Strategy Index: Nifty Dividend Opportunities 50"
+  }
+]
