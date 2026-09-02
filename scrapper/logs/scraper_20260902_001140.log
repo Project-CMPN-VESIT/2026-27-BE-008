@@ -1,0 +1,44 @@
+2026-09-02 00:11:40,217 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 00:11:40,226 [INFO] run: Initialized 2 sources from config
+2026-09-02 00:11:40,226 [INFO] run: ============================================================
+2026-09-02 00:11:40,226 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 00:11:40,226 [INFO] run: ============================================================
+2026-09-02 00:11:40,461 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 00:11:42,396 [INFO] scrapers.rbi_scraper: Found 0 unique circulars on index page
+2026-09-02 00:11:42,409 [INFO] scrapers.rbi_scraper: RBI scrape complete: 0 found, 0 new, 0 errors
+2026-09-02 00:11:42,411 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 0,
+  "records_new": 0,
+  "errors": []
+}
+2026-09-02 00:11:42,411 [INFO] run: ============================================================
+2026-09-02 00:11:42,411 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-09-02 00:11:42,411 [INFO] run: ============================================================
+2026-09-02 00:11:42,421 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-09-02 00:11:47,468 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-09-02 00:11:47,475 [INFO] scrapers.un_scraper: Parsed 736 individuals from UN XML
+2026-09-02 00:11:47,477 [INFO] scrapers.un_scraper: Parsed 275 entities from UN XML
+2026-09-02 00:11:50,691 [INFO] scrapers.un_scraper: UN scrape complete: 1011 found, 0 new, 0 errors
+2026-09-02 00:11:50,694 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1011,
+  "records_new": 0,
+  "records_processed": 0,
+  "errors": []
+}
+2026-09-02 00:11:50,694 [INFO] run: Scraping complete!
+2026-09-02 00:11:51,355 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 00:11:51,360 [INFO] run: ============================================================
+2026-09-02 00:11:51,360 [INFO] run: AI EXTRACTION: Processing unprocessed RBI records
+2026-09-02 00:11:51,361 [INFO] run: ============================================================
+2026-09-02 00:11:51,911 [INFO] extraction.mistral_extractor: Processing 0 unprocessed records through AI extraction
+2026-09-02 00:11:51,911 [INFO] extraction.mistral_extractor: AI extraction complete: 0 records processed, 0 entities found, 0 errors
+2026-09-02 00:11:51,917 [INFO] run: Extraction Result: {
+  "processed": 0,
+  "entities_found": 0,
+  "errors": []
+}
+2026-09-02 00:11:51,919 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

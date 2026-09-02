@@ -8,6 +8,6 @@ export class StaticIndexProvider {
   }
 
   public async getConstituents(index_id: string): Promise<IndexConstituent[]> {
-    return (indexConstituentsJson as IndexConstituent[]).filter(c => c.index_id === index_id);
+    return ((indexConstituentsJson as unknown) as IndexConstituent[]).filter(c => c.index_id === index_id);
   }
 }

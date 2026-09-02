@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import {
   AlertTriangle,
@@ -414,9 +415,9 @@ export default function AlertsPage() {
                         <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/15 transition-colors">
                           <Eye className="w-3 h-3" /> View Filing
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-medium border border-violet-200 dark:border-violet-500/20 hover:bg-violet-100 dark:hover:bg-violet-500/15 transition-colors">
-                          <Zap className="w-3 h-3" /> Analyze in War Room
-                        </button>
+                        <Link href="/cyro" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-medium border border-violet-200 dark:border-violet-500/20 hover:bg-violet-100 dark:hover:bg-violet-500/15 transition-colors">
+                          <Zap className="w-3 h-3" /> Analyze in CYRO
+                        </Link>
                       </div>
                     </div>
                   </div>

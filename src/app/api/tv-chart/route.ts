@@ -80,10 +80,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const screenerPromise = Promise.race([
+      getScreenerSnapshot(resolved.symbol),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 600)),
+    ]);
+
     const [quoteResult, candlesResult, screenerResult] = await Promise.allSettled([
       getLiveQuote(resolved.marketId),
       getCandleHistory(resolved.marketId, timeframe, range),
-      getScreenerSnapshot(resolved.symbol),
+      screenerPromise,
     ]);
 
     const quote = quoteResult.status === "fulfilled"

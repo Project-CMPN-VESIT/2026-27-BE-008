@@ -1,19 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, X, ListFilter, AlertCircle } from "lucide-react";
+import { Plus, X, ListFilter, Trash2 } from "lucide-react";
 
 export const METRICS = [
-  { id: "market_cap", label: "Market Cap" },
-  { id: "pe_ttm", label: "P/E Ratio" },
-  { id: "pb", label: "P/B Ratio" },
-  { id: "roe", label: "Return on Equity (%)" },
-  { id: "roce", label: "ROCE (%)" },
-  { id: "debt_equity", label: "Debt to Equity" },
-  { id: "dividend_yield", label: "Dividend Yield (%)" },
-  { id: "sales_growth_5y", label: "Sales Growth 5Y (%)" },
-  { id: "profit_growth_5y", label: "Profit Growth 5Y (%)" },
-  { id: "current_price", label: "Current Price (₹)" }
+  { id: "market_cap", label: "Market Cap", format: "cr" },
+  { id: "pe_ttm", label: "P/E Ratio", format: "num" },
+  { id: "pb", label: "P/B Ratio", format: "num" },
+  { id: "roe", label: "ROE (%)", format: "pct" },
+  { id: "roce", label: "ROCE (%)", format: "pct" },
+  { id: "debt_equity", label: "Debt / Equity", format: "num" },
+  { id: "dividend_yield", label: "Div Yield (%)", format: "pct" },
+  { id: "current_price", label: "Price (₹)", format: "num" },
+  { id: "sales_growth_5y", label: "5Y Sales (%)", format: "pct" },
+  { id: "profit_growth_5y", label: "5Y Profit (%)", format: "pct" },
 ];
 
 const OPS = ["<", "<=", ">", ">=", "==", "!="];
@@ -21,10 +21,14 @@ const OPS = ["<", "<=", ">", ">=", "==", "!="];
 interface QueryBuilderProps {
   queryAst: any;
   setQueryAst: (ast: any) => void;
+  isOpen: boolean;
+  onClose?: () => void;
 }
 
-export function QueryBuilder({ queryAst, setQueryAst }: QueryBuilderProps) {
+export function QueryBuilder({ queryAst, setQueryAst, isOpen }: QueryBuilderProps) {
   const [selectedNewMetric, setSelectedNewMetric] = useState(METRICS[0].id);
+
+  if (!isOpen) return null;
 
   const rules = queryAst.AND || [];
 
@@ -53,77 +57,98 @@ export function QueryBuilder({ queryAst, setQueryAst }: QueryBuilderProps) {
     setQueryAst(newAst);
   };
 
+  const clearAllRules = () => {
+    setQueryAst({ AND: [] });
+  };
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden mb-6">
-      <div className="bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-          <ListFilter className="w-4 h-4 text-blue-500" /> Advanced Query Builder
-        </h3>
-        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded font-medium border border-amber-200 dark:border-amber-900/50">
-          <AlertCircle className="w-3.5 h-3.5" /> Flat AND logic enforced for Phase 1
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-3 mb-3 shrink-0 animate-in fade-in slide-in-from-top-2 duration-150">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800 text-xs">
+        <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
+          <ListFilter className="w-3.5 h-3.5 text-blue-500" />
+          <span>Active Filter Conditions</span>
+          <span className="text-slate-400 font-normal">({rules.length} active)</span>
         </div>
+
+        {rules.length > 0 && (
+          <button
+            type="button"
+            onClick={clearAllRules}
+            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="w-3 h-3" /> Clear all
+          </button>
+        )}
       </div>
-      
-      <div className="p-5">
+
+      <div className="flex flex-wrap items-center gap-2">
         {rules.length === 0 ? (
-          <div className="text-sm text-slate-500 italic p-4 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
-            No active filters. All companies will be shown.
-          </div>
+          <span className="text-xs text-slate-400 italic py-1">
+            No active conditions. All stocks are returned.
+          </span>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            {rules.map((rule: any, idx: number) => {
-              const metricMeta = METRICS.find(m => m.id === rule.field);
-              return (
-                <div 
-                  key={idx} 
-                  className="group flex items-center bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-full pl-3 pr-1 py-1 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500"
+          rules.map((rule: any, idx: number) => {
+            const metricMeta = METRICS.find((m) => m.id === rule.field);
+            return (
+              <div
+                key={idx}
+                className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs gap-1.5 shadow-sm"
+              >
+                <span className="font-semibold text-slate-800 dark:text-slate-200" title={rule.field}>
+                  {metricMeta?.label || rule.field}
+                </span>
+
+                <select
+                  className="bg-transparent font-bold text-blue-600 dark:text-blue-400 outline-none cursor-pointer text-center"
+                  value={rule.op}
+                  onChange={(e) => updateRuleOp(idx, e.target.value)}
                 >
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate" title={rule.field}>
-                    {metricMeta?.label || rule.field}
-                  </span>
-                  
-                  <select 
-                    className="appearance-none bg-transparent text-sm font-bold text-blue-600 dark:text-blue-400 px-2 outline-none cursor-pointer text-center hover:bg-slate-50 dark:hover:bg-slate-800 rounded"
-                    value={rule.op}
-                    onChange={(e) => updateRuleOp(idx, e.target.value)}
-                  >
-                    {OPS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  
-                  <input 
-                    type="number"
-                    className="w-20 bg-transparent text-sm font-bold text-slate-900 dark:text-white outline-none placeholder-slate-300"
-                    value={rule.value}
-                    onChange={(e) => updateRuleValue(idx, Number(e.target.value))}
-                  />
-                  
-                  <button 
-                    onClick={() => removeRule(idx)}
-                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-red-500 rounded-full transition-colors ml-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                  {OPS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="number"
+                  className="w-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 font-bold text-slate-900 dark:text-white outline-none focus:border-blue-500 text-right"
+                  value={rule.value}
+                  onChange={(e) => updateRuleValue(idx, Number(e.target.value))}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => removeRule(idx)}
+                  className="p-0.5 text-slate-400 hover:text-red-500 transition-colors ml-0.5"
+                  title="Remove condition"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })
         )}
 
-        <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
-          <select 
-            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm w-64"
+        {/* Add condition inline */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <select
+            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs rounded-lg px-2 py-1 outline-none text-slate-700 dark:text-slate-200"
             value={selectedNewMetric}
             onChange={(e) => setSelectedNewMetric(e.target.value)}
           >
-            {METRICS.map(m => (
-              <option key={m.id} value={m.id}>{m.label}</option>
+            {METRICS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
             ))}
           </select>
-          <button 
+          <button
+            type="button"
             onClick={addRule}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-lg transition-colors shadow-sm"
+            className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 border border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-lg transition-colors"
           >
-            <Plus className="w-4 h-4" /> Add Condition
+            <Plus className="w-3.5 h-3.5" /> Add
           </button>
         </div>
       </div>

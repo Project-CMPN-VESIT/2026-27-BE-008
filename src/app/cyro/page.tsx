@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePersistentMessages, clearSessionMessages } from "@/hooks/usePersistentMessages";
 import { useTheme } from "next-themes";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -198,30 +197,23 @@ const nowTime = () =>
     minute: "2-digit",
   });
 
-export default function WarRoomPage() {
+export default function CyroPage() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [selectedTicker, setSelectedTicker] = useState("ADANIENT");
+  const [selectedTicker, setSelectedTicker] = useState("");
   const [quote, setQuote] = useState<LiveQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
   const [stockDocData, setStockDocData] = useState<StockDocData | null>(null);
   const [stockDocError, setStockDocError] = useState("");
   // activeSessionId must be declared before usePersistentMessages which uses it
   const [activeSessionId, setActiveSessionId] = useState<number>(1);
-  // Session-persistent messages — survives page reloads, keyed by activeSessionId
-  const [messages, setMessages] = usePersistentMessages<Message>(activeSessionId, []);
+  // In-memory messages — starts completely clean and fresh on every page load
+  const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [sessionFilter, setSessionFilter] = useState("");
   const [input, setInput] = useState("");
   const [micOn, setMicOn] = useState(false);
-  const [attachName, setAttachName] = useState("");
   const [activeTab, setActiveTab] = useState<"news" | "alerts" | "flow" | "source">("source");
-  const [quickOn, setQuickOn] = useState<Record<string, boolean>>({
-    live: false,
-    news: false,
-    fundamentals: false,
-    chart: false,
-  });
   const [toastText, setToastText] = useState("");
   const [toastOn, setToastOn] = useState(false);
   // CYRO streaming state
@@ -231,48 +223,40 @@ export default function WarRoomPage() {
   const [atPickerOpen, setAtPickerOpen] = useState(false);
   const [atPickerFilter, setAtPickerFilter] = useState("");
   const [taggedTicker, setTaggedTicker] = useState<string | null>(null);
-  // Right panel live data (Week 5)
+  // Right panel live data
   const [rightPanel, setRightPanel] = useState<RightPanelLive>({});
   const [selectedSource, setSelectedSource] = useState<SourceCitation | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const msgWrapRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
-    // Hydrate state from localStorage after initial render to avoid hydration mismatch
+    // Clear any previous stale chat keys from localStorage so each fresh start is completely blank
     try {
-      const rawAct = localStorage.getItem("cyro_active_session");
-      if (rawAct) setActiveSessionId(Number(rawAct) || 1);
-    } catch {}
-    try {
-      const rawSess = localStorage.getItem("cyro_sessions");
-      const parsedSess = rawSess ? (JSON.parse(rawSess) as Session[]) : null;
-      if (Array.isArray(parsedSess) && parsedSess.length > 0) {
-        setSessions(parsedSess);
+      localStorage.removeItem("cyro_active_session");
+      localStorage.removeItem("cyro_sessions");
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("cyro_session_") || key.startsWith("warroom_session_"))) {
+          localStorage.removeItem(key);
+        }
       }
     } catch {}
   }, []);
 
-  // Persist sessions list and active session ID on every change
-  useEffect(() => {
-    if (!mounted) return;
-    try { localStorage.setItem("cyro_sessions", JSON.stringify(sessions)); } catch { /* quota */ }
-  }, [sessions, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    try { localStorage.setItem("cyro_active_session", String(activeSessionId)); } catch { /* quota */ }
-  }, [activeSessionId, mounted]);
-
   const activeSymbol = `NSE_${selectedTicker}`;
 
 
-  // ── Week 5: Load right-panel live data whenever ticker changes ──
+  // ── Load right-panel live data whenever ticker changes ──
   useEffect(() => {
+    if (!selectedTicker) {
+      setRightPanel({ loading: false });
+      return;
+    }
+
     let alive = true;
     setRightPanel({ loading: true });
 
@@ -352,6 +336,11 @@ export default function WarRoomPage() {
   };
 
   useEffect(() => {
+    if (!selectedTicker) {
+      setQuote(null);
+      return;
+    }
+
     let alive = true;
     let inFlight = false;
 
@@ -394,6 +383,11 @@ export default function WarRoomPage() {
   }, [activeSymbol, selectedTicker]);
 
   useEffect(() => {
+    if (!selectedTicker) {
+      setStockDocData(null);
+      return;
+    }
+
     let alive = true;
     const controller = new AbortController();
 
@@ -496,7 +490,6 @@ export default function WarRoomPage() {
     ));
 
     setInput("");
-    setAttachName("");
     setTaggedTicker(null);
 
     setIsStreaming(true);
@@ -748,9 +741,10 @@ export default function WarRoomPage() {
   };
 
   const newChat = () => {
-    // Clear stored history for the current session before switching
-    clearSessionMessages(activeSessionId);
     setMessages([]);
+    setSelectedTicker("");
+    setQuote(null);
+    setRightPanel({});
     const id = Date.now();
     const next: Session = {
       id,
@@ -761,14 +755,6 @@ export default function WarRoomPage() {
     setSessions((prev) => [next, ...prev]);
     setActiveSessionId(id);
     showToast("New research session");
-  };
-
-  const onAttach = () => fileRef.current?.click();
-
-  const onFileChange = (file?: File | null) => {
-    if (!file) return;
-    setAttachName(file.name);
-    showToast("Attachment added");
   };
 
   const onExport = () => {
@@ -818,20 +804,19 @@ export default function WarRoomPage() {
               New Research
             </button>
           </div>
-
-          <div className="wl-block">
-            <div className="wl-top">
-              <span className="block-label">Live Quote</span>
-              <button className="wl-add-btn" onClick={() => showToast("Add watch item")}>+
-              </button>
-            </div>
-            <div className="wl-chip-wrap">
-              <div className={`wl-chip ${priceUp ? "up" : "dn"}`}>
-                {quote?.symbol ?? "NSE_ADANIENT"}
-                <span>{quote?.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}</span>
+          {selectedTicker && quote && (
+            <div className="wl-block">
+              <div className="wl-top">
+                <span className="block-label">Active Stock</span>
+              </div>
+              <div className="wl-chip-wrap">
+                <div className={`wl-chip ${priceUp ? "up" : "dn"}`}>
+                  {quote.symbol}
+                  <span>{quote.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="sb-search">
             <div className="sf">
@@ -860,8 +845,13 @@ export default function WarRoomPage() {
                   className="xbtn"
                   onClick={(ev) => {
                     ev.stopPropagation();
-                    clearSessionMessages(s.id);
                     setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                    if (activeSessionId === s.id) {
+                      setMessages([]);
+                      setSelectedTicker("");
+                      setQuote(null);
+                      setRightPanel({});
+                    }
                     showToast("Session removed");
                   }}
                 >
@@ -875,28 +865,36 @@ export default function WarRoomPage() {
         <main className="chat-main">
           <div className="topbar">
             <div className="tb-l">
-              <div className="live-ticker">
-                <span className="dot" />
-                <span className="sym">{quote?.symbol ?? "NSE_ADANIENT"}</span>
-                <span className="price">{quote?.ltp ? `Rs ${quote.ltp.toFixed(2)}` : "--"}</span>
-                <span className={`chg ${priceUp ? "up" : "dn"}`}>
-                  {quote?.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}
-                </span>
+              {selectedTicker && quote ? (
+                <div className="live-ticker">
+                  <span className="dot" />
+                  <span className="sym">{quote.symbol}</span>
+                  <span className="price">{quote.ltp ? `Rs ${quote.ltp.toFixed(2)}` : "--"}</span>
+                  <span className={`chg ${priceUp ? "up" : "dn"}`}>
+                    {quote.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}
+                  </span>
+                </div>
+              ) : (
+                <div className="live-ticker" style={{ opacity: 0.75 }}>
+                  <span className="sym" style={{ fontWeight: 500 }}>Type @ticker in chat to research</span>
+                </div>
+              )}
+              <div className="model-pill" onClick={() => showToast("CYRO AI Engine")}>
+                CYRO Analyst <ChevronDown size={12} />
               </div>
-              <div className="model-pill" onClick={() => showToast("Model switched")}>CYRO Analyst <ChevronDown size={12} /></div>
               <select
                 value={selectedTicker}
                 onChange={(e) => setSelectedTicker(e.target.value)}
                 className="company-picker"
               >
+                <option value="">Select Stock...</option>
                 {nifty50TickerOptions.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
             </div>
             <div className="tb-r">
-              <button className="tb-btn" onClick={() => showToast("Search chat")}
-              ><Search size={15} /></button>
+              <button className="tb-btn" onClick={() => showToast("Search chat")}><Search size={15} /></button>
               <button className="tb-btn" onClick={onExport}><File size={15} /></button>
               <button className="tb-btn" onClick={onCopyLink}><Share2 size={15} /></button>
               <button className="tb-btn" onClick={() => showToast("Notifications")}><Bell size={15} /></button>
@@ -912,7 +910,45 @@ export default function WarRoomPage() {
 
           <div className="messages" ref={msgWrapRef}>
             {messages.length === 0 ? (
-              <div className="empty-state">Conversation is empty. Start with the input below.</div>
+              <div className="empty-state-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "360px", padding: "40px 16px", textAlign: "center" }}>
+                <div style={{ width: "52px", height: "52px", borderRadius: "16px", background: "linear-gradient(135deg, #2563eb, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 25px rgba(37,99,235,0.25)", marginBottom: "16px" }}>
+                  <Sparkles size={26} color="#fff" />
+                </div>
+                <h2 style={{ fontSize: "19px", fontWeight: "800", color: "var(--text-1)", margin: "0 0 6px" }}>CYRO AI Research Engine</h2>
+                <p style={{ fontSize: "13px", color: "var(--text-3)", maxWidth: "440px", margin: "0 0 24px", lineHeight: "1.5" }}>
+                  Autonomous multi-analyst research for Indian equities. Tag any stock with <strong style={{ color: "var(--accent)" }}>@ticker</strong> to generate institutional-grade trade plans and fundamental breakdowns.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", maxWidth: "560px" }}>
+                  {[
+                    { label: "Analyze @RELIANCE", prompt: "@RELIANCE Provide a full institutional research breakdown and trade plan" },
+                    { label: "Evaluate @TATASTEEL", prompt: "@TATASTEEL Should I buy, hold, or sell at current levels?" },
+                    { label: "Check @HDFCBANK", prompt: "@HDFCBANK Key risks, valuations, and upside catalysts" },
+                    { label: "Scan @INFY", prompt: "@INFY Technical breakdown, support & resistance levels" },
+                  ].map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => {
+                        setInput(chip.prompt);
+                        inputRef.current?.focus();
+                      }}
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: "10px",
+                        background: "var(--bg-raised)",
+                        border: "1px solid var(--border-mid)",
+                        color: "var(--text-2)",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {chip.label} →
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : (
               messages.map((msg) => (
                 <div key={msg.id} className={`msg-row ${msg.role === "user" ? "user-row" : ""}`}>
@@ -998,25 +1034,19 @@ export default function WarRoomPage() {
                     {msg.role === "assistant" && msg.debateCards && msg.debateCards.length > 0 && (
                       <div className="debate-section">
                         {msg.debateCards.map((card, i) => (
-                          <div key={i} className={`debate-card dc-${card.type}`}>
+                          <div key={i} className="debate-card">
                             {card.type === "round" && (
                               <>
-                                <div className="dc-label">⚔️ Bull vs Bear — Round {card.round}</div>
+                                <div className="dc-label">Round {card.round}</div>
                                 <div className="dc-row">
-                                  <div className="dc-side bull">
-                                    <div className="dc-side-label">🟢 Bull</div>
-                                    <div className="dc-text">{card.bull}</div>
-                                  </div>
-                                  <div className="dc-side bear">
-                                    <div className="dc-side-label">🔴 Bear</div>
-                                    <div className="dc-text">{card.bear}</div>
-                                  </div>
+                                  <div className="dc-side bull"><div className="dc-side-label">🐂 Bull Case</div><div className="dc-text">{card.bull}</div></div>
+                                  <div className="dc-side bear"><div className="dc-side-label">🐻 Bear Case</div><div className="dc-text">{card.bear}</div></div>
                                 </div>
                               </>
                             )}
                             {card.type === "rebuttal" && (
                               <>
-                                <div className="dc-label">🔄 Rebuttals — Round {card.round}</div>
+                                <div className="dc-label">Round {card.round} — Rebuttal</div>
                                 <div className="dc-row">
                                   <div className="dc-side bull"><div className="dc-side-label">Bull Rebuttal</div><div className="dc-text">{card.bull}</div></div>
                                   <div className="dc-side bear"><div className="dc-side-label">Bear Rebuttal</div><div className="dc-text">{card.bear}</div></div>
@@ -1074,60 +1104,7 @@ export default function WarRoomPage() {
             )}
           </div>
 
-          <form className="input-area" onSubmit={sendMsg}>
-            <div className="quick-bar">
-              {/* Mode toggle */}
-              <button
-                type="button"
-                className={`q-pill mode-pill ${cyroMode === "normal" ? "on" : ""}`}
-                onClick={() => setCyroMode("normal")}
-                title="Normal mode: fast single-analyst research (~15s)"
-              >
-                ⚡ Normal
-              </button>
-              <button
-                type="button"
-                className={`q-pill mode-pill ${cyroMode === "reasoning" ? "on reasoning" : ""}`}
-                onClick={() => setCyroMode("reasoning")}
-                title="Reasoning mode: 7 analysts + debate (~3min)"
-              >
-                🧠 Deep
-              </button>
-              <div className="q-divider" />
-              <button
-                type="button"
-                className={`q-pill ${quickOn.live ? "on" : ""}`}
-                onClick={() => setQuickOn((p) => ({ ...p, live: !p.live }))}
-              >
-                <Globe size={11} /> Live Data
-              </button>
-              <button
-                type="button"
-                className={`q-pill ${quickOn.news ? "on" : ""}`}
-                onClick={() => setQuickOn((p) => ({ ...p, news: !p.news }))}
-              >
-                <Newspaper size={11} /> News
-              </button>
-              <button
-                type="button"
-                className={`q-pill ${quickOn.fundamentals ? "on" : ""}`}
-                onClick={() => setQuickOn((p) => ({ ...p, fundamentals: !p.fundamentals }))}
-              >
-                <Wallet size={11} /> Fundamentals
-              </button>
-              <button
-                type="button"
-                className={`q-pill ${quickOn.chart ? "on" : ""}`}
-                onClick={() => setQuickOn((p) => ({ ...p, chart: !p.chart }))}
-              >
-                <ChartColumn size={11} /> Chart
-              </button>
-              <button type="button" className="q-pill" onClick={onAttach}><Paperclip size={11} /> Attach</button>
-              <button type="button" className="q-pill" onClick={() => showToast("Screener module")}><FileSearch size={11} /> Screener</button>
-            </div>
-
-            {attachName ? <div className="att-prev">{attachName}</div> : null}
-
+          <form className="input-area" onSubmit={sendMsg} style={{ padding: "14px 20px" }}>
             {/* @ mention picker dropdown */}
             {atPickerOpen && (
               <div className="at-picker">
@@ -1145,10 +1122,7 @@ export default function WarRoomPage() {
               </div>
             )}
 
-            <div className="input-shell">
-              <button type="button" className="in-left" onClick={onAttach}>
-                <Plus size={18} />
-              </button>
+            <div className="input-shell" style={{ padding: "6px 14px" }}>
               <input
                 ref={inputRef}
                 className="msg-inp"
@@ -1161,7 +1135,7 @@ export default function WarRoomPage() {
                     if (!atPickerOpen) sendMsg();
                   }
                 }}
-                placeholder="Ask CYRO about a stock... (type @ to tag a ticker)"
+                placeholder="Ask CYRO about any stock... (type @ to tag a ticker)"
               />
               <div className="inp-right">
                 {isStreaming && (
@@ -1191,15 +1165,6 @@ export default function WarRoomPage() {
               </div>
             </div>
 
-            <input
-              ref={fileRef}
-              type="file"
-              hidden
-              onChange={(e) => {
-                onFileChange(e.target.files?.[0]);
-                e.currentTarget.value = "";
-              }}
-            />
           </form>
         </main>
 
@@ -1213,10 +1178,15 @@ export default function WarRoomPage() {
           <div className="rp-body">
 
 
-            {/* Week 5: Flow Intelligence Tab */}
+            {/* Flow Intelligence Tab */}
             {activeTab === "flow" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading flow data…</div>}
+                {!selectedTicker && !rightPanel.loading && (
+                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
+                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> in chat to view live FII/DII flows, India VIX, and options chain metrics.
+                  </div>
+                )}
                 {/* VIX */}
                 {rightPanel.fiiDii?.vix != null && (
                   <div className="card">
@@ -1250,14 +1220,16 @@ export default function WarRoomPage() {
                     )}
                   </div>
                 )}
-                {!rightPanel.loading && !rightPanel.fiiDii && (
-                  <div className="txt">Flow data unavailable (CYRO backend offline?)</div>
-                )}
               </>
             ) : null}
             {activeTab === "alerts" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading alerts…</div>}
+                {!selectedTicker && !rightPanel.loading && (
+                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
+                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> to inspect regulatory filings and disparity alerts.
+                  </div>
+                )}
                 {rightPanel.alerts && rightPanel.alerts.length > 0 ? (
                   rightPanel.alerts.map((alert, i) => (
                     <div key={i} className={`card ${alert.type === 'warn' ? 'warn' : 'info'}`}>
@@ -1268,13 +1240,18 @@ export default function WarRoomPage() {
                     </div>
                   ))
                 ) : (
-                  !rightPanel.loading && <div className="txt">No active alerts for {selectedTicker}.</div>
+                  selectedTicker && !rightPanel.loading && <div className="txt">No active alerts for {selectedTicker}.</div>
                 )}
               </>
             ) : null}
             {activeTab === "news" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading news…</div>}
+                {!selectedTicker && !rightPanel.loading && (
+                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
+                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> to stream corporate filings and live news.
+                  </div>
+                )}
                 {rightPanel.news?.announcements && rightPanel.news.announcements.length > 0 && (
                   <div className="card">
                     <div className="lbl">📣 Recent Announcements</div>
@@ -1299,8 +1276,8 @@ export default function WarRoomPage() {
                     ))}
                   </div>
                 )}
-                {!rightPanel.loading && !rightPanel.news?.news?.length && !rightPanel.news?.announcements?.length && (
-                  <div className="txt">No recent news or announcements found.</div>
+                {selectedTicker && !rightPanel.loading && !rightPanel.news?.news?.length && !rightPanel.news?.announcements?.length && (
+                  <div className="txt">No recent news or announcements found for {selectedTicker}.</div>
                 )}
               </>
             ) : null}
@@ -1336,11 +1313,11 @@ export default function WarRoomPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="txt" style={{ marginBottom: '10px' }}>Click on a source snippet in the chat to view complete details here.</div>
+                  <div className="txt" style={{ marginBottom: '10px', color: "var(--text-3)" }}>Click on a research citation in the chat to view complete evidence here.</div>
                 )}
 
                 <div className="card src">
-                  <div className="lbl"><FileText size={12} /> Source Snippets</div>
+                  <div className="lbl"><FileText size={12} /> Source Evidence</div>
                   {latestSources.length > 0 ? (
                     latestSources.map((c, i) => (
                       <div key={i} className="src-item" onClick={() => setSelectedSource(c)}>
@@ -1351,7 +1328,7 @@ export default function WarRoomPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="txt">No source snippets used in the latest response.</div>
+                    <div className="txt" style={{ color: "var(--text-3)" }}>No citations in the active conversation yet.</div>
                   )}
                 </div>
               </>

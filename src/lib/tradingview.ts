@@ -86,7 +86,7 @@ export type TvCandle = {
 };
 
 const allowedExchanges = new Set(["NSE", "BSE"]);
-const CANDLE_CACHE_TTL_MS = 45000;
+const CANDLE_CACHE_TTL_MS = 300000; // 5 minutes cache for daily/historical candles
 
 type CachedEntry<T> = {
   value: T;
@@ -411,32 +411,32 @@ export const marketDataService = new MarketDataService();
 
 export async function getLiveQuote(marketId: string): Promise<TvLiveQuote> {
   const existing = marketDataService.getLatest(marketId);
-  // If we already have a reasonably fresh quote (within 2 secs), return it
-  if (existing && (Date.now() - existing.updatedAt < 2000)) {
+  // If we already have a valid quote in store, return it immediately
+  if (existing && existing.ltp > 0) {
     return existing;
   }
 
-  // Subscribe temporarily to get the latest quote
+  // Subscribe to get the quote
   marketDataService.subscribe([marketId]);
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
-    const timeout = 3500;
+    const timeout = 2000;
     
     const checkInterval = setInterval(() => {
       const quote = marketDataService.getLatest(marketId);
-      if (quote && quote.ltp > 0 && quote.updatedAt > startTime) {
+      if (quote && quote.ltp > 0) {
         clearInterval(checkInterval);
         resolve(quote);
       } else if (Date.now() - startTime > timeout) {
         clearInterval(checkInterval);
         if (quote && quote.ltp > 0) {
-           resolve(quote); // return old quote on timeout if we have one
+          resolve(quote);
         } else {
-           reject(new Error("TradingView quote timeout via MarketDataService"));
+          reject(new Error("TradingView quote timeout via MarketDataService"));
         }
       }
-    }, 50);
+    }, 25);
   });
 }
 

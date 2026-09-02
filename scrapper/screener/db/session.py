@@ -5,7 +5,8 @@ from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(os.path.dirname(__file__), '../../data/screener.db')}")
+_default_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/screener.db")).replace("\\", "/")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{_default_db_path}")
 
 # Create Engine
 # If using SQLite, we need connect_args={'check_same_thread': False}

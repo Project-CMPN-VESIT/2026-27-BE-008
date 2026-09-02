@@ -1,7 +1,7 @@
 /**
  * src/hooks/usePersistentMessages.ts
  * ────────────────────────────────────
- * Persists CYRO War Room chat messages to localStorage, keyed by sessionId.
+ * Persists CYRO AI chat messages to localStorage, keyed by sessionId.
  *
  * Usage:
  *   const [messages, setMessages] = usePersistentMessages(sessionId, []);

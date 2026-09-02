@@ -19,10 +19,10 @@ export function useHeatmapData(symbols: string[], isLive: boolean = true) {
   const [quotes, setQuotes] = useState<Record<string, HeatmapQuote>>(globalQuotesCache);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const updateQuotes = (newQuotes: Partial<Record<string, HeatmapQuote>>) => {
-    setQuotes(prev => {
+  const updateQuotes = (newQuotes: Record<string, HeatmapQuote>) => {
+    setQuotes((prev) => {
       const next = { ...prev, ...newQuotes };
-      globalQuotesCache = next; // Keep global cache in sync
+      globalQuotesCache = next;
       return next;
     });
   };

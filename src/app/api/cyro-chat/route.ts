@@ -1,7 +1,7 @@
 /**
  * src/app/api/cyro-chat/route.ts
  * ─────────────────────────────
- * Next.js Route Handler — SSE bridge between the War Room UI and the
+ * Next.js Route Handler — SSE bridge between the CYRO UI and the
  * india-trade-cli CYRO Python backend.
  *
  * The UI connects here with:

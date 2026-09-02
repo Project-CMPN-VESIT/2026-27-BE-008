@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  Swords,
+  Sparkles,
   Shield,
   Search,
   BarChart3,
@@ -22,7 +22,7 @@ import { useEffect, useState } from "react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/war-room", label: "War Room", icon: Swords },
+  { href: "/cyro", label: "CYRO", icon: Sparkles },
   { href: "/regulatory", label: "SEBI Shield", icon: Shield },
   { href: "/screener", label: "Screener", icon: Search },
   { href: "/news-feed", label: "News Feed", icon: Newspaper },

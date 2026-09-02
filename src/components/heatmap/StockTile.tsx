@@ -12,6 +12,7 @@ interface StockTileProps {
   marketCap?: number | null;
   totalMarketCap?: number;
   totalWeight?: number;
+  isStale?: boolean;
 }
 
 export const StockTile: React.FC<StockTileProps> = ({

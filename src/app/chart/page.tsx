@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -199,21 +199,24 @@ const dedupeSuggestions = (items: SearchMatch[]) => {
   return Array.from(deduped.values());
 };
 
+const chartDataCache = new Map<string, TvChartResponse>();
+
 const stockRangeOptions = [
-  { value: "1D", label: "1D", timeframe: "5", range: 78 },
-  { value: "1W", label: "1W", timeframe: "30", range: 65 },
-  { value: "1M", label: "1M", timeframe: "D", range: 30 },
-  { value: "3M", label: "3M", timeframe: "D", range: 90 },
-  { value: "6M", label: "6M", timeframe: "D", range: 180 },
-  { value: "1Y", label: "1Y", timeframe: "D", range: 365 },
-  { value: "3Y", label: "3Y", timeframe: "W", range: 156 },
-  { value: "5Y", label: "5Y", timeframe: "W", range: 260 },
+  { value: "1D", label: "1D", timeframe: "5", days: 1 },
+  { value: "1W", label: "1W", timeframe: "30", days: 7 },
+  { value: "1M", label: "1M", timeframe: "D", days: 30 },
+  { value: "3M", label: "3M", timeframe: "D", days: 90 },
+  { value: "6M", label: "6M", timeframe: "D", days: 180 },
+  { value: "1Y", label: "1Y", timeframe: "D", days: 365 },
+  { value: "3Y", label: "3Y", timeframe: "W", days: 1095 },
+  { value: "5Y", label: "5Y", timeframe: "W", days: 1825 },
 ];
 
 const candleTimeframeOptions = [
-  { value: "AUTO", label: "5m" },
+  { value: "AUTO", label: "Auto" },
   { value: "1", label: "1m" },
   { value: "3", label: "3m" },
+  { value: "5", label: "5m" },
   { value: "15", label: "15m" },
   { value: "30", label: "30m" },
   { value: "60", label: "1H" },
@@ -286,7 +289,7 @@ const toIstDateKey = (unix: number) => {
   }).format(new Date(unix * 1000));
 };
 
-export default function AdvancedChartPage() {
+export function AdvancedChartContent() {
   const searchParams = useSearchParams();
   const initialSymbol = searchParams.get("symbol") ?? "RELIANCE";
   const initialMarketId = searchParams.get("marketId") ?? "NSE:RELIANCE";
@@ -296,7 +299,7 @@ export default function AdvancedChartPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [symbol, setSymbol] = useState(initialSymbol.toUpperCase());
   const [marketId, setMarketId] = useState(initialMarketId.toUpperCase());
-  const [selectedRange, setSelectedRange] = useState("1D");
+  const [selectedRange, setSelectedRange] = useState("1M");
   const [chartMode, setChartMode] = useState<ChartMode>("line");
   const [selectedCandleTimeframe, setSelectedCandleTimeframe] = useState("AUTO");
   const activeInstrumentSymbol = useMemo(() => {
@@ -307,13 +310,15 @@ export default function AdvancedChartPage() {
     () => stockRangeOptions.find((option) => option.value === selectedRange) ?? stockRangeOptions[2],
     [selectedRange]
   );
-  const requestedRange = useMemo(() => 10000, []);
-  const chartRequestTimeframe = chartMode === "candles"
-    ? (selectedCandleTimeframe === "AUTO" ? "5" : selectedCandleTimeframe)
+  const chartRequestTimeframe = chartMode === "candles" && selectedCandleTimeframe !== "AUTO"
+    ? selectedCandleTimeframe
     : activeRange.timeframe;
 
   const [refreshTick, setRefreshTick] = useState(0);
-  const [chartData, setChartData] = useState<TvChartResponse | null>(null);
+  const [chartData, setChartData] = useState<TvChartResponse | null>(() => {
+    const key = `${initialMarketId.toUpperCase()}|${initialSymbol.toUpperCase()}|D`;
+    return chartDataCache.get(key) ?? null;
+  });
   const [exchangeOptions, setExchangeOptions] = useState<ExchangeOption[]>([]);
   const [hoveredCandle, setHoveredCandle] = useState<CandleHover | null>(null);
   const [loading, setLoading] = useState(false);
@@ -439,12 +444,21 @@ export default function AdvancedChartPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = `${marketId}|${symbol}|${chartRequestTimeframe}`;
+    const cached = chartDataCache.get(cacheKey);
+
+    if (cached) {
+      setChartData(cached);
+      setError("");
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
 
     const fetchChart = async () => {
-      setLoading(true);
       try {
         const response = await fetch(
-          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${chartRequestTimeframe}&range=${requestedRange}`,
+          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${chartRequestTimeframe}&range=10000`,
           { cache: "no-store" }
         );
         const json = await response.json();
@@ -452,15 +466,34 @@ export default function AdvancedChartPage() {
         if (cancelled) return;
 
         if (!response.ok || !json.ok) {
-          setError(json.error ?? "Unable to load chart data");
-          setLoading(false);
+          if (!cached) {
+            setError(json.error ?? "Unable to load chart data");
+          }
           return;
         }
 
-        setChartData(json.data as TvChartResponse);
+        const data = json.data as TvChartResponse;
+        chartDataCache.set(cacheKey, data);
+        setChartData(data);
         setError("");
+
+        // Preload other common timeframes in background for instant 0ms switching
+        const preloadTimeframes = ["5", "30", "D", "W"].filter((tf) => tf !== chartRequestTimeframe);
+        for (const tf of preloadTimeframes) {
+          const preKey = `${marketId}|${symbol}|${tf}`;
+          if (!chartDataCache.has(preKey)) {
+            fetch(`/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${tf}&range=10000`, { cache: "no-store" })
+              .then((r) => r.json())
+              .then((j) => {
+                if (j?.ok && j.data) {
+                  chartDataCache.set(preKey, j.data as TvChartResponse);
+                }
+              })
+              .catch(() => {});
+          }
+        }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !cached) {
           setError("Unable to connect to chart service");
         }
       } finally {
@@ -475,7 +508,7 @@ export default function AdvancedChartPage() {
     return () => {
       cancelled = true;
     };
-  }, [marketId, symbol, activeRange, chartRequestTimeframe, requestedRange, refreshTick]);
+  }, [marketId, symbol, chartRequestTimeframe, refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -575,7 +608,7 @@ export default function AdvancedChartPage() {
     };
 
     fetchQuote();
-    const timer = setInterval(fetchQuote, 1000);
+    const timer = setInterval(fetchQuote, 1500);
 
     return () => {
       cancelled = true;
@@ -638,13 +671,18 @@ export default function AdvancedChartPage() {
     if (!chartData?.candles?.length) {
       return [];
     }
+    // Prevent timeframe mismatch (e.g. rendering daily candles when 1D 5m timeframe is requested)
+    if (chartData.timeframe && chartData.timeframe !== chartRequestTimeframe) {
+      return [];
+    }
 
     return [...chartData.candles]
       .sort((a, b) => a.time - b.time)
       .filter((candle, index, arr) => index === 0 || candle.time !== arr[index - 1].time);
-  }, [chartData?.candles]);
+  }, [chartData?.candles, chartData?.timeframe, chartRequestTimeframe]);
+
   const displayTimeframe = chartData?.timeframe ?? activeRange.timeframe;
-  const renderContextKey = `${marketId}|${symbol}|${chartMode}|${chartRequestTimeframe}|${activeRange.range}`;
+  const renderContextKey = `${marketId}|${symbol}|${chartMode}|${chartRequestTimeframe}|${selectedRange}`;
 
   useEffect(() => {
     if (!containerRef.current || !candleSeries.length) {
@@ -718,27 +756,38 @@ export default function AdvancedChartPage() {
 
     const applyDefaultVisibleWindow = () => {
       const totalBars = candleSeries.length;
-      const intradayMinutes = Number(chartRequestTimeframe);
+      if (totalBars === 0) return;
 
-      // For 1D intraday mode, show only the latest trading session candles.
-      if (selectedRange === "1D" && Number.isFinite(intradayMinutes) && intradayMinutes > 0) {
-        const latest = candleSeries[totalBars - 1];
-        if (latest) {
-          const latestDayKey = toIstDateKey(latest.time);
-          const fromIndex = candleSeries.findIndex((bar) => toIstDateKey(bar.time) === latestDayKey);
+      const latestBar = candleSeries[totalBars - 1];
+      const latestTime = latestBar.time;
 
-          if (fromIndex >= 0) {
-            const to = Math.max(0, totalBars - 1);
-            chart.timeScale().setVisibleLogicalRange({ from: fromIndex, to });
-            return;
-          }
+      // 1D range: show only latest trading day candles
+      if (selectedRange === "1D") {
+        const latestDayKey = toIstDateKey(latestTime);
+        const fromIndex = candleSeries.findIndex((bar) => toIstDateKey(bar.time) === latestDayKey);
+        if (fromIndex >= 0) {
+          chart.timeScale().setVisibleLogicalRange({
+            from: fromIndex,
+            to: totalBars - 1,
+          });
+          return;
         }
       }
 
-      const visibleBars = Math.min(activeRange.range, totalBars);
-      const to = Math.max(0, totalBars - 1);
-      const from = Math.max(0, to - visibleBars + 1);
-      chart.timeScale().setVisibleLogicalRange({ from, to });
+      // Exact time window for other ranges (1W=7d, 1M=30d, 3M=90d, 6M=180d, 1Y=365d, 3Y=1095d, 5Y=1825d)
+      const rangeConfig = stockRangeOptions.find((o) => o.value === selectedRange) ?? stockRangeOptions[2];
+      const targetStartTime = latestTime - rangeConfig.days * 86400;
+
+      let fromIndex = candleSeries.findIndex((bar) => bar.time >= targetStartTime);
+      if (fromIndex === -1) {
+        fromIndex = 0;
+      }
+      fromIndex = Math.min(fromIndex, Math.max(0, totalBars - 5));
+
+      chart.timeScale().setVisibleLogicalRange({
+        from: fromIndex,
+        to: totalBars - 1,
+      });
     };
 
     if (chartMode === "candles") {
@@ -808,7 +857,6 @@ export default function AdvancedChartPage() {
       };
 
       chart.subscribeCrosshairMove(handleCrosshairMove);
-      void series;
 
       const latest = candleSeries[candleSeries.length - 1];
       if (latest) {
@@ -898,7 +946,6 @@ export default function AdvancedChartPage() {
       };
 
       chart.subscribeCrosshairMove(handleCrosshairMove);
-      void series;
 
       const latest = candleSeries[candleSeries.length - 1];
       if (latest) {
@@ -929,7 +976,7 @@ export default function AdvancedChartPage() {
         chartRef.current = null;
       };
     }
-  }, [candleSeries, chartMode, displayTimeframe, renderContextKey, activeRange.range, chartRequestTimeframe, selectedRange]);
+  }, [candleSeries, chartMode, displayTimeframe, renderContextKey, selectedRange]);
 
   const isUp = (chartData?.quote?.pChange ?? 0) >= 0;
 
@@ -1144,6 +1191,14 @@ export default function AdvancedChartPage() {
             <div className="lg:col-span-9">
               <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
                 <div className="relative h-[430px] min-w-0">
+                  {loading && (!chartData || chartData.timeframe !== chartRequestTimeframe) && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/80 backdrop-blur-[1px] dark:bg-slate-950/80">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Loading chart data...</span>
+                      </div>
+                    </div>
+                  )}
                   {hoveredCandle && (
                     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 text-xs">
                       {typeof hoveredCandle.xPosition === "number" && (
@@ -1182,7 +1237,20 @@ export default function AdvancedChartPage() {
                     {stockRangeOptions.map((option) => (
                       <button
                         key={option.value}
-                        onClick={() => setSelectedRange(option.value)}
+                        onClick={() => {
+                          userAdjustedZoomRef.current = false;
+                          preservedLogicalRangeRef.current = null;
+                          const targetTf = chartMode === "candles" && selectedCandleTimeframe !== "AUTO"
+                            ? selectedCandleTimeframe
+                            : option.timeframe;
+                          const cacheKey = `${marketId}|${symbol}|${targetTf}`;
+                          const cached = chartDataCache.get(cacheKey);
+                          if (cached) {
+                            setChartData(cached);
+                            setLoading(false);
+                          }
+                          setSelectedRange(option.value);
+                        }}
                         className={`h-8 rounded-md px-2.5 text-xs font-semibold transition-colors ${
                           selectedRange === option.value
                             ? "bg-blue-600 text-white"
@@ -1219,7 +1287,11 @@ export default function AdvancedChartPage() {
                     {chartMode === "candles" && (
                       <select
                         value={selectedCandleTimeframe}
-                        onChange={(e) => setSelectedCandleTimeframe(e.target.value)}
+                        onChange={(e) => {
+                          userAdjustedZoomRef.current = false;
+                          preservedLogicalRangeRef.current = null;
+                          setSelectedCandleTimeframe(e.target.value);
+                        }}
                         className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                       >
                         {candleTimeframeOptions.map((option) => (
@@ -1567,5 +1639,22 @@ export default function AdvancedChartPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdvancedChartPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Loading chart terminal...</p>
+          </div>
+        </div>
+      }
+    >
+      <AdvancedChartContent />
+    </Suspense>
   );
 }

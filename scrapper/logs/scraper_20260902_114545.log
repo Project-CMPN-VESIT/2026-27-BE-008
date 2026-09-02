@@ -1,0 +1,25 @@
+2026-09-02 11:45:45,612 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 11:45:45,624 [INFO] run: Initialized 2 sources from config
+2026-09-02 11:45:45,624 [INFO] run: ============================================================
+2026-09-02 11:45:45,624 [INFO] run: SCRAPING: UN Sanctions Consolidated List
+2026-09-02 11:45:45,624 [INFO] run: ============================================================
+2026-09-02 11:45:45,726 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
+2026-09-02 11:45:45,726 [INFO] run: Docs available at http://localhost:8000/docs
+2026-09-02 11:45:45,730 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
+2026-09-02 11:45:45,731 [INFO] run: Docs available at http://localhost:8003/docs
+2026-09-02 11:45:45,976 [INFO] scrapers.un_scraper: Downloading UN sanctions XML: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+2026-09-02 11:45:46,313 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 11:45:51,998 [INFO] screener.db.session: Initialized database schema at postgresql://neondb_owner:npg_geK3auME1UOV@ep-old-glade-b35ro0vc-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+2026-09-02 11:46:30,122 [INFO] scrapers.un_scraper: XML downloaded and parsed successfully
+2026-09-02 11:46:30,141 [INFO] scrapers.un_scraper: Parsed 736 individuals from UN XML
+2026-09-02 11:46:30,143 [INFO] scrapers.un_scraper: Parsed 275 entities from UN XML
+2026-09-02 11:46:33,496 [INFO] scrapers.un_scraper: UN scrape complete: 1011 found, 0 new, 0 errors
+2026-09-02 11:46:33,502 [INFO] run: UN Result: {
+  "source": "un_sanctions_consolidated",
+  "status": "COMPLETED",
+  "records_found": 1011,
+  "records_new": 0,
+  "records_processed": 0,
+  "errors": []
+}
+2026-09-02 11:46:33,502 [INFO] run: Scraping complete!

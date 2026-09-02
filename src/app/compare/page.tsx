@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, AlertTriangle, Crown, TrendingDown } from "lucide-react";
@@ -27,7 +27,7 @@ const METRIC_DIRECTION: Record<string, number> = {
   interest_coverage: 1,
 };
 
-export default function ComparePage() {
+function CompareContent() {
   const searchParams = useSearchParams();
   const symbolsParam = searchParams.get("symbols");
   const symbols = symbolsParam ? symbolsParam.split(",") : [];
@@ -279,8 +279,15 @@ export default function ComparePage() {
             </table>
           </div>
         </div>
-
       </div>
     </div>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 p-8 text-white">Loading comparison...</div>}>
+      <CompareContent />
+    </Suspense>
   );
 }
