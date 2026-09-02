@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Shield,
   ShieldAlert,
@@ -14,7 +14,10 @@ import {
   Info,
   Calendar,
   XCircle,
-  Play
+  Play,
+  ArrowUpDown,
+  ArrowDown,
+  ArrowUp
 } from "lucide-react";
 
 interface ScrapedEntity {
@@ -28,13 +31,52 @@ interface ScrapedEntity {
   link_to_circular?: string;
   issuing_body?: string;
   circular_number?: string;
+  status?: string;
+  action_type?: string;
 }
+
+const parseDateToUnix = (dateStr?: string | null): number => {
+  if (!dateStr || dateStr === "N/A" || dateStr === "null" || dateStr === "undefined") {
+    return 0;
+  }
+  
+  const trimmed = dateStr.trim();
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    return parsed;
+  }
+
+  // Handle DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
+  const parts = trimmed.split(/[-/.]/);
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return d.getTime();
+      }
+    } else if (parts[0].length === 4) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return d.getTime();
+      }
+    }
+  }
+
+  return 0;
+};
 
 export default function RegulatoryPage() {
   const [entities, setEntities] = useState<ScrapedEntity[]>([]);
   const [selectedEntity, setSelectedEntity] = useState<ScrapedEntity | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSource, setFilterSource] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc"); // Default: latest to oldest
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,46 +119,56 @@ export default function RegulatoryPage() {
     fetchEntities();
   }, []);
 
-  const filteredEntities = entities.filter((e) => {
-    const searchContext = `${e.name} ${e.din_number || ""} ${e.pan_number || ""} ${e.cin_number || ""} ${e.issuing_body || ""}`.toLowerCase();
-    const matchesSearch = searchContext.includes(searchQuery.toLowerCase());
-    const matchesFilter = filterSource === "all" || e.source_id === filterSource;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredEntities = useMemo(() => {
+    return entities
+      .filter((e) => {
+        const searchContext = `${e.name} ${e.din_number || ""} ${e.pan_number || ""} ${e.cin_number || ""} ${e.issuing_body || ""}`.toLowerCase();
+        const matchesSearch = searchContext.includes(searchQuery.toLowerCase());
+        const matchesFilter = filterSource === "all" || e.source_id === filterSource;
+        return matchesSearch && matchesFilter;
+      })
+      .sort((a, b) => {
+        const timeA = parseDateToUnix(a.date_of_publish);
+        const timeB = parseDateToUnix(b.date_of_publish);
+        if (timeA !== timeB) {
+          return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
+        }
+        return sortOrder === "desc" ? (b.id ?? 0) - (a.id ?? 0) : (a.id ?? 0) - (b.id ?? 0);
+      });
+  }, [entities, searchQuery, filterSource, sortOrder]);
 
   const getSourceLabel = (sourceId: string) => {
     switch (sourceId) {
-      case "sebi_debarred": return "SEBI Debarred";
+      case "sebi_orders": return "SEBI Orders";
       case "rbi_standalone_circulars": return "RBI Default/Actions";
-      case "un_sanctions_consolidated": return "UN Sanctions";
+      case "nse_circulars": return "NSE Circulars";
+      case "bse_notices": return "BSE Notices";
       default: return sourceId.replace("_", " ").toUpperCase();
     }
   };
 
   const getActualLink = (entity: ScrapedEntity) => {
-    if (entity.source_id === "un_sanctions_consolidated" || entity.link_to_circular?.endsWith(".xml")) {
-      return `https://www.google.com/search?q=${encodeURIComponent('UN Security Council Sanctions "' + entity.name + '"')}`;
-    }
     return entity.link_to_circular;
   };
 
   const getSourceBadgeColor = (sourceId: string) => {
     switch (sourceId) {
-      case "sebi_debarred": return "bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20";
+      case "sebi_orders": return "bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20";
+      case "nse_circulars": return "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20";
+      case "bse_notices": return "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20";
       case "rbi_standalone_circulars": return "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20";
-      case "un_sanctions_consolidated": return "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20";
       default: return "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
     }
   };
 
   const stats = {
     total: entities.length,
-    sebi: entities.filter(e => e.source_id === "sebi_debarred").length,
+    sebi: entities.filter(e => e.source_id === "sebi_orders").length,
+    nse_bse: entities.filter(e => e.source_id === "nse_circulars" || e.source_id === "bse_notices").length,
     rbi: entities.filter(e => e.source_id === "rbi_standalone_circulars").length,
-    un: entities.filter(e => e.source_id === "un_sanctions_consolidated").length,
   };
 
-  const availableSources = ["all", ...Array.from(new Set(entities.map(e => e.source_id)))];
+  const availableSources = ["all", "sebi_orders", "nse_circulars", "bse_notices", "rbi_standalone_circulars"];
 
   return (
     <div className="p-6 space-y-6 bg-grid-pattern min-h-screen">
@@ -126,9 +178,9 @@ export default function RegulatoryPage() {
             <Shield className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">SEBI Regulatory Shield</h1>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">SEBI Regulatory Shield (India Only)</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Live automated feed from Indian regulatory bodies and global sanctions lists
+              Strictly monitoring SEBI, NSE, BSE, and RBI actions with source provenance
             </p>
           </div>
         </div>
@@ -146,24 +198,24 @@ export default function RegulatoryPage() {
 
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Extracted</span><Users className="w-4 h-4 text-slate-400" /></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Actions</span><Users className="w-4 h-4 text-slate-400" /></div>
           <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</div>
-          <p className="text-xs text-slate-400 mt-1">Flagged Entities & Orgs</p>
+          <p className="text-xs text-slate-400 mt-1">Regulatory Actions Tracked</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-500/20 p-4 shadow-sm glow-rose">
           <div className="flex items-center justify-between"><span className="text-xs font-medium text-rose-600 dark:text-rose-400 uppercase tracking-wider">SEBI Actions</span><ShieldAlert className="w-4 h-4 text-rose-500" /></div>
           <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{stats.sebi}</div>
-          <p className="text-xs text-rose-500/70 mt-1">Debarred / Banned</p>
+          <p className="text-xs text-rose-500/70 mt-1">Debarred / Banned / Penalized</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-500/20 p-4 shadow-sm glow-blue">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">NSE/BSE Restrictions</span><Building2 className="w-4 h-4 text-blue-500" /></div>
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{stats.nse_bse}</div>
+          <p className="text-xs text-blue-500/70 mt-1">Exchange Level Surveillance</p>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-500/20 p-4 shadow-sm glow-amber">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">RBI Defaulters</span><Building2 className="w-4 h-4 text-amber-500" /></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">RBI Actions</span><FileWarning className="w-4 h-4 text-amber-500" /></div>
           <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.rbi}</div>
-          <p className="text-xs text-amber-500/70 mt-1">Wilful & Large Defaults</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-500/20 p-4 shadow-sm glow-purple">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">Global Sanctions</span><XCircle className="w-4 h-4 text-purple-500" /></div>
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{stats.un}</div>
-          <p className="text-xs text-purple-500/70 mt-1">UN & International Lists</p>
+          <p className="text-xs text-amber-500/70 mt-1">RBI Circulars</p>
         </div>
       </div>
 
@@ -196,15 +248,33 @@ export default function RegulatoryPage() {
               <tr className="border-b border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Entity Details</th>
                 <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Identifiers</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Source Database</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Publish Date</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Source</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Action & Status</th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <button
+                    onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                    className="inline-flex items-center gap-1.5 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer group"
+                    title={`Currently sorted ${sortOrder === "desc" ? "Latest to Oldest" : "Oldest to Latest"}. Click to toggle.`}
+                  >
+                    <span>Publish Date</span>
+                    {sortOrder === "desc" ? (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded font-medium">
+                        Latest First <ArrowDown className="w-3 h-3" />
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded font-medium">
+                        Oldest First <ArrowUp className="w-3 h-3" />
+                      </span>
+                    )}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
               {filteredEntities.map((entity) => (
-                <tr key={`${entity.id}-${entity.source_id}`} onClick={() => {
+                <tr key={`${entity.id}-${entity.source_id}-${entity.circular_number}`} onClick={() => {
                   const link = getActualLink(entity);
-                  if (link) {
+                  if (link && link !== "UNKNOWN") {
                     window.open(link, '_blank', 'noopener,noreferrer');
                   }
                   setSelectedEntity(selectedEntity?.id === entity.id ? null : entity);
@@ -232,6 +302,16 @@ export default function RegulatoryPage() {
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide ${getSourceBadgeColor(entity.source_id)}`}>
                       {getSourceLabel(entity.source_id)}
                     </span>
+                  </td>
+                  <td className="px-5 py-4 align-top">
+                    <div className="flex flex-col items-start gap-1">
+                      <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 mt-1">
+                        {entity.action_type || "REGULATORY ACTION"}
+                      </div>
+                      <div className="text-[10px] font-semibold tracking-wide mt-0.5" style={{ color: entity.status === 'ACTIVE' ? '#ef4444' : entity.status === 'EXPIRED' ? '#10b981' : '#64748b' }}>
+                        {entity.status || "UNKNOWN"}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-5 py-4 align-top">
                     <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Calendar className="w-3.5 h-3.5 text-slate-400" />{entity.date_of_publish || "N/A"}</div>
@@ -264,7 +344,7 @@ export default function RegulatoryPage() {
                 {selectedEntity.cin_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">CIN</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.cin_number}</div></div>}
                 {selectedEntity.circular_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">Order/Circular No.</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.circular_number}</div></div>}
               </div>
-              {getActualLink(selectedEntity) && (
+              {getActualLink(selectedEntity) && getActualLink(selectedEntity) !== "UNKNOWN" && (
                 <div className="mt-5 pt-5 border-t border-slate-200 dark:border-slate-700/50">
                   <a href={getActualLink(selectedEntity)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium text-blue-600 dark:text-blue-400 hover:border-blue-300 dark:hover:border-blue-500/50 transition-colors shadow-sm"><ExternalLink className="w-4 h-4" />Open Original Source</a>
                 </div>

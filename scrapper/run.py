@@ -56,10 +56,12 @@ def init_sources(db):
     for source in config["sources"]:
         db.upsert_source(
             source_id=source["source_id"],
-            name=source["name"],
+            source_name=source["name"],
             url=source["url"],
-            format_type=source["format_type"],
-            publishing_body=source["publishing_body"],
+            source_type=source["format_type"],
+            regulator=source["publishing_body"],
+            country=source.get("country", "IN"),
+            priority=source.get("priority", 1),
             active=source.get("active", True),
         )
     logger.info(f"Initialized {len(config['sources'])} sources from config")
@@ -74,6 +76,30 @@ def cmd_scrape(args):
     source = args.source
     max_circulars = args.max
 
+    if source in (None, "all", "sebi"):
+        logger.info("=" * 60)
+        logger.info("SCRAPING: SEBI Official Orders")
+        logger.info("=" * 60)
+        from scrapers.sebi_scraper import scrape_all as scrape_sebi
+        result = scrape_sebi(db, max_circulars=max_circulars)
+        logger.info(f"SEBI Result: {json.dumps(result, indent=2, default=str)}")
+        
+    if source in (None, "all", "nse"):
+        logger.info("=" * 60)
+        logger.info("SCRAPING: NSE Regulatory Actions")
+        logger.info("=" * 60)
+        from scrapers.nse_scraper import scrape_all as scrape_nse
+        result = scrape_nse(db, max_circulars=max_circulars)
+        logger.info(f"NSE Result: {json.dumps(result, indent=2, default=str)}")
+        
+    if source in (None, "all", "bse"):
+        logger.info("=" * 60)
+        logger.info("SCRAPING: BSE Regulatory Notices")
+        logger.info("=" * 60)
+        from scrapers.bse_scraper import scrape_all as scrape_bse
+        result = scrape_bse(db, max_circulars=max_circulars)
+        logger.info(f"BSE Result: {json.dumps(result, indent=2, default=str)}")
+
     if source in (None, "all", "rbi"):
         logger.info("=" * 60)
         logger.info("SCRAPING: RBI Standalone Circulars")
@@ -82,27 +108,19 @@ def cmd_scrape(args):
         result = scrape_rbi(db, max_circulars=max_circulars)
         logger.info(f"RBI Result: {json.dumps(result, indent=2, default=str)}")
 
-    if source in (None, "all", "un"):
-        logger.info("=" * 60)
-        logger.info("SCRAPING: UN Sanctions Consolidated List")
-        logger.info("=" * 60)
-        from scrapers.un_scraper import scrape_all as scrape_un
-        result = scrape_un(db)
-        logger.info(f"UN Result: {json.dumps(result, indent=2, default=str)}")
-
     logger.info("Scraping complete!")
 
 
 def cmd_extract(args):
-    """Run AI extraction on unprocessed RBI records."""
+    """Run extraction on unprocessed RBI records."""
     from db.database import Database
-    from extraction.mistral_extractor import process_unprocessed_records
+    from extraction.deterministic_extractor import process_unprocessed_records
 
     db = Database()
     max_records = args.max
 
     logger.info("=" * 60)
-    logger.info("AI EXTRACTION: Processing unprocessed RBI records")
+    logger.info("EXTRACTION: Processing unprocessed records deterministically")
     logger.info("=" * 60)
 
     result = process_unprocessed_records(db, max_records=max_records)

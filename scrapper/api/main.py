@@ -252,8 +252,8 @@ async def screen_records(request: ScreenRequest):
 
     start_time = datetime.now()
 
-    # Load all entities with their name variants
-    all_entities = db.get_all_entities_with_variants()
+    # Load all entities with their active/historical actions
+    all_entities = db.get_all_actions_with_entities()
 
     if not all_entities:
         return ScreenResponse(
@@ -306,12 +306,12 @@ async def get_stats():
 @app.get("/v1/entities")
 async def get_entities(page_size: int = 500):
     """Get all extracted entities for the UI."""
-    all_entities = db.get_all_entities_with_variants()
+    all_entities = db.get_all_actions_with_entities()
     
     formatted = []
     for e in all_entities[:page_size]:
         formatted.append({
-            "id": e["id"],
+            "id": e["entity_id"],
             "source_id": e["source_id"],
             "name": e["name"],
             "din_number": e.get("din"),
@@ -319,8 +319,10 @@ async def get_entities(page_size: int = 500):
             "cin_number": e.get("cin"),
             "date_of_publish": e.get("date_published"),
             "link_to_circular": e.get("link"),
-            "issuing_body": e.get("publishing_body"),
-            "circular_number": e.get("circular_number")
+            "issuing_body": e.get("regulator"),
+            "circular_number": e.get("circular_number"),
+            "status": e.get("sanction_status"),
+            "action_type": e.get("action_type")
         })
         
     return {"entities": formatted}

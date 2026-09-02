@@ -14,15 +14,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Realistic browser headers to avoid 418/403 blocks
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (compatible; FinPilotBot/1.0)",
 }
 
 INDEX_URL = "https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx"
@@ -49,7 +42,7 @@ def scrape_index(session: requests.Session = None, max_circulars: int = None) ->
         href = link["href"]
         text = link.get_text(strip=True)
 
-        if "NotificationUser.aspx" in href and text:
+        if "NotificationUser.aspx?Id=" in href and text:
             # Build absolute URL
             if href.startswith("/"):
                 full_url = f"https://www.rbi.org.in{href}"
@@ -188,21 +181,18 @@ def scrape_all(db, max_circulars: int = None, delay_min: float = 2, delay_max: f
                 content_hash = compute_hash(full_text)
 
                 # Diff detection: skip if already seen
-                if db.record_exists(content_hash):
+                if not db.document_exists(content_hash):
+                    db.insert_document(
+                        source_id=source_id,
+                        content_hash=content_hash,
+                        source_url=circ["url"],
+                        published_at=detail.get("date_published"),
+                        raw_text=full_text
+                    )
+                    records_new += 1
+                    logger.info(f"  [{i+1}/{records_found}] NEW: {circ['circular_number']}")
+                else:
                     logger.info(f"  [{i+1}/{records_found}] SKIP (already exists): {circ['circular_number']}")
-                    continue
-
-                # Store raw record
-                record_id = db.insert_raw_record(
-                    source_id=source_id,
-                    content_hash=content_hash,
-                    circular_number=circ["circular_number"],
-                    url=circ["url"],
-                    date_published=detail.get("date_published"),
-                    raw_text=full_text,
-                )
-                records_new += 1
-                logger.info(f"  [{i+1}/{records_found}] NEW: {circ['circular_number']}")
 
             except requests.RequestException as e:
                 error_msg = f"Failed to scrape {circ['url']}: {str(e)}"

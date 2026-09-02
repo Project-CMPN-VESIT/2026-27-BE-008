@@ -1,0 +1,78 @@
+2026-09-02 21:50:39,396 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 21:50:39,409 [INFO] run: Initialized 4 sources from config
+2026-09-02 21:50:39,409 [INFO] run: ============================================================
+2026-09-02 21:50:39,409 [INFO] run: SCRAPING: SEBI Official Orders
+2026-09-02 21:50:39,409 [INFO] run: ============================================================
+2026-09-02 21:50:40,725 [INFO] run: SEBI Result: {
+  "status": "success",
+  "source": "sebi_orders",
+  "records_found": 3,
+  "records_new": 0
+}
+2026-09-02 21:50:40,725 [INFO] run: ============================================================
+2026-09-02 21:50:40,726 [INFO] run: SCRAPING: NSE Regulatory Actions
+2026-09-02 21:50:40,726 [INFO] run: ============================================================
+2026-09-02 21:50:41,490 [INFO] run: NSE Result: {
+  "status": "success",
+  "source": "nse_circulars",
+  "records_found": 2,
+  "records_new": 0
+}
+2026-09-02 21:50:41,490 [INFO] run: ============================================================
+2026-09-02 21:50:41,490 [INFO] run: SCRAPING: BSE Regulatory Notices
+2026-09-02 21:50:41,490 [INFO] run: ============================================================
+2026-09-02 21:50:42,270 [INFO] run: BSE Result: {
+  "status": "success",
+  "source": "bse_notices",
+  "records_found": 0,
+  "records_new": 0
+}
+2026-09-02 21:50:42,270 [INFO] run: ============================================================
+2026-09-02 21:50:42,270 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 21:50:42,270 [INFO] run: ============================================================
+2026-09-02 21:50:42,278 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 21:50:43,228 [INFO] scrapers.rbi_scraper: Found 2 unique circulars on index page
+2026-09-02 21:50:43,228 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/scripts/NotificationUser.aspx
+2026-09-02 21:50:43,663 [INFO] scrapers.rbi_scraper:   [1/2] NEW: Notifications
+2026-09-02 21:50:43,663 [INFO] scrapers.rbi_scraper:   Waiting 3.3s before next request...
+2026-09-02 21:50:46,946 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx
+2026-09-02 21:50:47,508 [INFO] scrapers.rbi_scraper:   [2/2] SKIP (already exists): Notifications
+2026-09-02 21:50:47,520 [INFO] scrapers.rbi_scraper: RBI scrape complete: 2 found, 1 new, 0 errors
+2026-09-02 21:50:47,521 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 2,
+  "records_new": 1,
+  "errors": []
+}
+2026-09-02 21:50:47,521 [INFO] run: Scraping complete!
+2026-09-02 21:50:50,159 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 21:50:50,161 [INFO] run: ============================================================
+2026-09-02 21:50:50,161 [INFO] run: AI EXTRACTION: Processing unprocessed RBI records
+2026-09-02 21:50:50,161 [INFO] run: ============================================================
+2026-09-02 21:50:50,827 [INFO] extraction.mistral_extractor: Processing 2 unprocessed documents
+2026-09-02 21:50:50,827 [INFO] extraction.mistral_extractor: [1/2] Processing doc 1
+2026-09-02 21:50:51,143 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:50:53,348 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:50:57,565 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:05,888 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:22,183 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:22,184 [ERROR] extraction.mistral_extractor: LLM extraction failed: API error occurred: Status 401
+{"detail":"Invalid API Key"}
+
+2026-09-02 21:51:22,192 [INFO] extraction.mistral_extractor: [2/2] Processing doc 2
+2026-09-02 21:51:23,119 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:25,457 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:29,658 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:37,977 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:54,360 [INFO] httpx: HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 401 Unauthorized"
+2026-09-02 21:51:54,361 [ERROR] extraction.mistral_extractor: LLM extraction failed: API error occurred: Status 401
+{"detail":"Invalid API Key"}
+
+2026-09-02 21:51:54,369 [INFO] extraction.mistral_extractor: Extraction complete: 2 docs processed, 0 entities found
+2026-09-02 21:51:54,383 [INFO] run: Extraction Result: {
+  "processed": 2,
+  "entities_found": 0,
+  "errors": []
+}
+2026-09-02 21:51:54,386 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

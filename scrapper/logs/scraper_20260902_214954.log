@@ -1,0 +1,20 @@
+2026-09-02 21:49:54,210 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 21:49:54,212 [ERROR] run: Command failed: Database.upsert_source() got an unexpected keyword argument 'name'
+Traceback (most recent call last):
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 259, in main
+    commands[args.command](args)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 72, in cmd_scrape
+    init_sources(db)
+    ~~~~~~~~~~~~^^^^
+  File "D:\Desktop\FinPilot\scrapper\run.py", line 57, in init_sources
+    db.upsert_source(
+    ~~~~~~~~~~~~~~~~^
+        source_id=source["source_id"],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        active=source.get("active", True),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: Database.upsert_source() got an unexpected keyword argument 'name'

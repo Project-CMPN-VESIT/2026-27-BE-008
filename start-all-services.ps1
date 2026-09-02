@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateRange(1, 1440)]
-    [int]$UnScrapeIntervalMinutes = 30,
-    [switch]$UnScrapeOnce,
+    [int]$ScrapeIntervalMinutes = 30,
+    [switch]$ScrapeOnce,
     [string]$MistralApiKey
 )
 
@@ -115,7 +115,7 @@ $Command
 
 $safeActivate = $activateScript.Replace("'", "''")
 $safePython = $pythonExe.Replace("'", "''")
-$unSleepSeconds = [Math]::Max(60, $UnScrapeIntervalMinutes * 60)
+$unSleepSeconds = [Math]::Max(60, $ScrapeIntervalMinutes * 60)
 
 $frontendCommand = "npm run dev"
 
@@ -144,21 +144,21 @@ $screenerApiCommand = @"
 & '$safePython' run.py serve-screener
 "@
 
-if ($UnScrapeOnce) {
-    $unScraperCommand = @"
+if ($ScrapeOnce) {
+    $pipelineScraperCommand = @"
 & '$safeActivate'
-& '$safePython' run.py scrape --source un
-Write-Host "[UN Scraper] One-time run complete." -ForegroundColor Green
+& '$safePython' run.py pipeline --source all
+Write-Host "[Regulatory Scraper] One-time run complete." -ForegroundColor Green
 "@
 }
 else {
-    $unScraperCommand = @"
+    $pipelineScraperCommand = @"
 & '$safeActivate'
-& '$safePython' run.py scrape --source un
+& '$safePython' run.py pipeline --source all
 while (`$true) {
-    Write-Host "[UN Scraper] Sleeping for $UnScrapeIntervalMinutes minutes..." -ForegroundColor Yellow
+    Write-Host "[Regulatory Scraper] Sleeping for $ScrapeIntervalMinutes minutes..." -ForegroundColor Yellow
     Start-Sleep -Seconds $unSleepSeconds
-    & '$safePython' run.py scrape --source un
+    & '$safePython' run.py pipeline --source all
 }
 "@
 }
@@ -169,7 +169,7 @@ Start-ServiceTerminal -Title "FinPilot News Feed Backend (8002)" -WorkingDirecto
 Start-ServiceTerminal -Title "FinPilot Paper Trading Backend (8001)" -WorkingDirectory $paperTradingDir -Command $paperTradingCommand
 Start-ServiceTerminal -Title "FinPilot Regulatory API (8000)" -WorkingDirectory $scrapperDir -Command $regulatoryApiCommand
 Start-ServiceTerminal -Title "FinPilot Screener API (8003)" -WorkingDirectory $scrapperDir -Command $screenerApiCommand
-Start-ServiceTerminal -Title "FinPilot UN Sanctions Scraper" -WorkingDirectory $scrapperDir -Command $unScraperCommand
+Start-ServiceTerminal -Title "FinPilot Regulatory Scraper" -WorkingDirectory $scrapperDir -Command $pipelineScraperCommand
 
 Write-Host "Launched all services in separate terminals:" -ForegroundColor Green
 Write-Host "1. Frontend            -> http://localhost:3000"
@@ -178,4 +178,4 @@ Write-Host "3. News Feed backend   -> http://localhost:8002"
 Write-Host "4. Paper Trading       -> http://localhost:8001"
 Write-Host "5. Regulatory API      -> http://localhost:8000"
 Write-Host "6. Screener API        -> http://localhost:8003"
-Write-Host "7. UN scraper          -> scrape once at startup, then recurring scrape --source un"
+Write-Host "7. Regulatory scraper  -> pipeline all at startup, then recurring"

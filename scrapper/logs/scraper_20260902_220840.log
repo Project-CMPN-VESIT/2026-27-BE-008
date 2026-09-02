@@ -1,0 +1,28 @@
+2026-09-02 22:08:40,032 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:08:40,045 [INFO] run: Initialized 4 sources from config
+2026-09-02 22:08:40,045 [INFO] run: ============================================================
+2026-09-02 22:08:40,045 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 22:08:40,045 [INFO] run: ============================================================
+2026-09-02 22:08:40,256 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 22:08:41,096 [INFO] scrapers.rbi_scraper: Found 0 unique circulars on index page
+2026-09-02 22:08:41,111 [INFO] scrapers.rbi_scraper: RBI scrape complete: 0 found, 0 new, 0 errors
+2026-09-02 22:08:41,112 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 0,
+  "records_new": 0,
+  "errors": []
+}
+2026-09-02 22:08:41,112 [INFO] run: Scraping complete!
+2026-09-02 22:08:41,116 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:08:41,118 [INFO] run: ============================================================
+2026-09-02 22:08:41,118 [INFO] run: EXTRACTION: Processing unprocessed records deterministically
+2026-09-02 22:08:41,118 [INFO] run: ============================================================
+2026-09-02 22:08:41,123 [INFO] extraction.deterministic_extractor: Processing 0 unprocessed documents deterministically
+2026-09-02 22:08:41,123 [INFO] extraction.deterministic_extractor: Extraction complete: 0 docs processed, 0 entities found
+2026-09-02 22:08:41,123 [INFO] run: Extraction Result: {
+  "processed": 0,
+  "entities_found": 0,
+  "errors": []
+}
+2026-09-02 22:08:41,124 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

@@ -1,0 +1,3 @@
+2026-09-02 22:00:53,098 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:00:53,115 [INFO] run: Initialized 4 sources from config
+2026-09-02 22:00:53,115 [INFO] run: Scraping complete!

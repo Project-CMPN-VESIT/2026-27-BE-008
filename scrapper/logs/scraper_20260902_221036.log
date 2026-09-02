@@ -1,0 +1,47 @@
+2026-09-02 22:10:36,289 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:10:36,304 [INFO] run: Initialized 4 sources from config
+2026-09-02 22:10:36,304 [INFO] run: ============================================================
+2026-09-02 22:10:36,304 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 22:10:36,304 [INFO] run: ============================================================
+2026-09-02 22:10:36,519 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 22:10:37,385 [INFO] scrapers.rbi_scraper: Found 5 unique circulars on index page
+2026-09-02 22:10:37,385 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13325&Mode=0
+2026-09-02 22:10:37,758 [INFO] scrapers.rbi_scraper:   [1/5] NEW: DOR.ACC.REC.No.426/21.02.067/2025-26
+2026-09-02 22:10:37,758 [INFO] scrapers.rbi_scraper:   Waiting 3.2s before next request...
+2026-09-02 22:10:40,945 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13323&Mode=0
+2026-09-02 22:10:41,664 [INFO] scrapers.rbi_scraper:   [2/5] NEW: DOR.ACC.REC.No.425/21.02.067/2025-26
+2026-09-02 22:10:41,664 [INFO] scrapers.rbi_scraper:   Waiting 2.9s before next request...
+2026-09-02 22:10:44,589 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13322&Mode=0
+2026-09-02 22:10:45,116 [INFO] scrapers.rbi_scraper:   [3/5] NEW: DOR.ACC.REC.No.424/21.02.067/2025-26
+2026-09-02 22:10:45,116 [INFO] scrapers.rbi_scraper:   Waiting 3.0s before next request...
+2026-09-02 22:10:48,126 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13320&Mode=0
+2026-09-02 22:10:48,809 [INFO] scrapers.rbi_scraper:   [4/5] NEW: DOR.ACC.REC.No.423/21.02.067/2025-26
+2026-09-02 22:10:48,810 [INFO] scrapers.rbi_scraper:   Waiting 3.8s before next request...
+2026-09-02 22:10:52,587 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12922&Mode=0
+2026-09-02 22:10:53,138 [INFO] scrapers.rbi_scraper:   [5/5] NEW: DOR.AML.REC.61/14.06.001/2025-26
+2026-09-02 22:10:53,149 [INFO] scrapers.rbi_scraper: RBI scrape complete: 5 found, 5 new, 0 errors
+2026-09-02 22:10:53,150 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 5,
+  "records_new": 5,
+  "errors": []
+}
+2026-09-02 22:10:53,150 [INFO] run: Scraping complete!
+2026-09-02 22:10:53,155 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:10:53,157 [INFO] run: ============================================================
+2026-09-02 22:10:53,157 [INFO] run: EXTRACTION: Processing unprocessed records deterministically
+2026-09-02 22:10:53,157 [INFO] run: ============================================================
+2026-09-02 22:10:53,163 [INFO] extraction.deterministic_extractor: Processing 5 unprocessed documents deterministically
+2026-09-02 22:10:53,163 [INFO] extraction.deterministic_extractor: [1/5] Processing doc 171
+2026-09-02 22:10:53,217 [INFO] extraction.deterministic_extractor: [2/5] Processing doc 172
+2026-09-02 22:10:53,269 [INFO] extraction.deterministic_extractor: [3/5] Processing doc 173
+2026-09-02 22:10:53,315 [INFO] extraction.deterministic_extractor: [4/5] Processing doc 174
+2026-09-02 22:10:53,360 [INFO] extraction.deterministic_extractor: [5/5] Processing doc 175
+2026-09-02 22:10:53,403 [INFO] extraction.deterministic_extractor: Extraction complete: 5 docs processed, 5 entities found
+2026-09-02 22:10:53,403 [INFO] run: Extraction Result: {
+  "processed": 5,
+  "entities_found": 5,
+  "errors": []
+}
+2026-09-02 22:10:53,405 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

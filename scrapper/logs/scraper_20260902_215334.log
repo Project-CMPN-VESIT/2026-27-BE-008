@@ -1,0 +1,6 @@
+2026-09-02 21:53:34,076 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 21:53:34,089 [INFO] run: Initialized 4 sources from config
+2026-09-02 21:53:34,089 [INFO] run: Scraping complete!
+2026-09-02 21:53:34,256 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
+2026-09-02 21:53:34,256 [INFO] run: Docs available at http://localhost:8003/docs
+2026-09-02 21:53:37,971 [INFO] screener.db.session: Initialized database schema at postgresql://neondb_owner:npg_geK3auME1UOV@ep-old-glade-b35ro0vc-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require

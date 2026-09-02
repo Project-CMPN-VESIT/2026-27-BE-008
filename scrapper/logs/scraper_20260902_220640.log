@@ -1,0 +1,224 @@
+2026-09-02 22:06:40,895 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:06:40,911 [INFO] run: Initialized 4 sources from config
+2026-09-02 22:06:40,912 [INFO] run: ============================================================
+2026-09-02 22:06:40,912 [INFO] run: SCRAPING: SEBI Official Orders
+2026-09-02 22:06:40,912 [INFO] run: ============================================================
+2026-09-02 22:06:40,972 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
+2026-09-02 22:06:40,972 [INFO] run: Docs available at http://localhost:8003/docs
+2026-09-02 22:06:40,987 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
+2026-09-02 22:06:40,987 [INFO] run: Docs available at http://localhost:8000/docs
+2026-09-02 22:06:41,373 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:06:42,333 [ERROR] scrapers.sebi_scraper: SEBI Scraper failed: '>' not supported between instances of 'int' and 'NoneType'
+2026-09-02 22:06:42,346 [INFO] run: SEBI Result: {
+  "status": "success",
+  "source": "sebi_orders",
+  "records_found": 1,
+  "records_new": 0
+}
+2026-09-02 22:06:42,346 [INFO] run: ============================================================
+2026-09-02 22:06:42,346 [INFO] run: SCRAPING: NSE Regulatory Actions
+2026-09-02 22:06:42,346 [INFO] run: ============================================================
+2026-09-02 22:06:44,211 [INFO] screener.db.session: Initialized database schema at postgresql://neondb_owner:npg_geK3auME1UOV@ep-old-glade-b35ro0vc-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+2026-09-02 22:06:44,848 [INFO] run: NSE Result: {
+  "status": "success",
+  "source": "nse_circulars",
+  "records_found": 186,
+  "records_new": 162
+}
+2026-09-02 22:06:44,848 [INFO] run: ============================================================
+2026-09-02 22:06:44,849 [INFO] run: SCRAPING: BSE Regulatory Notices
+2026-09-02 22:06:44,849 [INFO] run: ============================================================
+2026-09-02 22:06:45,714 [INFO] run: BSE Result: {
+  "status": "success",
+  "source": "bse_notices",
+  "records_found": 0,
+  "records_new": 0
+}
+2026-09-02 22:06:45,716 [INFO] run: ============================================================
+2026-09-02 22:06:45,716 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 22:06:45,716 [INFO] run: ============================================================
+2026-09-02 22:06:45,723 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 22:06:46,538 [INFO] scrapers.rbi_scraper: Found 0 unique circulars on index page
+2026-09-02 22:06:46,553 [INFO] scrapers.rbi_scraper: RBI scrape complete: 0 found, 0 new, 0 errors
+2026-09-02 22:06:46,554 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED",
+  "records_found": 0,
+  "records_new": 0,
+  "errors": []
+}
+2026-09-02 22:06:46,554 [INFO] run: Scraping complete!
+2026-09-02 22:06:46,562 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 22:06:46,563 [INFO] run: ============================================================
+2026-09-02 22:06:46,564 [INFO] run: EXTRACTION: Processing unprocessed records deterministically
+2026-09-02 22:06:46,564 [INFO] run: ============================================================
+2026-09-02 22:06:46,568 [INFO] extraction.deterministic_extractor: Processing 162 unprocessed documents deterministically
+2026-09-02 22:06:46,568 [INFO] extraction.deterministic_extractor: [1/162] Processing doc 9
+2026-09-02 22:06:46,627 [INFO] extraction.deterministic_extractor: [2/162] Processing doc 10
+2026-09-02 22:06:46,706 [INFO] extraction.deterministic_extractor: [3/162] Processing doc 11
+2026-09-02 22:06:46,770 [INFO] extraction.deterministic_extractor: [4/162] Processing doc 12
+2026-09-02 22:06:46,840 [INFO] extraction.deterministic_extractor: [5/162] Processing doc 13
+2026-09-02 22:06:46,927 [INFO] extraction.deterministic_extractor: [6/162] Processing doc 14
+2026-09-02 22:06:46,999 [INFO] extraction.deterministic_extractor: [7/162] Processing doc 15
+2026-09-02 22:06:47,059 [INFO] extraction.deterministic_extractor: [8/162] Processing doc 16
+2026-09-02 22:06:47,124 [INFO] extraction.deterministic_extractor: [9/162] Processing doc 17
+2026-09-02 22:06:47,193 [INFO] extraction.deterministic_extractor: [10/162] Processing doc 18
+2026-09-02 22:06:47,259 [INFO] extraction.deterministic_extractor: [11/162] Processing doc 19
+2026-09-02 22:06:47,307 [INFO] extraction.deterministic_extractor: [12/162] Processing doc 20
+2026-09-02 22:06:47,376 [INFO] extraction.deterministic_extractor: [13/162] Processing doc 21
+2026-09-02 22:06:47,431 [INFO] extraction.deterministic_extractor: [14/162] Processing doc 22
+2026-09-02 22:06:47,506 [INFO] extraction.deterministic_extractor: [15/162] Processing doc 23
+2026-09-02 22:06:47,579 [INFO] extraction.deterministic_extractor: [16/162] Processing doc 24
+2026-09-02 22:06:47,650 [INFO] extraction.deterministic_extractor: [17/162] Processing doc 25
+2026-09-02 22:06:47,720 [INFO] extraction.deterministic_extractor: [18/162] Processing doc 26
+2026-09-02 22:06:47,796 [INFO] extraction.deterministic_extractor: [19/162] Processing doc 27
+2026-09-02 22:06:47,863 [INFO] extraction.deterministic_extractor: [20/162] Processing doc 28
+2026-09-02 22:06:47,927 [INFO] extraction.deterministic_extractor: [21/162] Processing doc 29
+2026-09-02 22:06:48,002 [INFO] extraction.deterministic_extractor: [22/162] Processing doc 30
+2026-09-02 22:06:48,067 [INFO] extraction.deterministic_extractor: [23/162] Processing doc 31
+2026-09-02 22:06:48,129 [INFO] extraction.deterministic_extractor: [24/162] Processing doc 32
+2026-09-02 22:06:48,193 [INFO] extraction.deterministic_extractor: [25/162] Processing doc 33
+2026-09-02 22:06:48,255 [INFO] extraction.deterministic_extractor: [26/162] Processing doc 34
+2026-09-02 22:06:48,308 [INFO] extraction.deterministic_extractor: [27/162] Processing doc 35
+2026-09-02 22:06:48,372 [INFO] extraction.deterministic_extractor: [28/162] Processing doc 36
+2026-09-02 22:06:48,438 [INFO] extraction.deterministic_extractor: [29/162] Processing doc 37
+2026-09-02 22:06:48,501 [INFO] extraction.deterministic_extractor: [30/162] Processing doc 38
+2026-09-02 22:06:48,569 [INFO] extraction.deterministic_extractor: [31/162] Processing doc 39
+2026-09-02 22:06:48,638 [INFO] extraction.deterministic_extractor: [32/162] Processing doc 40
+2026-09-02 22:06:48,716 [INFO] extraction.deterministic_extractor: [33/162] Processing doc 41
+2026-09-02 22:06:48,793 [INFO] extraction.deterministic_extractor: [34/162] Processing doc 42
+2026-09-02 22:06:48,866 [INFO] extraction.deterministic_extractor: [35/162] Processing doc 43
+2026-09-02 22:06:48,937 [INFO] extraction.deterministic_extractor: [36/162] Processing doc 44
+2026-09-02 22:06:49,009 [INFO] extraction.deterministic_extractor: [37/162] Processing doc 45
+2026-09-02 22:06:49,082 [INFO] extraction.deterministic_extractor: [38/162] Processing doc 46
+2026-09-02 22:06:49,149 [INFO] extraction.deterministic_extractor: [39/162] Processing doc 47
+2026-09-02 22:06:49,210 [INFO] extraction.deterministic_extractor: [40/162] Processing doc 48
+2026-09-02 22:06:49,289 [INFO] extraction.deterministic_extractor: [41/162] Processing doc 49
+2026-09-02 22:06:49,351 [INFO] extraction.deterministic_extractor: [42/162] Processing doc 50
+2026-09-02 22:06:49,406 [INFO] extraction.deterministic_extractor: [43/162] Processing doc 51
+2026-09-02 22:06:49,473 [INFO] extraction.deterministic_extractor: [44/162] Processing doc 52
+2026-09-02 22:06:49,545 [INFO] extraction.deterministic_extractor: [45/162] Processing doc 53
+2026-09-02 22:06:49,608 [INFO] extraction.deterministic_extractor: [46/162] Processing doc 54
+2026-09-02 22:06:49,665 [INFO] extraction.deterministic_extractor: [47/162] Processing doc 55
+2026-09-02 22:06:49,727 [INFO] extraction.deterministic_extractor: [48/162] Processing doc 56
+2026-09-02 22:06:49,782 [INFO] extraction.deterministic_extractor: [49/162] Processing doc 57
+2026-09-02 22:06:49,839 [INFO] extraction.deterministic_extractor: [50/162] Processing doc 58
+2026-09-02 22:06:49,948 [INFO] extraction.deterministic_extractor: [51/162] Processing doc 59
+2026-09-02 22:06:50,018 [INFO] extraction.deterministic_extractor: [52/162] Processing doc 60
+2026-09-02 22:06:50,279 [INFO] extraction.deterministic_extractor: [53/162] Processing doc 61
+2026-09-02 22:06:50,336 [INFO] extraction.deterministic_extractor: [54/162] Processing doc 62
+2026-09-02 22:06:50,433 [INFO] extraction.deterministic_extractor: [55/162] Processing doc 63
+2026-09-02 22:06:50,506 [INFO] extraction.deterministic_extractor: [56/162] Processing doc 64
+2026-09-02 22:06:50,590 [INFO] extraction.deterministic_extractor: [57/162] Processing doc 65
+2026-09-02 22:06:50,664 [INFO] extraction.deterministic_extractor: [58/162] Processing doc 66
+2026-09-02 22:06:50,739 [INFO] extraction.deterministic_extractor: [59/162] Processing doc 67
+2026-09-02 22:06:50,797 [INFO] extraction.deterministic_extractor: [60/162] Processing doc 68
+2026-09-02 22:06:50,873 [INFO] extraction.deterministic_extractor: [61/162] Processing doc 69
+2026-09-02 22:06:51,015 [INFO] extraction.deterministic_extractor: [62/162] Processing doc 70
+2026-09-02 22:06:51,075 [INFO] extraction.deterministic_extractor: [63/162] Processing doc 71
+2026-09-02 22:06:51,136 [INFO] extraction.deterministic_extractor: [64/162] Processing doc 72
+2026-09-02 22:06:51,205 [INFO] extraction.deterministic_extractor: [65/162] Processing doc 73
+2026-09-02 22:06:51,265 [INFO] extraction.deterministic_extractor: [66/162] Processing doc 74
+2026-09-02 22:06:51,328 [INFO] extraction.deterministic_extractor: [67/162] Processing doc 75
+2026-09-02 22:06:51,386 [INFO] extraction.deterministic_extractor: [68/162] Processing doc 76
+2026-09-02 22:06:51,437 [INFO] extraction.deterministic_extractor: [69/162] Processing doc 77
+2026-09-02 22:06:51,501 [INFO] extraction.deterministic_extractor: [70/162] Processing doc 78
+2026-09-02 22:06:51,558 [INFO] extraction.deterministic_extractor: [71/162] Processing doc 79
+2026-09-02 22:06:51,617 [INFO] extraction.deterministic_extractor: [72/162] Processing doc 80
+2026-09-02 22:06:51,682 [INFO] extraction.deterministic_extractor: [73/162] Processing doc 81
+2026-09-02 22:06:51,738 [INFO] extraction.deterministic_extractor: [74/162] Processing doc 82
+2026-09-02 22:06:51,810 [INFO] extraction.deterministic_extractor: [75/162] Processing doc 83
+2026-09-02 22:06:51,883 [INFO] extraction.deterministic_extractor: [76/162] Processing doc 84
+2026-09-02 22:06:51,984 [INFO] extraction.deterministic_extractor: [77/162] Processing doc 85
+2026-09-02 22:06:52,045 [INFO] extraction.deterministic_extractor: [78/162] Processing doc 86
+2026-09-02 22:06:52,091 [INFO] extraction.deterministic_extractor: [79/162] Processing doc 87
+2026-09-02 22:06:52,154 [INFO] extraction.deterministic_extractor: [80/162] Processing doc 88
+2026-09-02 22:06:52,214 [INFO] extraction.deterministic_extractor: [81/162] Processing doc 89
+2026-09-02 22:06:52,289 [INFO] extraction.deterministic_extractor: [82/162] Processing doc 90
+2026-09-02 22:06:52,366 [INFO] extraction.deterministic_extractor: [83/162] Processing doc 91
+2026-09-02 22:06:52,434 [INFO] extraction.deterministic_extractor: [84/162] Processing doc 92
+2026-09-02 22:06:52,497 [INFO] extraction.deterministic_extractor: [85/162] Processing doc 93
+2026-09-02 22:06:52,567 [INFO] extraction.deterministic_extractor: [86/162] Processing doc 94
+2026-09-02 22:06:52,631 [INFO] extraction.deterministic_extractor: [87/162] Processing doc 95
+2026-09-02 22:06:52,695 [INFO] extraction.deterministic_extractor: [88/162] Processing doc 96
+2026-09-02 22:06:52,761 [INFO] extraction.deterministic_extractor: [89/162] Processing doc 97
+2026-09-02 22:06:52,830 [INFO] extraction.deterministic_extractor: [90/162] Processing doc 98
+2026-09-02 22:06:52,955 [INFO] extraction.deterministic_extractor: [91/162] Processing doc 99
+2026-09-02 22:06:53,020 [INFO] extraction.deterministic_extractor: [92/162] Processing doc 100
+2026-09-02 22:06:53,078 [INFO] extraction.deterministic_extractor: [93/162] Processing doc 101
+2026-09-02 22:06:53,139 [INFO] extraction.deterministic_extractor: [94/162] Processing doc 102
+2026-09-02 22:06:53,191 [INFO] extraction.deterministic_extractor: [95/162] Processing doc 103
+2026-09-02 22:06:53,255 [INFO] extraction.deterministic_extractor: [96/162] Processing doc 104
+2026-09-02 22:06:53,320 [INFO] extraction.deterministic_extractor: [97/162] Processing doc 105
+2026-09-02 22:06:53,364 [INFO] extraction.deterministic_extractor: [98/162] Processing doc 106
+2026-09-02 22:06:53,455 [INFO] extraction.deterministic_extractor: [99/162] Processing doc 107
+2026-09-02 22:06:53,515 [INFO] extraction.deterministic_extractor: [100/162] Processing doc 108
+2026-09-02 22:06:53,577 [INFO] extraction.deterministic_extractor: [101/162] Processing doc 109
+2026-09-02 22:06:53,650 [INFO] extraction.deterministic_extractor: [102/162] Processing doc 110
+2026-09-02 22:06:53,711 [INFO] extraction.deterministic_extractor: [103/162] Processing doc 111
+2026-09-02 22:06:53,776 [INFO] extraction.deterministic_extractor: [104/162] Processing doc 112
+2026-09-02 22:06:53,833 [INFO] extraction.deterministic_extractor: [105/162] Processing doc 113
+2026-09-02 22:06:53,933 [INFO] extraction.deterministic_extractor: [106/162] Processing doc 114
+2026-09-02 22:06:53,991 [INFO] extraction.deterministic_extractor: [107/162] Processing doc 115
+2026-09-02 22:06:54,058 [INFO] extraction.deterministic_extractor: [108/162] Processing doc 116
+2026-09-02 22:06:54,123 [INFO] extraction.deterministic_extractor: [109/162] Processing doc 117
+2026-09-02 22:06:54,189 [INFO] extraction.deterministic_extractor: [110/162] Processing doc 118
+2026-09-02 22:06:54,243 [INFO] extraction.deterministic_extractor: [111/162] Processing doc 119
+2026-09-02 22:06:54,306 [INFO] extraction.deterministic_extractor: [112/162] Processing doc 120
+2026-09-02 22:06:54,372 [INFO] extraction.deterministic_extractor: [113/162] Processing doc 121
+2026-09-02 22:06:54,478 [INFO] extraction.deterministic_extractor: [114/162] Processing doc 122
+2026-09-02 22:06:54,564 [INFO] extraction.deterministic_extractor: [115/162] Processing doc 123
+2026-09-02 22:06:54,628 [INFO] extraction.deterministic_extractor: [116/162] Processing doc 124
+2026-09-02 22:06:54,692 [INFO] extraction.deterministic_extractor: [117/162] Processing doc 125
+2026-09-02 22:06:54,745 [INFO] extraction.deterministic_extractor: [118/162] Processing doc 126
+2026-09-02 22:06:54,800 [INFO] extraction.deterministic_extractor: [119/162] Processing doc 127
+2026-09-02 22:06:54,866 [INFO] extraction.deterministic_extractor: [120/162] Processing doc 128
+2026-09-02 22:06:54,927 [INFO] extraction.deterministic_extractor: [121/162] Processing doc 129
+2026-09-02 22:06:54,991 [INFO] extraction.deterministic_extractor: [122/162] Processing doc 130
+2026-09-02 22:06:55,054 [INFO] extraction.deterministic_extractor: [123/162] Processing doc 131
+2026-09-02 22:06:55,118 [INFO] extraction.deterministic_extractor: [124/162] Processing doc 132
+2026-09-02 22:06:55,172 [INFO] extraction.deterministic_extractor: [125/162] Processing doc 133
+2026-09-02 22:06:55,233 [INFO] extraction.deterministic_extractor: [126/162] Processing doc 134
+2026-09-02 22:06:55,295 [INFO] extraction.deterministic_extractor: [127/162] Processing doc 135
+2026-09-02 22:06:55,360 [INFO] extraction.deterministic_extractor: [128/162] Processing doc 136
+2026-09-02 22:06:55,427 [INFO] extraction.deterministic_extractor: [129/162] Processing doc 137
+2026-09-02 22:06:55,492 [INFO] extraction.deterministic_extractor: [130/162] Processing doc 138
+2026-09-02 22:06:55,552 [INFO] extraction.deterministic_extractor: [131/162] Processing doc 139
+2026-09-02 22:06:55,615 [INFO] extraction.deterministic_extractor: [132/162] Processing doc 140
+2026-09-02 22:06:55,975 [INFO] extraction.deterministic_extractor: [133/162] Processing doc 141
+2026-09-02 22:06:56,031 [INFO] extraction.deterministic_extractor: [134/162] Processing doc 142
+2026-09-02 22:06:56,103 [INFO] extraction.deterministic_extractor: [135/162] Processing doc 143
+2026-09-02 22:06:56,171 [INFO] extraction.deterministic_extractor: [136/162] Processing doc 144
+2026-09-02 22:06:56,235 [INFO] extraction.deterministic_extractor: [137/162] Processing doc 145
+2026-09-02 22:06:56,298 [INFO] extraction.deterministic_extractor: [138/162] Processing doc 146
+2026-09-02 22:06:56,365 [INFO] extraction.deterministic_extractor: [139/162] Processing doc 147
+2026-09-02 22:06:56,438 [INFO] extraction.deterministic_extractor: [140/162] Processing doc 148
+2026-09-02 22:06:56,494 [INFO] extraction.deterministic_extractor: [141/162] Processing doc 149
+2026-09-02 22:06:56,550 [INFO] extraction.deterministic_extractor: [142/162] Processing doc 150
+2026-09-02 22:06:56,611 [INFO] extraction.deterministic_extractor: [143/162] Processing doc 151
+2026-09-02 22:06:56,663 [INFO] extraction.deterministic_extractor: [144/162] Processing doc 152
+2026-09-02 22:06:56,722 [INFO] extraction.deterministic_extractor: [145/162] Processing doc 153
+2026-09-02 22:06:56,795 [INFO] extraction.deterministic_extractor: [146/162] Processing doc 154
+2026-09-02 22:06:56,856 [INFO] extraction.deterministic_extractor: [147/162] Processing doc 155
+2026-09-02 22:06:57,006 [INFO] extraction.deterministic_extractor: [148/162] Processing doc 156
+2026-09-02 22:06:57,068 [INFO] extraction.deterministic_extractor: [149/162] Processing doc 157
+2026-09-02 22:06:57,138 [INFO] extraction.deterministic_extractor: [150/162] Processing doc 158
+2026-09-02 22:06:57,203 [INFO] extraction.deterministic_extractor: [151/162] Processing doc 159
+2026-09-02 22:06:57,274 [INFO] extraction.deterministic_extractor: [152/162] Processing doc 160
+2026-09-02 22:06:57,335 [INFO] extraction.deterministic_extractor: [153/162] Processing doc 161
+2026-09-02 22:06:57,438 [INFO] extraction.deterministic_extractor: [154/162] Processing doc 162
+2026-09-02 22:06:57,501 [INFO] extraction.deterministic_extractor: [155/162] Processing doc 163
+2026-09-02 22:06:57,569 [INFO] extraction.deterministic_extractor: [156/162] Processing doc 164
+2026-09-02 22:06:57,636 [INFO] extraction.deterministic_extractor: [157/162] Processing doc 165
+2026-09-02 22:06:57,715 [INFO] extraction.deterministic_extractor: [158/162] Processing doc 166
+2026-09-02 22:06:57,781 [INFO] extraction.deterministic_extractor: [159/162] Processing doc 167
+2026-09-02 22:06:57,835 [INFO] extraction.deterministic_extractor: [160/162] Processing doc 168
+2026-09-02 22:06:57,888 [INFO] extraction.deterministic_extractor: [161/162] Processing doc 169
+2026-09-02 22:06:57,955 [INFO] extraction.deterministic_extractor: [162/162] Processing doc 170
+2026-09-02 22:06:58,027 [INFO] extraction.deterministic_extractor: Extraction complete: 162 docs processed, 162 entities found
+2026-09-02 22:06:58,027 [INFO] run: Extraction Result: {
+  "processed": 162,
+  "entities_found": 162,
+  "errors": []
+}
+2026-09-02 22:06:58,031 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

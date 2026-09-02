@@ -1,0 +1,51 @@
+2026-09-02 21:50:08,871 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-02 21:50:08,896 [INFO] run: Initialized 4 sources from config
+2026-09-02 21:50:08,896 [INFO] run: ============================================================
+2026-09-02 21:50:08,896 [INFO] run: SCRAPING: SEBI Official Orders
+2026-09-02 21:50:08,896 [INFO] run: ============================================================
+2026-09-02 21:50:12,562 [INFO] run: SEBI Result: {
+  "status": "success",
+  "source": "sebi_orders",
+  "records_found": 3,
+  "records_new": 2
+}
+2026-09-02 21:50:12,563 [INFO] run: ============================================================
+2026-09-02 21:50:12,563 [INFO] run: SCRAPING: NSE Regulatory Actions
+2026-09-02 21:50:12,563 [INFO] run: ============================================================
+2026-09-02 21:50:13,061 [INFO] run: NSE Result: {
+  "status": "success",
+  "source": "nse_circulars",
+  "records_found": 2,
+  "records_new": 2
+}
+2026-09-02 21:50:13,061 [INFO] run: ============================================================
+2026-09-02 21:50:13,061 [INFO] run: SCRAPING: BSE Regulatory Notices
+2026-09-02 21:50:13,061 [INFO] run: ============================================================
+2026-09-02 21:50:14,048 [INFO] run: BSE Result: {
+  "status": "success",
+  "source": "bse_notices",
+  "records_found": 0,
+  "records_new": 0
+}
+2026-09-02 21:50:14,048 [INFO] run: ============================================================
+2026-09-02 21:50:14,048 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-02 21:50:14,048 [INFO] run: ============================================================
+2026-09-02 21:50:14,054 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx
+2026-09-02 21:50:15,162 [INFO] scrapers.rbi_scraper: Found 2 unique circulars on index page
+2026-09-02 21:50:15,163 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/scripts/NotificationUser.aspx
+2026-09-02 21:50:15,522 [ERROR] scrapers.rbi_scraper:   Error processing Notifications: 'Database' object has no attribute 'record_exists'
+2026-09-02 21:50:15,522 [INFO] scrapers.rbi_scraper:   Waiting 4.5s before next request...
+2026-09-02 21:50:19,997 [INFO] scrapers.rbi_scraper: Fetching circular detail: https://www.rbi.org.in/Scripts/NotificationUser.aspx
+2026-09-02 21:50:20,666 [ERROR] scrapers.rbi_scraper:   Error processing Notifications: 'Database' object has no attribute 'record_exists'
+2026-09-02 21:50:20,680 [INFO] scrapers.rbi_scraper: RBI scrape complete: 2 found, 0 new, 2 errors
+2026-09-02 21:50:20,681 [INFO] run: RBI Result: {
+  "source": "rbi_standalone_circulars",
+  "status": "COMPLETED_WITH_ERRORS",
+  "records_found": 2,
+  "records_new": 0,
+  "errors": [
+    "Error processing Notifications: 'Database' object has no attribute 'record_exists'",
+    "Error processing Notifications: 'Database' object has no attribute 'record_exists'"
+  ]
+}
+2026-09-02 21:50:20,681 [INFO] run: Scraping complete!
