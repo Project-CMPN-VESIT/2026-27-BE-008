@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from apscheduler.schedulers.background import BackgroundScheduler  # type: ignore[reportMissingImports]
 
 from database import insert_announcement
@@ -37,8 +39,6 @@ def start_scheduler():
         replace_existing=True,
         max_instances=1,
         coalesce=True,
+        next_run_time=datetime.now(),
     )
     _scheduler.start()
-
-    # Run one polling cycle immediately at startup.
-    _poll_announcements()

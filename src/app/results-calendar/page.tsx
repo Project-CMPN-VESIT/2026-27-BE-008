@@ -47,8 +47,22 @@ export default function ResultsCalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
 
-  const fetchCalendar = useCallback(async (background = false) => {
-    if (background) {
+  // Instant 0ms initial load from client cache if available
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("finpilot_results_cal");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRows(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const fetchCalendar = useCallback(async (background = false, forceRefresh = false) => {
+    if (background || rows.length > 0) {
       setRefreshing(true);
     } else {
       setLoading(true);
@@ -57,22 +71,30 @@ export default function ResultsCalendarPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/results-calendar", { cache: "no-store" });
+      const url = forceRefresh ? "/api/results-calendar?refresh=true" : "/api/results-calendar";
+      const response = await fetch(url, { cache: "no-store" });
       const payload: ResultCalendarResponse = await response.json();
 
       if (!response.ok) {
         throw new Error(payload.detail || "Failed to fetch results calendar");
       }
 
-      setRows(Array.isArray(payload.results) ? payload.results : []);
+      const items = Array.isArray(payload.results) ? payload.results : [];
+      setRows(items);
       setLastUpdatedAt(payload.fetchedAt || new Date().toISOString());
+
+      if (items.length > 0) {
+        try {
+          localStorage.setItem("finpilot_results_cal", JSON.stringify(items));
+        } catch {}
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load results calendar");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [rows.length]);
 
   useEffect(() => {
     fetchCalendar(false);
@@ -145,7 +167,7 @@ export default function ResultsCalendarPage() {
         </div>
 
         <button
-          onClick={() => fetchCalendar(true)}
+          onClick={() => fetchCalendar(true, true)}
           disabled={loading || refreshing}
           className={`inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 ${
             loading || refreshing ? "cursor-not-allowed opacity-60" : ""

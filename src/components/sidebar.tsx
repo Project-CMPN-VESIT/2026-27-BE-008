@@ -29,9 +29,6 @@ const navItems = [
   { href: "/heatmap", label: "Heatmap", icon: Map },
   { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
-  { href: "/scoring", label: "RK/PL Scores", icon: BarChart3 },
-  { href: "/alerts", label: "Disparity Alerts", icon: AlertTriangle },
-  { href: "/council", label: "Agent Council", icon: Users },
 ];
 
 export function Sidebar() {

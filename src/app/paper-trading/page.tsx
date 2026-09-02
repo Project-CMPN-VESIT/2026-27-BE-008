@@ -126,25 +126,54 @@ export default function PaperTradingPage() {
   // Real-time tick history cache
   const [liveHistoryTicks, setLiveHistoryTicks] = useState<Array<{ time: number; value: number; invested: number }>>([]);
 
-  const [tradeForm, setTradeForm] = useState({
-    ticker: "RELIANCE",
-    action: "BUY" as "BUY" | "SELL",
-    quantity: 10,
-  });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStockForModal, setSelectedStockForModal] = useState<string>("RELIANCE");
+  const [modalAction, setModalAction] = useState<"BUY" | "SELL">("BUY");
+  const [modalQuantity, setModalQuantity] = useState<number>(10);
+  const rangeDataCache = useRef<Record<string, any>>({});
+
   const [isClient, setIsClient] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [chartRange, setChartRange] = useState("1D");
+  const [chartMetric, setChartMetric] = useState<"total" | "holdings">("holdings");
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [portfolioChartData, setPortfolioChartData] = useState<{
+    areaSeriesData: Array<{ time: UTCTimestamp; value: number }>;
+    candleSeriesData: Array<{ time: UTCTimestamp; open: number; high: number; low: number; close: number }>;
+    barSeriesData: Array<{ time: UTCTimestamp; value: number; color: string }>;
+    investedBaseline: number;
+    capitalBaseline: number;
+  }>({
+    areaSeriesData: [],
+    candleSeriesData: [],
+    barSeriesData: [],
+    investedBaseline: 0,
+    capitalBaseline: INITIAL_CAPITAL,
+  });
+
+  const areaSeriesRef = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const barSeriesRef = useRef<any>(null);
+
+  const chartMetricRef = useRef(chartMetric);
+  chartMetricRef.current = chartMetric;
+
+  const chartRangeRef = useRef(chartRange);
+  chartRangeRef.current = chartRange;
+
+  const portfolioChartDataRef = useRef(portfolioChartData);
+  portfolioChartDataRef.current = portfolioChartData;
 
   useEffect(() => {
     let isMounted = true;
-    if (tradeForm.ticker.trim().length < 2) {
+    if (searchTerm.trim().length < 2) {
       setSuggestions([]);
       return;
     }
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/tv-search?q=${encodeURIComponent(tradeForm.ticker.trim())}`);
+        const response = await fetch(`/api/tv-search?q=${encodeURIComponent(searchTerm.trim())}`);
         const json = await response.json();
         if (!isMounted) return;
         if (response.ok && json.ok) {
@@ -153,12 +182,13 @@ export default function PaperTradingPage() {
           setSuggestions(deduped);
         }
       } catch {}
-    }, 150);
+    }, 120);
+
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [tradeForm.ticker]);
+  }, [searchTerm]);
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -401,96 +431,175 @@ export default function PaperTradingPage() {
     });
   }, [data, metrics.holdingsValue, metrics.investedValue]);
 
-  // Build Real-Time Market Value vs Invested Cost Basis Series
-  const { areaSeriesData, candleSeriesData, barSeriesData, investedBaseline } = useMemo(() => {
-    if (!data) return { areaSeriesData: [], candleSeriesData: [], barSeriesData: [], investedBaseline: 0 };
-
-    const now = Math.floor(Date.now() / 1000);
-    const invested = metrics.investedValue > 0 ? metrics.investedValue : 404812;
-    const currentMarketVal = metrics.holdingsValue > 0 ? metrics.holdingsValue : invested + 4788;
-    const pnlDelta = currentMarketVal - invested;
-
-    let numPoints = 60;
-    let stepSec = 300; // 5 min for 1D
-
-    if (chartRange === "1D") {
-      numPoints = 65;
-      stepSec = 300;
-    } else if (chartRange === "1W") {
-      numPoints = 84;
-      stepSec = 7200;
-    } else if (chartRange === "1M") {
-      numPoints = 60;
-      stepSec = 43200;
-    } else if (chartRange === "3M") {
-      numPoints = 90;
-      stepSec = 86400;
-    } else if (chartRange === "1Y" || chartRange === "ALL") {
-      numPoints = 120;
-      stepSec = 86400 * 3;
+  // Fetch real portfolio chart data from TradingView-backed portfolio API
+  const fetchPortfolioChart = useCallback(async (range: string, metric: "total" | "holdings", forceRefresh = false) => {
+    const cacheKey = `${range}:${metric}`;
+    if (!forceRefresh && rangeDataCache.current[cacheKey]) {
+      setPortfolioChartData(rangeDataCache.current[cacheKey]);
+      setIsChartLoading(false);
+      return;
     }
 
-    const startTimestamp = now - numPoints * stepSec;
-    const area: Array<{ time: UTCTimestamp; value: number }> = [];
-    const candles: Array<{ time: UTCTimestamp; open: number; high: number; low: number; close: number }> = [];
-    const bars: Array<{ time: UTCTimestamp; value: number; color?: string }> = [];
+    setIsChartLoading(true);
 
-    let currentVal = invested;
+    try {
+      const res = await fetch(`/api/paper-trading/portfolio-chart?userId=test_user&range=${range}&metric=${metric}`);
+      const json = await res.json();
+      if (json.ok && json.data) {
+        const parsed = {
+          areaSeriesData: (json.data.areaSeriesData || []).map((d: any) => ({ time: d.time as UTCTimestamp, value: d.value })),
+          candleSeriesData: (json.data.candleSeriesData || []).map((d: any) => ({
+            time: d.time as UTCTimestamp,
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+          })),
+          barSeriesData: (json.data.barSeriesData || []).map((d: any) => ({
+            time: d.time as UTCTimestamp,
+            value: d.value,
+            color: d.color,
+          })),
+          investedBaseline: json.data.investedBaseline ?? 0,
+          capitalBaseline: json.data.capitalBaseline ?? INITIAL_CAPITAL,
+        };
+        rangeDataCache.current[cacheKey] = parsed;
+        setPortfolioChartData(parsed);
+      }
+    } catch (err) {
+      console.error("Failed to fetch portfolio chart:", err);
+    } finally {
+      setIsChartLoading(false);
+    }
+  }, []);
 
-    for (let i = 0; i <= numPoints; i++) {
-      const time = (startTimestamp + i * stepSec) as UTCTimestamp;
-      const progress = i / numPoints;
-      
-      // Dynamic market fluctuations plotted against the invested value
-      const trend = invested + pnlDelta * progress;
-      const intraFluctuation = Math.sin(i * 0.45) * (Math.abs(pnlDelta) * 0.35 + 850) + Math.cos(i * 0.9) * 450;
-      
-      let pointVal = Math.round(trend + (i === numPoints ? 0 : intraFluctuation));
-      if (i === numPoints) pointVal = currentMarketVal;
-      if (i === 0) pointVal = invested;
+  const prevPositionsLenRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (prevPositionsLenRef.current !== undefined && prevPositionsLenRef.current !== data?.positions?.length) {
+      rangeDataCache.current = {};
+    }
+    prevPositionsLenRef.current = data?.positions?.length;
+    fetchPortfolioChart(chartRange, chartMetric);
+  }, [fetchPortfolioChart, chartRange, chartMetric, data?.positions?.length]);
 
-      area.push({ time, value: pointVal });
-
-      // Candle values
-      const open = i === 0 ? invested : currentVal;
-      const close = pointVal;
-      const spread = Math.abs(close - open) + 200;
-      const high = Math.max(open, close) + (Math.abs(Math.sin(i)) * spread * 0.4);
-      const low = Math.min(open, close) - (Math.abs(Math.cos(i)) * spread * 0.4);
-
-      candles.push({
-        time,
-        open: Math.round(open),
-        high: Math.round(high),
-        low: Math.round(low),
-        close: Math.round(close),
+  // Pre-warm other chart ranges in background so timeframe clicks render in 0ms
+  useEffect(() => {
+    if (!data || data.positions.length === 0) return;
+    const idleTimer = setTimeout(() => {
+      const metric = chartMetricRef.current;
+      ["1D", "1W", "1M", "3M", "1Y", "ALL"].forEach((r) => {
+        const cacheKey = `${r}:${metric}`;
+        if (rangeDataCache.current[cacheKey]) return;
+        fetch(`/api/paper-trading/portfolio-chart?userId=test_user&range=${r}&metric=${metric}`)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.ok && json.data) {
+              rangeDataCache.current[cacheKey] = {
+                areaSeriesData: (json.data.areaSeriesData || []).map((d: any) => ({ time: d.time as UTCTimestamp, value: d.value })),
+                candleSeriesData: (json.data.candleSeriesData || []).map((d: any) => ({
+                  time: d.time as UTCTimestamp,
+                  open: d.open,
+                  high: d.high,
+                  low: d.low,
+                  close: d.close,
+                })),
+                barSeriesData: (json.data.barSeriesData || []).map((d: any) => ({
+                  time: d.time as UTCTimestamp,
+                  value: d.value,
+                  color: d.color,
+                })),
+                investedBaseline: json.data.investedBaseline ?? 0,
+                capitalBaseline: json.data.capitalBaseline ?? INITIAL_CAPITAL,
+              };
+            }
+          })
+          .catch(() => {});
       });
+    }, 200);
 
-      bars.push({
-        time,
-        value: Math.round(close - invested),
-        color: close >= invested ? "rgba(16, 185, 129, 0.85)" : "rgba(239, 68, 68, 0.85)",
-      });
+    return () => clearTimeout(idleTimer);
+  }, [data]);
 
-      currentVal = pointVal;
+  // Live real-time tick injection directly to active chart series (safe update)
+  useEffect(() => {
+    if (!data || !areaSeriesRef.current) return;
+    const currentChart = portfolioChartDataRef.current;
+    if (currentChart.areaSeriesData.length === 0) return;
+
+    const currentVal = chartMetric === "total" ? metrics.totalValue : metrics.holdingsValue;
+    if (currentVal <= 0) return;
+
+    const lastPoint = currentChart.areaSeriesData[currentChart.areaSeriesData.length - 1];
+    const diffRatio = Math.abs(currentVal - lastPoint.value) / (lastPoint.value || 1);
+
+    // If difference is large (>4%, e.g. after a trade or major portfolio shift), refresh entire chart rather than creating a single point vertical cliff
+    if (diffRatio > 0.04) {
+      rangeDataCache.current = {};
+      fetchPortfolioChart(chartRangeRef.current, chartMetric);
+      return;
     }
 
-    return { areaSeriesData: area, candleSeriesData: candles, barSeriesData: bars, investedBaseline: invested };
-  }, [data, chartRange, metrics.holdingsValue, metrics.investedValue]);
+    areaSeriesRef.current.update({ time: lastPoint.time as UTCTimestamp, value: Math.round(currentVal * 100) / 100 });
+    if (candleSeriesRef.current && currentChart.candleSeriesData.length > 0) {
+      const last = currentChart.candleSeriesData[currentChart.candleSeriesData.length - 1];
+      candleSeriesRef.current.update({
+        time: last.time as UTCTimestamp,
+        open: last.open,
+        high: Math.max(last.high, currentVal),
+        low: Math.min(last.low, currentVal),
+        close: Math.round(currentVal * 100) / 100,
+      });
+    }
+  }, [livePrices, metrics.totalValue, metrics.holdingsValue, chartMetric]);
 
-  // Chart Rendering
+  // Chart Rendering & Data Sync
   useEffect(() => {
     if (!chartContainerRef.current || !isClient || !data) return;
 
     let isCancelled = false;
 
-    const renderChart = async () => {
+    const syncOrRenderChart = async () => {
       const { createChart, AreaSeries, CandlestickSeries, HistogramSeries, ColorType } = await import("lightweight-charts");
 
       if (isCancelled || !chartContainerRef.current) return;
 
+      const baseline = chartMetric === "total" ? portfolioChartData.capitalBaseline : portfolioChartData.investedBaseline;
+      const currentVal = chartMetric === "total" ? metrics.totalValue : metrics.holdingsValue;
+      const isProfit = currentVal >= baseline;
+
+      // If chart already exists and view mode matches, simply update series data without disposing
       if (chartRef.current) {
-        chartRef.current.remove();
+        if (chartViewMode === "area" && areaSeriesRef.current) {
+          areaSeriesRef.current.applyOptions({
+            lineColor: isProfit ? "#10b981" : "#ef4444",
+            topColor: isProfit ? "rgba(16, 185, 129, 0.28)" : "rgba(239, 68, 68, 0.28)",
+            bottomColor: isProfit ? "rgba(16, 185, 129, 0.0)" : "rgba(239, 68, 68, 0.0)",
+          });
+          if (portfolioChartData.areaSeriesData.length > 0) {
+            areaSeriesRef.current.setData(portfolioChartData.areaSeriesData);
+          }
+          chartRef.current.timeScale().fitContent();
+          return;
+        }
+        if (chartViewMode === "candles" && candleSeriesRef.current) {
+          if (portfolioChartData.candleSeriesData.length > 0) {
+            candleSeriesRef.current.setData(portfolioChartData.candleSeriesData);
+          }
+          chartRef.current.timeScale().fitContent();
+          return;
+        }
+        if (chartViewMode === "bars" && barSeriesRef.current) {
+          if (portfolioChartData.barSeriesData.length > 0) {
+            barSeriesRef.current.setData(portfolioChartData.barSeriesData);
+          }
+          chartRef.current.timeScale().fitContent();
+          return;
+        }
+
+        // Mode changed: safely clean up existing chart
+        try {
+          chartRef.current.remove();
+        } catch {}
         chartRef.current = null;
       }
 
@@ -498,6 +607,8 @@ export default function PaperTradingPage() {
         window.removeEventListener("resize", chartResizeHandlerRef.current);
         chartResizeHandlerRef.current = null;
       }
+
+      chartContainerRef.current.innerHTML = "";
 
       const chart = createChart(chartContainerRef.current, {
         layout: {
@@ -512,41 +623,55 @@ export default function PaperTradingPage() {
         },
         rightPriceScale: {
           borderColor: isDarkMode ? "rgba(30, 41, 59, 0.8)" : "rgba(226, 232, 240, 0.8)",
-          scaleMargins: { top: 0.1, bottom: 0.1 },
+          scaleMargins: { top: 0.12, bottom: 0.12 },
         },
         timeScale: {
           borderColor: isDarkMode ? "rgba(30, 41, 59, 0.8)" : "rgba(226, 232, 240, 0.8)",
           timeVisible: true,
           secondsVisible: false,
         },
+        handleScroll: {
+          mouseWheel: false,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+        handleScale: {
+          axisPressedMouseMove: true,
+          mouseWheel: false,
+          pinch: true,
+        },
         localization: {
           priceFormatter: (value: number) => `₹${currency(value)}`,
+          timeFormatter: (time: number) => {
+            return new Date(time * 1000).toLocaleString([], {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          }
         },
         width: chartContainerRef.current.clientWidth,
-        height: 280,
+        height: 330,
       });
 
-      const isProfit = metrics.unrealizedPnl >= 0;
+      areaSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      barSeriesRef.current = null;
 
       if (chartViewMode === "area") {
         const areaSeries = chart.addSeries(AreaSeries, {
           lineColor: isProfit ? "#10b981" : "#ef4444",
-          topColor: isProfit ? "rgba(16, 185, 129, 0.32)" : "rgba(239, 68, 68, 0.32)",
-          bottomColor: isProfit ? "rgba(16, 185, 129, 0.01)" : "rgba(239, 68, 68, 0.01)",
+          topColor: isProfit ? "rgba(16, 185, 129, 0.28)" : "rgba(239, 68, 68, 0.28)",
+          bottomColor: isProfit ? "rgba(16, 185, 129, 0.0)" : "rgba(239, 68, 68, 0.0)",
           lineWidth: 2,
           crosshairMarkerVisible: true,
         });
-        areaSeries.setData(areaSeriesData);
-
-        // Baseline: Invested Value line
-        areaSeries.createPriceLine({
-          price: investedBaseline,
-          color: isDarkMode ? "#f59e0b" : "#d97706",
-          lineWidth: 1,
-          lineStyle: 2,
-          axisLabelVisible: true,
-          title: "Invested Baseline",
-        });
+        if (portfolioChartData.areaSeriesData.length > 0) {
+          areaSeries.setData(portfolioChartData.areaSeriesData);
+        }
+        areaSeriesRef.current = areaSeries;
       } else if (chartViewMode === "candles") {
         const candleSeries = chart.addSeries(CandlestickSeries, {
           upColor: "#10b981",
@@ -556,22 +681,19 @@ export default function PaperTradingPage() {
           wickUpColor: "#10b981",
           wickDownColor: "#ef4444",
         });
-        candleSeries.setData(candleSeriesData);
-
-        candleSeries.createPriceLine({
-          price: investedBaseline,
-          color: isDarkMode ? "#f59e0b" : "#d97706",
-          lineWidth: 1,
-          lineStyle: 2,
-          axisLabelVisible: true,
-          title: "Invested",
-        });
+        if (portfolioChartData.candleSeriesData.length > 0) {
+          candleSeries.setData(portfolioChartData.candleSeriesData);
+        }
+        candleSeriesRef.current = candleSeries;
       } else if (chartViewMode === "bars") {
         const barSeries = chart.addSeries(HistogramSeries, {
           color: "#10b981",
           priceFormat: { type: "volume" },
         });
-        barSeries.setData(barSeriesData);
+        if (portfolioChartData.barSeriesData.length > 0) {
+          barSeries.setData(portfolioChartData.barSeriesData);
+        }
+        barSeriesRef.current = barSeries;
       }
 
       chart.subscribeCrosshairMove((param) => {
@@ -580,7 +702,8 @@ export default function PaperTradingPage() {
           return;
         }
         const seriesData = Array.from(param.seriesData.values())[0] as any;
-        if (seriesData && typeof seriesData.value === "number") {
+        const val = typeof seriesData?.value === "number" ? seriesData.value : (typeof seriesData?.close === "number" ? seriesData.close : null);
+        if (val !== null) {
           setHoveredPoint({
             time: new Date(Number(param.time) * 1000).toLocaleString([], {
               month: "short",
@@ -588,7 +711,7 @@ export default function PaperTradingPage() {
               hour: "2-digit",
               minute: "2-digit",
             }),
-            value: seriesData.value,
+            value: val,
           });
         }
       });
@@ -597,8 +720,8 @@ export default function PaperTradingPage() {
       chartRef.current = chart;
 
       const handleResize = () => {
-        if (chartContainerRef.current) {
-          chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        if (chartContainerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
         }
       };
 
@@ -606,7 +729,7 @@ export default function PaperTradingPage() {
       window.addEventListener("resize", handleResize);
     };
 
-    renderChart();
+    syncOrRenderChart();
 
     return () => {
       isCancelled = true;
@@ -615,29 +738,49 @@ export default function PaperTradingPage() {
         chartResizeHandlerRef.current = null;
       }
       if (chartRef.current) {
-        chartRef.current.remove();
+        const chartToDestroy = chartRef.current;
         chartRef.current = null;
+        areaSeriesRef.current = null;
+        candleSeriesRef.current = null;
+        barSeriesRef.current = null;
+        try {
+          chartToDestroy.remove();
+        } catch {}
       }
     };
-  }, [data, isClient, isDarkMode, chartViewMode, areaSeriesData, candleSeriesData, barSeriesData, investedBaseline, metrics.unrealizedPnl]);
+  }, [
+    data,
+    isClient,
+    isDarkMode,
+    chartViewMode,
+    chartMetric,
+    portfolioChartData,
+  ]);
 
-  const handleExecuteTrade = async (thesis: string, feedback: string) => {
+  const handleExecuteTrade = async (
+    thesis: string,
+    feedback: string,
+    action: "BUY" | "SELL" = "BUY",
+    quantity: number = 10
+  ) => {
     try {
       const res = await fetch("/api/paper-trading/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: "test_user",
-          ticker: tradeForm.ticker,
-          action: tradeForm.action,
-          quantity: tradeForm.quantity,
+          ticker: selectedStockForModal,
+          action,
+          quantity,
           userThesis: thesis,
           aiFeedback: feedback,
         }),
       });
       const json = await res.json();
       if (json.ok) {
+        rangeDataCache.current = {};
         loadPortfolio(true);
+        fetchPortfolioChart(chartRange, chartMetric);
       } else {
         alert("Trade Failed: " + json.error);
       }
@@ -648,7 +791,9 @@ export default function PaperTradingPage() {
   };
 
   const handleQuickTrade = (ticker: string, action: "BUY" | "SELL") => {
-    setTradeForm({ ticker, action, quantity: 10 });
+    setSelectedStockForModal(ticker);
+    setModalAction(action);
+    setModalQuantity(10);
     setIsModalOpen(true);
   };
 
@@ -663,100 +808,137 @@ export default function PaperTradingPage() {
     );
   }
 
-  const activeHoldingsVal = hoveredPoint ? hoveredPoint.value : (metrics.holdingsValue > 0 ? metrics.holdingsValue : 409600);
-  const activeInvestedVal = metrics.investedValue > 0 ? metrics.investedValue : 404812;
-  const activeUnrealized = activeHoldingsVal - activeInvestedVal;
-  const activeUnrealizedPct = activeInvestedVal > 0 ? (activeUnrealized / activeInvestedVal) * 100 : 0;
+  const firstPointVal = portfolioChartData.areaSeriesData.length > 0
+    ? portfolioChartData.areaSeriesData[0].value
+    : (chartMetric === "total" ? INITIAL_CAPITAL : metrics.investedValue);
+  const currentTotalVal = metrics.totalValue;
+  const currentHoldingsVal = metrics.holdingsValue;
+  const activeVal = hoveredPoint
+    ? hoveredPoint.value
+    : chartMetric === "total"
+    ? currentTotalVal
+    : currentHoldingsVal;
+  const activePnl = activeVal - firstPointVal;
+  const activePnlPct = firstPointVal > 0 ? (activePnl / firstPointVal) * 100 : 0;
 
   return (
     <div className="min-h-[calc(100vh-56px)] bg-slate-50 dark:bg-slate-950 p-4 lg:p-6 font-sans">
       <div className="mx-auto max-w-[1680px] flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
-              <Activity className="h-4 w-4" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-                Paper Trading Crucible
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Mark-to-market live portfolio tracker & AI thesis mentor
-              </p>
-            </div>
+        {/* Paper Trading Header */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-2">
+          {/* Left: Branding */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Paper Trading</h1>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live MTM
+            </span>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Real-Time MTM Active</span>
-            </div>
+          {/* Right: Search & Refresh */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            {/* Search Bar - matching Dashboard design but more prominent */}
+            <div className="relative w-full md:w-80" ref={tickerInputWrapRef}>
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 shadow-sm text-slate-900 dark:text-slate-100 transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value.toUpperCase());
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  placeholder="Search stocks..."
+                  className="flex-1 min-w-0 bg-transparent text-[13px] font-bold outline-none placeholder:text-slate-400 uppercase"
+                />
+                <kbd className="hidden sm:inline-block ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono border border-slate-200 dark:border-slate-700 pointer-events-none shadow-sm">⌘K</kbd>
+              </div>
 
-            {lastSyncedAt && (
-              <span className="text-xs text-slate-400 hidden sm:inline">
-                Synced: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
-            )}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden max-h-64 overflow-y-auto">
+                  {suggestions.map((sug) => (
+                    <button
+                      key={sug.symbol}
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setShowSuggestions(false);
+                        setSelectedStockForModal(sug.symbol);
+                        setModalAction("BUY");
+                        setModalQuantity(10);
+                        setIsModalOpen(true);
+                      }}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800/60 last:border-0 flex items-center justify-between group transition-colors cursor-pointer"
+                    >
+                      <div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          {sug.symbol}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate max-w-[200px] sm:max-w-[260px]">
+                          {sug.companyName}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                          {sug.exchange}
+                        </span>
+                        <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 opacity-0 group-hover:opacity-100 transition-opacity">
+                          Trade
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
-              onClick={() => loadPortfolio(true)}
+              onClick={() => {
+                loadPortfolio(true);
+                fetchPortfolioChart(chartRange, chartMetric);
+              }}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-750 transition-colors"
+              className="flex items-center justify-center p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700 shrink-0"
+              title="Refresh"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span>{isRefreshing ? "Syncing..." : "Refresh"}</span>
+              <RefreshCw className={`w-4 h-4 text-slate-500 dark:text-slate-400 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
 
         {/* 2-Column Dashboard Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* LEFT SIDE: Real-Time Market Value vs Invested Graph & Tabs */}
+          {/* LEFT SIDE: Deterministic Portfolio Graph & Tabs */}
           <div className="lg:col-span-8 flex flex-col gap-4">
             {/* Real-time Performance Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Holdings Market Value vs Invested Cost
-                    </span>
-                    {hoveredPoint && (
-                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.2 rounded-md">
-                        {hoveredPoint.time}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-baseline gap-3 mt-1">
-                    <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                      ₹{currency(activeHoldingsVal)}
-                    </span>
-                    <span
-                      className={`inline-flex items-center text-xs font-bold px-2 py-0.5 rounded-md ${
-                        activeUnrealized >= 0
-                          ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
-                          : "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50"
-                      }`}
-                    >
-                      {activeUnrealized >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 mr-0.5" /> : <ArrowDownRight className="h-3.5 w-3.5 mr-0.5" />}
-                      {activeUnrealized >= 0 ? "+" : ""}₹{currency(activeUnrealized)} ({percent(activeUnrealizedPct)})
-                    </span>
-                    <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold hidden md:inline">
-                      (vs Invested: ₹{currency(activeInvestedVal)})
-                    </span>
-                  </div>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm relative">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    ₹{currency(activeVal)}
+                  </span>
+                  <span
+                    className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg ${
+                      activePnl >= 0
+                        ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
+                        : "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50"
+                    }`}
+                  >
+                    {activePnl >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 mr-0.5" /> : <ArrowDownRight className="h-3.5 w-3.5 mr-0.5" />}
+                    {activePnl >= 0 ? "+" : ""}₹{currency(activePnl)} ({percent(activePnlPct)})
+                    <span className="ml-1.5 text-[10px] font-semibold opacity-90">{hoveredPoint?.time || chartRange}</span>
+                  </span>
                 </div>
 
                 {/* Right controls: View Mode & Timeframe */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2">
                   {/* Chart Style Switcher */}
                   <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
                     <button
                       type="button"
                       onClick={() => setChartViewMode("area")}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         chartViewMode === "area" ? "bg-white dark:bg-slate-900 text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
                       }`}
                       title="Area Curve"
@@ -766,22 +948,12 @@ export default function PaperTradingPage() {
                     <button
                       type="button"
                       onClick={() => setChartViewMode("candles")}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         chartViewMode === "candles" ? "bg-white dark:bg-slate-900 text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
                       }`}
                       title="Candlestick Chart"
                     >
                       <CandlestickChart className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChartViewMode("bars")}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                        chartViewMode === "bars" ? "bg-white dark:bg-slate-900 text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                      title="P&L Bar Histogram"
-                    >
-                      <BarChart2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
@@ -792,7 +964,7 @@ export default function PaperTradingPage() {
                         key={r}
                         type="button"
                         onClick={() => setChartRange(r)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           chartRange === r
                             ? "bg-blue-600 text-white shadow-sm"
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -805,35 +977,18 @@ export default function PaperTradingPage() {
                 </div>
               </div>
 
-              {/* Chart Canvas */}
-              <div ref={chartContainerRef} className="relative h-[280px] w-full" />
+              {/* Chart Canvas with Loading State */}
+              <div className="relative">
+                <div ref={chartContainerRef} className="relative h-[330px] w-full" />
 
-              {/* Real-time Summary Stats Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3.5 mt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Invested Value</span>
-                  <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm">
-                    ₹{currency(metrics.investedValue)}
-                  </strong>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Current Market Value</span>
-                  <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm">
-                    ₹{currency(metrics.holdingsValue)}
-                  </strong>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Capital Remaining</span>
-                  <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm">
-                    ₹{currency(metrics.cash)}
-                  </strong>
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[11px]">Total Portfolio Value</span>
-                  <strong className="text-blue-600 dark:text-blue-400 font-bold text-sm">
-                    ₹{currency(metrics.totalValue)}
-                  </strong>
-                </div>
+                {isChartLoading && (
+                  <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl z-10 transition-all">
+                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-500" />
+                      Updating {chartRange} Trend...
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -918,7 +1073,7 @@ export default function PaperTradingPage() {
                             <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">₹{currency(row.invested)}</td>
                             <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">₹{currency(row.marketValue)}</td>
                             <td className={`px-4 py-3 text-right font-bold ${row.unrealizedPnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                              {row.unrealizedPnl >= 0 ? "+" : ""}₹{currency(row.unrealizedPnl)} ({percent(row.returnPct)})
+                              {row.unrealizedPnl >= 0 ? "+" : ""}₹{currency(row.unrealizedPnl)}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <button
@@ -1109,7 +1264,7 @@ export default function PaperTradingPage() {
                 }`}
               >
                 <span className="text-xs font-semibold">Unrealized P&L</span>
-                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <span className="text-sm font-bold flex items-center gap-1">
                   {metrics.unrealizedPnl >= 0 ? "↗" : "↘"} ₹{currency(metrics.unrealizedPnl)} ({percent(metrics.unrealizedReturnPct)})
                 </span>
               </div>
@@ -1167,105 +1322,6 @@ export default function PaperTradingPage() {
                 )}
               </div>
             </div>
-
-            {/* Quick Order Execution */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-blue-500" /> Place Simulated Order
-              </h3>
-
-              <div className="space-y-3">
-                {/* Ticker Search */}
-                <div className="relative" ref={tickerInputWrapRef}>
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      value={tradeForm.ticker}
-                      onChange={(e) => {
-                        setTradeForm({ ...tradeForm, ticker: e.target.value.toUpperCase() });
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      placeholder="Search stock..."
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950 pl-8 pr-3 py-2 text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute left-0 top-full z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 shadow-xl">
-                      {suggestions.map((item) => (
-                        <button
-                          key={item.marketId}
-                          type="button"
-                          onClick={() => {
-                            setTradeForm({ ...tradeForm, ticker: item.symbol });
-                            setShowSuggestions(false);
-                          }}
-                          className="flex w-full flex-col border-b border-slate-100 dark:border-slate-800 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
-                        >
-                          <div className="text-xs font-bold text-slate-900 dark:text-white">{item.symbol}</div>
-                          <div className="truncate text-[11px] text-slate-400">{item.companyName}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Action & Qty */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setTradeForm({ ...tradeForm, action: "BUY" })}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        tradeForm.action === "BUY"
-                          ? "bg-emerald-600 text-white shadow-sm"
-                          : "text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      BUY
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTradeForm({ ...tradeForm, action: "SELL" })}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        tradeForm.action === "SELL"
-                          ? "bg-rose-600 text-white shadow-sm"
-                          : "text-slate-600 dark:text-slate-400"
-                      }`}
-                    >
-                      SELL
-                    </button>
-                  </div>
-
-                  <div>
-                    <input
-                      type="number"
-                      min={1}
-                      value={tradeForm.quantity}
-                      onChange={(e) =>
-                        setTradeForm({ ...tradeForm, quantity: clampPositiveInteger(Number(e.target.value)) })
-                      }
-                      placeholder="Qty"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950 px-3 py-2 text-xs font-bold text-slate-900 dark:text-white text-right outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  disabled={!tradeForm.ticker.trim() || tradeForm.quantity < 1}
-                  className={`w-full py-2.5 rounded-xl font-bold text-xs text-white shadow-sm transition-all active:scale-98 ${
-                    tradeForm.action === "BUY"
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-rose-600 hover:bg-rose-700"
-                  }`}
-                >
-                  Submit Order via AI Mentor →
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1274,10 +1330,18 @@ export default function PaperTradingPage() {
         <TradingModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          ticker={tradeForm.ticker}
-          action={tradeForm.action}
-          quantity={tradeForm.quantity}
-          currentPrice={livePrices[tradeForm.ticker] || 0}
+          ticker={selectedStockForModal}
+          initialAction={modalAction}
+          initialQuantity={modalQuantity}
+          availableCash={metrics.cash}
+          existingPosition={
+            positionRows.find((p) => p.ticker === selectedStockForModal)
+              ? {
+                  quantity: positionRows.find((p) => p.ticker === selectedStockForModal)!.quantity,
+                  averageBuy: positionRows.find((p) => p.ticker === selectedStockForModal)!.averageBuy,
+                }
+              : null
+          }
           onExecute={handleExecuteTrade}
         />
       )}

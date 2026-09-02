@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useDeferredValue } from "react";
 import { FileText, Filter, Newspaper, RefreshCw, Search } from "lucide-react";
 
 type NewsItem = {
@@ -53,6 +53,15 @@ const sortNewsByLatest = (items: NewsItem[]) => {
   });
 };
 
+const DATE_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
 const formatDate = (value: string | null) => {
   if (!value) {
     return "--";
@@ -63,21 +72,16 @@ const formatDate = (value: string | null) => {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).format(date);
+  return DATE_FORMATTER.format(date);
 };
 
 export default function NewsFeedPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("ALL");
   const [detailFilter, setDetailFilter] = useState("ALL");
+  const [visibleCount, setVisibleCount] = useState(100);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,8 +180,12 @@ export default function NewsFeedPage() {
     }
   }, [detailOptions, detailFilter]);
 
+  useEffect(() => {
+    setVisibleCount(100);
+  }, [deferredSearch, sourceFilter, detailFilter]);
+
   const filteredNews = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = deferredSearch.trim().toLowerCase();
     const normalizedDetail = detailFilter.trim().toUpperCase();
 
     return news.filter((item) => {
@@ -209,7 +217,18 @@ export default function NewsFeedPage() {
       }`.toLowerCase();
       return text.includes(query);
     });
-  }, [news, search, sourceFilter, detailFilter]);
+  }, [news, deferredSearch, sourceFilter, detailFilter]);
+
+  const displayedNews = useMemo(() => {
+    return filteredNews.slice(0, visibleCount);
+  }, [filteredNews, visibleCount]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 350) {
+      setVisibleCount((prev) => Math.min(prev + 100, filteredNews.length));
+    }
+  };
 
   const stats = useMemo(() => {
     const total = news.length;
@@ -323,7 +342,7 @@ export default function NewsFeedPage() {
         ) : filteredNews.length === 0 ? (
           <div className="px-4 py-8 text-sm text-slate-500">No announcements found.</div>
         ) : (
-          <div className="max-h-[68vh] overflow-auto">
+          <div className="max-h-[68vh] overflow-auto" onScroll={handleScroll}>
             <table className="w-full border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900">
                 <tr className="border-b border-slate-200 dark:border-slate-800">
@@ -338,7 +357,7 @@ export default function NewsFeedPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                {filteredNews.map((item) => (
+                {displayedNews.map((item) => (
                   <tr key={`${item.id}-${item.content_hash}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30">
                     <td className="px-4 py-3 text-xs font-semibold">
                       <span
@@ -378,6 +397,17 @@ export default function NewsFeedPage() {
                 ))}
               </tbody>
             </table>
+
+            {visibleCount < filteredNews.length && (
+              <div className="flex items-center justify-center p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                <button
+                  onClick={() => setVisibleCount((prev) => Math.min(prev + 100, filteredNews.length))}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors"
+                >
+                  Showing {displayedNews.length} of {filteredNews.length} announcements • Scroll or click to load more
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

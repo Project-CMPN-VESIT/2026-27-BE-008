@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS announcements (
     content_hash TEXT UNIQUE,
     fetched_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_announcements_announced_at ON announcements(announced_at);
+CREATE INDEX IF NOT EXISTS idx_announcements_source ON announcements(source);
 """
 
 

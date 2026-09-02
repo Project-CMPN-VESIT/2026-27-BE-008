@@ -1,0 +1,37 @@
+2026-09-03 00:10:03,053 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-03 00:10:03,070 [INFO] run: Initialized 4 sources from config
+2026-09-03 00:10:03,070 [INFO] run: ============================================================
+2026-09-03 00:10:03,070 [INFO] run: SCRAPING: SEBI Official Orders
+2026-09-03 00:10:03,071 [INFO] run: ============================================================
+2026-09-03 00:10:03,282 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
+2026-09-03 00:10:03,282 [INFO] run: Docs available at http://localhost:8000/docs
+2026-09-03 00:10:03,697 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
+2026-09-03 00:10:04,775 [ERROR] scrapers.sebi_scraper: SEBI Scraper failed: '>' not supported between instances of 'int' and 'NoneType'
+2026-09-03 00:10:04,788 [INFO] run: SEBI Result: {
+  "status": "success",
+  "source": "sebi_orders",
+  "records_found": 1,
+  "records_new": 0
+}
+2026-09-03 00:10:04,788 [INFO] run: ============================================================
+2026-09-03 00:10:04,788 [INFO] run: SCRAPING: NSE Regulatory Actions
+2026-09-03 00:10:04,788 [INFO] run: ============================================================
+2026-09-03 00:10:05,779 [INFO] run: NSE Result: {
+  "status": "success",
+  "source": "nse_circulars",
+  "records_found": 170,
+  "records_new": 0
+}
+2026-09-03 00:10:05,779 [INFO] run: ============================================================
+2026-09-03 00:10:05,779 [INFO] run: SCRAPING: BSE Regulatory Notices
+2026-09-03 00:10:05,779 [INFO] run: ============================================================
+2026-09-03 00:10:06,892 [INFO] run: BSE Result: {
+  "status": "success",
+  "source": "bse_notices",
+  "records_found": 0,
+  "records_new": 0
+}
+2026-09-03 00:10:06,893 [INFO] run: ============================================================
+2026-09-03 00:10:06,893 [INFO] run: SCRAPING: RBI Standalone Circulars
+2026-09-03 00:10:06,893 [INFO] run: ============================================================
+2026-09-03 00:10:06,901 [INFO] scrapers.rbi_scraper: Fetching RBI index page: https://www.rbi.org.in/Scripts/BS_ViewListofstandalonecirculars.aspx

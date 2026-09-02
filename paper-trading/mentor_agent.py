@@ -18,7 +18,7 @@ def _resolve_mistral_client_class():
     except Exception:
         return None
 
-load_dotenv(find_dotenv(usecwd=True))
+load_dotenv(find_dotenv(usecwd=True), override=True)
 logger = logging.getLogger(__name__)
 MistralClientClass = _resolve_mistral_client_class()
 
@@ -34,11 +34,19 @@ Critique their logic in 3 short sentences. If the RK score is low due to managem
 
 class MentorAgent:
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
+        load_dotenv(find_dotenv(usecwd=True), override=True)
+        key = api_key or os.getenv("MISTRAL_API_KEY")
+        if not key or key == "fake":
+            from pathlib import Path
+            root_env = Path(__file__).resolve().parent.parent / ".env"
+            if root_env.exists():
+                load_dotenv(root_env, override=True)
+                key = os.getenv("MISTRAL_API_KEY")
+        self.api_key = key
         self.client = None
 
-        if not self.api_key:
-            logger.warning("MISTRAL_API_KEY not set. Mentor Agent will return fallback message.")
+        if not self.api_key or self.api_key == "fake":
+            logger.warning("MISTRAL_API_KEY not set or invalid. Mentor Agent will return fallback message.")
             return
 
         if MistralClientClass is None:
