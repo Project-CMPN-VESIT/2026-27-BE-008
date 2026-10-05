@@ -1,3 +1,0 @@
-2026-09-02 13:41:21,204 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
-2026-09-02 13:41:21,205 [INFO] run: Docs available at http://localhost:8000/docs
-2026-09-02 13:41:21,622 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

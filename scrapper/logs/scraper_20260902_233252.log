@@ -1,6 +1,0 @@
-2026-09-02 23:32:53,107 [INFO] run: Starting SEBI Shield API on 0.0.0.0:8000
-2026-09-02 23:32:53,107 [INFO] run: Docs available at http://localhost:8000/docs
-2026-09-02 23:32:53,178 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
-2026-09-02 23:32:53,179 [INFO] run: Docs available at http://localhost:8003/docs
-2026-09-02 23:32:53,540 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db
-2026-09-02 23:32:56,730 [INFO] screener.db.session: Initialized database schema at postgresql://neondb_owner:npg_geK3auME1UOV@ep-old-glade-b35ro0vc-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require

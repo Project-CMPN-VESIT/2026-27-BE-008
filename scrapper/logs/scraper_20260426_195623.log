@@ -1,3 +1,0 @@
-2026-04-26 19:56:23,180 [INFO] run: Starting screening API on 0.0.0.0:8000
-2026-04-26 19:56:23,180 [INFO] run: Docs available at http://localhost:8000/docs
-2026-04-26 19:56:23,598 [INFO] db.database: Database initialized at D:\Desktop\FinPilot\scrapper\data\sanctions.db

@@ -48,3 +48,32 @@ doc_Scrapper/output/
 doc_Scrapper/annual_reports/
 doc_Scrapper/.env
 
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.benchmarks/
+
+# Python Virtual Environments
+venve/
+venv/
+.venv/
+env/
+ENV/
+
+# Logs
+*.log
+logs/
+scrapper/logs/
+data-pipeline/logs/
+
+# Local databases and runtime caches (preserve tracked core databases)
+cyro_security_master.db
+/chroma_db/
+opt-expiry.json
+pipeline_data.db
+
+# Claude / Editor artifacts
+.claude/

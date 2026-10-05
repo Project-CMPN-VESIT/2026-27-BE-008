@@ -1,3 +1,0 @@
-2026-09-02 00:57:14,024 [INFO] run: Starting Discovery Screener API on 0.0.0.0:8003
-2026-09-02 00:57:14,024 [INFO] run: Docs available at http://localhost:8003/docs
-2026-09-02 00:57:17,330 [INFO] screener.db.session: Initialized database schema at postgresql://neondb_owner:npg_geK3auME1UOV@ep-old-glade-b35ro0vc-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
