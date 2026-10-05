@@ -16,6 +16,7 @@ textual>=0.80.0             # TUI framework (split panels)
 prompt_toolkit>=3.0.0       # REPL with tab-complete
 
 # ── Data & Analysis ──────────────────────────────────────────
+sqlalchemy>=2.0               # AI Baskets database layer
 pandas>=2.2.0               # OHLCV data manipulation
 numpy>=1.26.0               # Numerical computations
 # py_vollib>=1.0.1          # Black-Scholes, Greeks (optional: pip install py_vollib)

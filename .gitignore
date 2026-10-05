@@ -48,3 +48,5 @@ doc_Scrapper/output/
 doc_Scrapper/annual_reports/
 doc_Scrapper/.env
 
+# AI Baskets local database (rebuilt automatically)
+india-trade-cli/data/
