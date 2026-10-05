@@ -36,6 +36,7 @@ dependencies = [
     "openai>=1.40.0",
     "google-genai>=1.0.0",
     "google-cloud-aiplatform>=1.60.0",
+    "langchain-openai>=0.1.0",
     # ── Terminal UI ───────────────────────────────────────────────────
     "rich>=13.7.0",
     "textual>=0.80.0",

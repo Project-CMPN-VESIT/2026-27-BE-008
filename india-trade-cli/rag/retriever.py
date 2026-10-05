@@ -45,18 +45,10 @@ def search_financial_docs(
     symbol: str | None = None,
     top_k: int = 5,
     score_threshold: float = 0.30,
+    exclude_source_types: list[str] | None = None,
 ) -> list[RetrievedDoc]:
     """
     Semantic search over indexed financial documents.
-
-    Args:
-        query:           Natural language question, e.g. "INFY revenue growth trend"
-        symbol:          Optional NSE ticker filter (e.g. "INFY"). If None, searches all.
-        top_k:           Maximum number of results to return.
-        score_threshold: Minimum cosine similarity (0–1). Lower = more results.
-
-    Returns:
-        List of RetrievedDoc objects, sorted by relevance.
     """
     try:
         import chromadb  # type: ignore
@@ -69,32 +61,31 @@ def search_financial_docs(
         client = chromadb.PersistentClient(path=db_path)
         collection = client.get_collection("cyro_financial_docs")
     except Exception as e:
-        # Collection doesn't exist yet — return helpful message
         return [RetrievedDoc(
-            text=(
-                f"No financial documents indexed yet for {'symbol ' + symbol if symbol else 'any ticker'}. "
-                f"Run: from rag.indexer import index_ticker; index_ticker('{symbol or 'RELIANCE'}') "
-                f"to index S3 documents. Error: {e}"
-            ),
+            text=f"No financial documents indexed yet for {symbol}. Error: {e}",
             score=0.0,
             metadata={"symbol": symbol or "", "source_type": "rag_error"},
         )]
 
-    # Build query embedding using the same backend as the indexer
     from rag.indexer import _get_mistral_embeddings
     try:
         query_embed = _get_mistral_embeddings([query])[0]
     except Exception as e:
-        return [RetrievedDoc(
-            text=f"Embedding error during search: {e}",
-            score=0.0,
-            metadata={"symbol": symbol or "", "source_type": "rag_error"},
-        )]
+        return [RetrievedDoc(text=f"Embedding error: {e}", score=0.0, metadata={"source_type": "rag_error"})]
 
-    # Build where filter
     where_clause: dict | None = None
+    conditions = []
+    
     if symbol:
-        where_clause = {"symbol": symbol.upper()}
+        conditions.append({"symbol": symbol.upper()})
+        
+    if exclude_source_types:
+        conditions.append({"source_type": {"$nin": exclude_source_types}})
+        
+    if len(conditions) == 1:
+        where_clause = conditions[0]
+    elif len(conditions) > 1:
+        where_clause = {"$and": conditions}
 
     # Query ChromaDB
     try:

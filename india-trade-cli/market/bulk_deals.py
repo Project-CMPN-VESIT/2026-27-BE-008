@@ -425,3 +425,26 @@ def print_deals(symbol: Optional[str] = None, days: int = 5) -> None:
 
     console.print(table)
     console.print(f"[dim]{len(all_deals)} deals shown[/dim]")
+
+
+def get_deals_for_symbol(symbol: str, days: int = 30) -> list[Deal]:
+    """
+    Return all bulk AND block deals for a given NSE symbol over the last `days`.
+
+    This is the canonical entry point used by market.nse_client.get_insider_trades()
+    and the CYRO Filings & Governance agent tool.
+
+    Args:
+        symbol: NSE ticker, e.g. "INFY", "RELIANCE"
+        days:   Lookback window in calendar days (default 30)
+
+    Returns:
+        Combined list of Deal objects (block + bulk), most recent first.
+    """
+    sym_upper = symbol.upper()
+    block = [d for d in get_block_deals() if d.symbol.upper() == sym_upper]
+    bulk = get_bulk_deals(days=days, symbol=sym_upper)
+    combined = block + bulk
+    # Sort by date descending (most recent first)
+    combined.sort(key=lambda d: d.date, reverse=True)
+    return combined

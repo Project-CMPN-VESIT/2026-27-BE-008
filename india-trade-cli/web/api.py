@@ -64,7 +64,9 @@ from web.auth import auth_router, init_db as init_auth_db, get_session, user_cou
 # Load .env + keychain at server startup
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+from config.env_loader import load_project_env
+
+load_project_env()  # root .env wins, override=True (see config/env_loader.py)
 load_dotenv(Path.home() / ".trading_platform" / ".env", override=False)
 from config.credentials import load_all as _load_keychain
 

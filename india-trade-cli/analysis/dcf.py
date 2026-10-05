@@ -19,7 +19,10 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from analysis.fundamental import FundamentalSnapshot
 
 from rich.console import Console
 from rich.panel import Panel
@@ -284,6 +287,7 @@ def dcf_for_symbol(
     symbol: str,
     growth_rate: Optional[float] = None,
     wacc: Optional[float] = None,
+    snap: Optional['FundamentalSnapshot'] = None,
 ) -> dict:
     """
     Compute DCF for a stock symbol using yfinance data.
@@ -308,7 +312,8 @@ def dcf_for_symbol(
     try:
         from analysis.fundamental import analyse
 
-        snap = analyse(symbol)
+        if snap is None:
+            snap = analyse(symbol)
 
         # Get FCF
         fcf = snap.free_cash_flow

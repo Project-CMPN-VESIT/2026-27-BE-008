@@ -31,7 +31,9 @@ socket.getaddrinfo = _ipv4_getaddrinfo
 # ── Load .env before anything else ───────────────────────────
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+from config.env_loader import load_project_env
+
+load_project_env()
 
 # ── Pull keychain credentials into env (after .env so .env wins) ─
 from config.credentials import load_all as _load_keychain

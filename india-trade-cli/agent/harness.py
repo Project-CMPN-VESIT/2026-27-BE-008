@@ -485,3 +485,111 @@ def run(
         )
 
     return response or ""
+
+
+# ── CYRO Context Smoke Test ───────────────────────────────────
+
+
+def smoke_test_cyro_context(symbol: str = "RELIANCE") -> dict:
+    """
+    Smoke test for the CYRO ContextBuilder.
+
+    Runs a full context build for a known-liquid NSE symbol and asserts that
+    every data module added in the NSE integration is populated (non-None /
+    non-empty). Designed to catch NSE endpoint schema drift early.
+
+    Usage:
+        from agent.harness import smoke_test_cyro_context
+        results = smoke_test_cyro_context("RELIANCE")
+        # prints pass/fail for each module
+
+    Returns dict with {module_name: {"pass": bool, "detail": str}}
+    """
+    import uuid
+    from rich.table import Table
+    from rich.console import Console as _Console
+
+    _console = _Console()
+    _console.rule(f"[bold cyan]CYRO Context Smoke Test — {symbol.upper()}[/bold cyan]")
+
+    research_id = str(uuid.uuid4())
+    try:
+        from web.cyro_engine.context_builder import ContextBuilder
+        cb = ContextBuilder(research_id=research_id)
+        ctx = cb.build_context(
+            symbol=symbol.upper(),
+            message=f"Research {symbol} for investment",
+            mode="normal",
+        )
+    except Exception as e:
+        _console.print(f"[red]Context build crashed: {e}[/red]")
+        return {"context_build": {"pass": False, "detail": str(e)}}
+
+    checks = {
+        "market_snapshot.price": (
+            ctx.market_snapshot.get("price"),
+            "NSE/Fyers/yfinance live price"
+        ),
+        "financials.quarterly": (
+            ctx.financials.get("quarterly"),
+            "NSE results_comparison (5-quarter series)"
+        ),
+        "financials.pe": (
+            ctx.financials.get("pe"),
+            "Screener.in PE ratio"
+        ),
+        "financials.shareholding": (
+            ctx.financials.get("shareholding"),
+            "NSE shareholding pattern"
+        ),
+        "financials.peers": (
+            ctx.financials.get("peers"),
+            "Screener.in peer comparison table"
+        ),
+        "sector_peer_macro.macro.usd_inr": (
+            ctx.sector_peer_macro.get("macro", {}).get("usd_inr"),
+            "Yahoo Finance USD/INR"
+        ),
+        "sector_peer_macro.macro.brent_crude_usd": (
+            ctx.sector_peer_macro.get("macro", {}).get("brent_crude_usd"),
+            "Yahoo Finance Brent Crude"
+        ),
+        "sector_peer_macro.fii_dii": (
+            ctx.sector_peer_macro.get("fii_dii"),
+            "NSE FII/DII authenticated scraper"
+        ),
+        "events (actions/board_meetings)": (
+            ctx.events,
+            "NSE corporate actions + board meetings"
+        ),
+        "evidence_registry non-empty": (
+            ctx.evidence_registry,
+            "At least one EvidenceItem registered"
+        ),
+    }
+
+    results = {}
+    table = Table(title=f"Smoke Test — {symbol.upper()}", show_lines=True)
+    table.add_column("Module", style="cyan", min_width=40)
+    table.add_column("Status", min_width=8)
+    table.add_column("Source", style="dim")
+    table.add_column("Value (truncated)")
+
+    all_pass = True
+    for name, (val, source) in checks.items():
+        passed = val is not None and val != [] and val != {}
+        if not passed:
+            all_pass = False
+        status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
+        val_str = str(val)[:60] if val else "None / empty"
+        table.add_row(name, status, source, val_str)
+        results[name] = {"pass": passed, "detail": val_str, "source": source}
+
+    _console.print(table)
+    overall = "[bold green]ALL PASS[/bold green]" if all_pass else "[bold red]SOME FAILURES[/bold red]"
+    _console.print(f"\nOverall: {overall}")
+    _console.print(
+        f"Evidence registry contains {len(ctx.evidence_registry)} items, "
+        f"News: {len(ctx.news)} items, RAG: {len(ctx.rag)} docs"
+    )
+    return results

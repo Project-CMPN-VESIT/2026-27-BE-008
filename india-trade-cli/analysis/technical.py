@@ -23,47 +23,51 @@ from market.history import get_ohlcv
 # ── Result dataclass ─────────────────────────────────────────
 
 
+from typing import Optional
+
 @dataclass
 class Signal:
     name: str
-    value: float | str
+    value: float | str | None
     verdict: str  # "BULLISH" | "BEARISH" | "NEUTRAL"
     detail: str = ""
-
 
 @dataclass
 class TechnicalSnapshot:
     symbol: str
     ltp: float
+    interval: str = "1D"
+    as_of: str = ""
 
     # Indicators
-    rsi: float = 0.0
-    macd: float = 0.0
-    macd_sig: float = 0.0
-    macd_hist: float = 0.0
-    ema20: float = 0.0
-    ema50: float = 0.0
-    sma200: float = 0.0
-    bb_upper: float = 0.0
-    bb_lower: float = 0.0
-    bb_mid: float = 0.0
-    atr: float = 0.0
-    volume_ratio: float = 0.0  # today's vol / 20-day avg vol
+    rsi: Optional[float] = None
+    macd: Optional[float] = None
+    macd_sig: Optional[float] = None
+    macd_hist: Optional[float] = None
+    ema20: Optional[float] = None
+    ema50: Optional[float] = None
+    sma200: Optional[float] = None
+    bb_upper: Optional[float] = None
+    bb_lower: Optional[float] = None
+    bb_mid: Optional[float] = None
+    atr: Optional[float] = None
+    volume_ratio: Optional[float] = None
 
     # Support / Resistance
-    support: float = 0.0
-    resistance: float = 0.0
-    pivot: float = 0.0
+    support: Optional[float] = None
+    resistance: Optional[float] = None
+    pivot: Optional[float] = None
 
     # Signals list
     signals: list[Signal] = field(default_factory=list)
 
+    # Limitations
+    limitations: list[str] = field(default_factory=list)
+
     # Overall verdict
-    verdict: str = "NEUTRAL"  # BULLISH | BEARISH | NEUTRAL
-    score: int = 0  # -100 to +100
+    verdict: str = "NEUTRAL"
+    score: int = 0
     summary: str = ""
-
-
 # ── Core indicators ──────────────────────────────────────────
 
 
@@ -143,6 +147,173 @@ def pivot_points(df: pd.DataFrame) -> dict[str, float]:
 # ── Main analyser ────────────────────────────────────────────
 
 
+def analyse_dataframe(
+    df: pd.DataFrame, symbol: str, interval: str = "1D", as_of: str = ""
+) -> TechnicalSnapshot:
+    """
+    Compute technical analysis strictly from a provided DataFrame.
+    Gracefully handles insufficient history instead of padding zeros.
+    """
+    limitations = []
+    
+    if df.empty or len(df) < 5:
+        return TechnicalSnapshot(
+            symbol=symbol, ltp=0.0, interval=interval, as_of=as_of, 
+            verdict="INSUFFICIENT DATA", limitations=["Not enough candles to compute ANY metrics (minimum 5 required)."]
+        )
+
+    close = df["close"]
+    ltp = float(close.iloc[-1])
+    n_candles = len(df)
+
+    snap = TechnicalSnapshot(symbol=symbol, ltp=round(ltp, 2), interval=interval, as_of=as_of)
+    signals: list[Signal] = []
+    score = 0
+
+    # RSI
+    if n_candles >= 14:
+        rsi_val = float(rsi(close).iloc[-1])
+        snap.rsi = round(rsi_val, 2)
+        if rsi_val < 30:
+            signals.append(Signal("RSI", round(rsi_val, 1), "BULLISH", "Oversold (<30)"))
+            score += 15
+        elif rsi_val > 70:
+            signals.append(Signal("RSI", round(rsi_val, 1), "BEARISH", "Overbought (>70)"))
+            score -= 15
+        else:
+            signals.append(Signal("RSI", round(rsi_val, 1), "NEUTRAL", "Bullish zone" if rsi_val > 50 else "Bearish zone"))
+            score += 5 if rsi_val > 50 else -5
+    else:
+        limitations.append("Insufficient data for RSI (need >= 14).")
+
+    # MACD
+    if n_candles >= 35:
+        macd_line, sig_line, histogram = macd(close)
+        snap.macd = round(float(macd_line.iloc[-1]), 4)
+        snap.macd_sig = round(float(sig_line.iloc[-1]), 4)
+        snap.macd_hist = round(float(histogram.iloc[-1]), 4)
+        
+        hist_val = snap.macd_hist
+        prev_hist = float(histogram.iloc[-2])
+        if hist_val > 0 and prev_hist <= 0:
+            signals.append(Signal("MACD", snap.macd, "BULLISH", "Bullish crossover"))
+            score += 15
+        elif hist_val < 0 and prev_hist >= 0:
+            signals.append(Signal("MACD", snap.macd, "BEARISH", "Bearish crossover"))
+            score -= 15
+        elif hist_val > 0:
+            signals.append(Signal("MACD", snap.macd, "BULLISH", "Above signal line"))
+            score += 8
+        else:
+            signals.append(Signal("MACD", snap.macd, "BEARISH", "Below signal line"))
+            score -= 8
+    else:
+        limitations.append("Insufficient data for MACD (need >= 35).")
+
+    # EMAs
+    if n_candles >= 20:
+        ema20_val = float(ema(close, 20).iloc[-1])
+        snap.ema20 = round(ema20_val, 2)
+        if ltp > ema20_val:
+            signals.append(Signal("EMA20", snap.ema20, "BULLISH", "Price above EMA20"))
+            score += 8
+        else:
+            signals.append(Signal("EMA20", snap.ema20, "BEARISH", "Price below EMA20"))
+            score -= 8
+    else:
+        limitations.append("Insufficient data for EMA20.")
+
+    if n_candles >= 50:
+        ema50_val = float(ema(close, 50).iloc[-1])
+        snap.ema50 = round(ema50_val, 2)
+        if ltp > ema50_val:
+            signals.append(Signal("EMA50", snap.ema50, "BULLISH", "Price above EMA50"))
+            score += 8
+        else:
+            signals.append(Signal("EMA50", snap.ema50, "BEARISH", "Price below EMA50"))
+            score -= 8
+    else:
+        limitations.append("Insufficient data for EMA50.")
+
+    # SMA200
+    if n_candles >= 200:
+        sma200_val = float(sma(close, 200).iloc[-1])
+        snap.sma200 = round(sma200_val, 2)
+        if ltp > sma200_val:
+            signals.append(Signal("SMA200", snap.sma200, "BULLISH", "Price above 200 DMA"))
+            score += 10
+        else:
+            signals.append(Signal("SMA200", snap.sma200, "BEARISH", "Price below 200 DMA"))
+            score -= 10
+    else:
+        limitations.append("Insufficient data for SMA200.")
+
+    # Bollinger Bands
+    if n_candles >= 20:
+        bb_upper, bb_mid, bb_lower = bollinger_bands(close)
+        bb_u = float(bb_upper.iloc[-1])
+        bb_m = float(bb_mid.iloc[-1])
+        bb_l = float(bb_lower.iloc[-1])
+        snap.bb_upper, snap.bb_mid, snap.bb_lower = round(bb_u, 2), round(bb_m, 2), round(bb_l, 2)
+        
+        if ltp < bb_l:
+            signals.append(Signal("BollingerBands", round(ltp, 2), "BULLISH", "Price below lower band"))
+            score += 10
+        elif ltp > bb_u:
+            signals.append(Signal("BollingerBands", round(ltp, 2), "BEARISH", "Price above upper band"))
+            score -= 10
+        else:
+            bb_pos = (ltp - bb_l) / (bb_u - bb_l) if (bb_u - bb_l) else 0.5
+            signals.append(Signal("BollingerBands", f"{bb_pos:.0%} of band", "NEUTRAL", "Inside bands"))
+    else:
+        limitations.append("Insufficient data for Bollinger Bands.")
+
+    # ATR
+    if n_candles >= 14:
+        snap.atr = round(float(atr(df).iloc[-1]), 2)
+    else:
+        limitations.append("Insufficient data for ATR.")
+
+    # Volume
+    if n_candles >= 20:
+        vol_avg = float(df["volume"].rolling(20).mean().iloc[-1])
+        vol_today = float(df["volume"].iloc[-1])
+        vol_ratio = round(vol_today / vol_avg, 2) if vol_avg else 1.0
+        snap.volume_ratio = vol_ratio
+        if vol_ratio > 1.5:
+            dir_signal = "BULLISH" if ltp >= float(df["open"].iloc[-1]) else "BEARISH"
+            signals.append(Signal("Volume", f"{vol_ratio:.1f}x avg", dir_signal, "High volume"))
+            score += 8 if dir_signal == "BULLISH" else -8
+        else:
+            signals.append(Signal("Volume", f"{vol_ratio:.1f}x avg", "NEUTRAL", "Normal volume"))
+    else:
+        limitations.append("Insufficient data for 20-day Volume Average.")
+
+    # Pivots
+    try:
+        pivots = pivot_points(df)
+        snap.pivot = pivots["pivot"]
+        snap.support = pivots["s1"]
+        snap.resistance = pivots["r1"]
+    except Exception:
+        limitations.append("Unable to calculate pivot points.")
+
+    # Verdict
+    snap.score = max(-100, min(100, score))
+    snap.verdict = "BULLISH" if snap.score > 30 else "BEARISH" if snap.score < -30 else "NEUTRAL"
+    snap.signals = signals
+    snap.limitations = limitations
+    
+    bullish_count = sum(1 for s in signals if s.verdict == "BULLISH")
+    bearish_count = sum(1 for s in signals if s.verdict == "BEARISH")
+    snap.summary = (
+        f"{bullish_count} bullish / {bearish_count} bearish signals | "
+        f"Score: {snap.score:+d}"
+    )
+
+    return snap
+
+
 def analyse(
     symbol: str,
     exchange: str = "NSE",
@@ -150,194 +321,11 @@ def analyse(
 ) -> TechnicalSnapshot:
     """
     Full technical analysis for a symbol.
-
-    Fetches OHLCV, computes all indicators, generates signals,
-    and returns a TechnicalSnapshot with a score and verdict.
-
-    Score:  +10 per bullish signal, -10 per bearish signal.
-    Verdict:
-        score > 30  → BULLISH
-        score < -30 → BEARISH
-        else        → NEUTRAL
+    Fetches OHLCV and calls analyse_dataframe.
     """
-    # ── Fetch data ────────────────────────────────────────────
     try:
         df = get_ohlcv(symbol=symbol, exchange=exchange, days=days)
     except Exception:
         df = pd.DataFrame()
 
-    if df.empty or len(df) < 30:
-        return TechnicalSnapshot(symbol=symbol, ltp=0.0, verdict="INSUFFICIENT DATA")
-
-    close = df["close"]
-    ltp = float(close.iloc[-1])
-
-    # ── Compute indicators ────────────────────────────────────
-    rsi_series = rsi(close)
-    rsi_val = float(rsi_series.iloc[-1])
-
-    macd_line, sig_line, histogram = macd(close)
-    macd_val = float(macd_line.iloc[-1])
-    sig_val = float(sig_line.iloc[-1])
-    hist_val = float(histogram.iloc[-1])
-
-    ema20_val = float(ema(close, 20).iloc[-1])
-    ema50_val = float(ema(close, 50).iloc[-1])
-    sma200_val = (
-        float(sma(close, 200).iloc[-1]) if len(df) >= 200 else float(sma(close, len(df)).iloc[-1])
-    )
-
-    bb_upper, bb_mid, bb_lower = bollinger_bands(close)
-    bb_u = float(bb_upper.iloc[-1])
-    bb_m = float(bb_mid.iloc[-1])
-    bb_l = float(bb_lower.iloc[-1])
-
-    atr_val = float(atr(df).iloc[-1])
-
-    vol_avg = float(df["volume"].rolling(20).mean().iloc[-1])
-    vol_today = float(df["volume"].iloc[-1])
-    vol_ratio = round(vol_today / vol_avg, 2) if vol_avg else 1.0
-
-    pivots = pivot_points(df)
-
-    # ── Build signals ─────────────────────────────────────────
-    signals: list[Signal] = []
-    score = 0
-
-    # RSI
-    if rsi_val < 30:
-        signals.append(Signal("RSI", round(rsi_val, 1), "BULLISH", "Oversold (<30)"))
-        score += 15
-    elif rsi_val > 70:
-        signals.append(Signal("RSI", round(rsi_val, 1), "BEARISH", "Overbought (>70)"))
-        score -= 15
-    else:
-        signals.append(
-            Signal(
-                "RSI",
-                round(rsi_val, 1),
-                "NEUTRAL",
-                "Bullish zone (50-70)" if rsi_val > 50 else "Bearish zone (30-50)",
-            )
-        )
-        score += 5 if rsi_val > 50 else -5
-
-    # MACD crossover
-    prev_hist = float(histogram.iloc[-2]) if len(histogram) >= 2 else 0
-    if hist_val > 0 and prev_hist <= 0:
-        signals.append(Signal("MACD", round(macd_val, 2), "BULLISH", "Bullish crossover"))
-        score += 15
-    elif hist_val < 0 and prev_hist >= 0:
-        signals.append(Signal("MACD", round(macd_val, 2), "BEARISH", "Bearish crossover"))
-        score -= 15
-    elif hist_val > 0:
-        signals.append(Signal("MACD", round(macd_val, 2), "BULLISH", "Above signal line"))
-        score += 8
-    else:
-        signals.append(Signal("MACD", round(macd_val, 2), "BEARISH", "Below signal line"))
-        score -= 8
-
-    # Price vs MAs
-    if ltp > ema20_val:
-        signals.append(Signal("EMA20", round(ema20_val, 2), "BULLISH", "Price above EMA20"))
-        score += 8
-    else:
-        signals.append(Signal("EMA20", round(ema20_val, 2), "BEARISH", "Price below EMA20"))
-        score -= 8
-
-    if ltp > ema50_val:
-        signals.append(Signal("EMA50", round(ema50_val, 2), "BULLISH", "Price above EMA50"))
-        score += 8
-    else:
-        signals.append(Signal("EMA50", round(ema50_val, 2), "BEARISH", "Price below EMA50"))
-        score -= 8
-
-    if ltp > sma200_val:
-        signals.append(Signal("SMA200", round(sma200_val, 2), "BULLISH", "Price above 200 DMA"))
-        score += 10
-    else:
-        signals.append(Signal("SMA200", round(sma200_val, 2), "BEARISH", "Price below 200 DMA"))
-        score -= 10
-
-    # Bollinger Bands
-    if ltp < bb_l:
-        signals.append(
-            Signal(
-                "BollingerBands",
-                round(ltp, 2),
-                "BULLISH",
-                "Price below lower band — potential reversal",
-            )
-        )
-        score += 10
-    elif ltp > bb_u:
-        signals.append(
-            Signal(
-                "BollingerBands",
-                round(ltp, 2),
-                "BEARISH",
-                "Price above upper band — potential reversal",
-            )
-        )
-        score -= 10
-    else:
-        bb_pos = (ltp - bb_l) / (bb_u - bb_l) if (bb_u - bb_l) else 0.5
-        signals.append(
-            Signal(
-                "BollingerBands",
-                f"{bb_pos:.0%} of band",
-                "NEUTRAL",
-                f"Upper={bb_u:.2f} Mid={bb_m:.2f} Lower={bb_l:.2f}",
-            )
-        )
-
-    # Volume confirmation
-    if vol_ratio > 1.5:
-        dir_signal = "BULLISH" if ltp >= float(df["open"].iloc[-1]) else "BEARISH"
-        signals.append(
-            Signal(
-                "Volume",
-                f"{vol_ratio:.1f}x avg",
-                dir_signal,
-                f"High volume day ({vol_ratio:.1f}× 20-day avg)",
-            )
-        )
-        score += 8 if dir_signal == "BULLISH" else -8
-    else:
-        signals.append(Signal("Volume", f"{vol_ratio:.1f}x avg", "NEUTRAL", "Normal volume"))
-
-    # ── Verdict ───────────────────────────────────────────────
-    score = max(-100, min(100, score))
-    verdict = "BULLISH" if score > 30 else "BEARISH" if score < -30 else "NEUTRAL"
-
-    bullish_count = sum(1 for s in signals if s.verdict == "BULLISH")
-    bearish_count = sum(1 for s in signals if s.verdict == "BEARISH")
-    summary = (
-        f"{bullish_count} bullish / {bearish_count} bearish signals | "
-        f"Score: {score:+d} | RSI {rsi_val:.1f} | "
-        f"{'Above' if ltp > sma200_val else 'Below'} 200 DMA"
-    )
-
-    return TechnicalSnapshot(
-        symbol=symbol,
-        ltp=round(ltp, 2),
-        rsi=round(rsi_val, 2),
-        macd=round(macd_val, 4),
-        macd_sig=round(sig_val, 4),
-        macd_hist=round(hist_val, 4),
-        ema20=round(ema20_val, 2),
-        ema50=round(ema50_val, 2),
-        sma200=round(sma200_val, 2),
-        bb_upper=round(bb_u, 2),
-        bb_lower=round(bb_l, 2),
-        bb_mid=round(bb_m, 2),
-        atr=round(atr_val, 2),
-        volume_ratio=vol_ratio,
-        support=pivots["s1"],
-        resistance=pivots["r1"],
-        pivot=pivots["pivot"],
-        signals=signals,
-        verdict=verdict,
-        score=score,
-        summary=summary,
-    )
+    return analyse_dataframe(df, symbol=symbol, interval="1D", as_of="")

@@ -61,9 +61,9 @@ class CyroRequest(BaseModel):
 # Fast lookup first; rapidfuzz fallback for natural language queries
 _TICKER_MAP: dict[str, str] = {
     "reliance": "RELIANCE", "reliance industries": "RELIANCE",
-    "tcs": "TCS", "tata consultancy": "TCS",
-    "infosys": "INFY", "infy": "INFY",
-    "hdfc bank": "HDFCBANK", "hdfcbank": "HDFCBANK",
+    "tcs": "TCS", "tata consultancy": "TCS", "tata consultancy services": "TCS",
+    "infosys": "INFY", "infy": "INFY", "infosys limited": "INFY",
+    "hdfc bank": "HDFCBANK", "hdfcbank": "HDFCBANK", "hdfc bank limited": "HDFCBANK",
     "icici bank": "ICICIBANK", "icicibank": "ICICIBANK",
     "wipro": "WIPRO",
     "hcl": "HCLTECH", "hcltech": "HCLTECH",
@@ -79,7 +79,7 @@ _TICKER_MAP: dict[str, str] = {
     "ongc": "ONGC",
     "sun pharma": "SUNPHARMA", "sunpharma": "SUNPHARMA",
     "adani": "ADANIENT", "adani enterprises": "ADANIENT",
-    "sbi": "SBIN", "state bank": "SBIN",
+    "sbi": "SBIN", "state bank": "SBIN", "state bank of india": "SBIN", "sbi stock": "SBIN",
     "itc": "ITC",
     "dr reddy": "DRREDDY", "drreddy": "DRREDDY",
     "cipla": "CIPLA",
@@ -111,47 +111,188 @@ _TICKER_MAP: dict[str, str] = {
     "power grid": "POWERGRID",
 }
 
+import logging
+logger = logging.getLogger(__name__)
+
+_SYMBOL_CACHE: dict[str, str] = {}
+_SYMBOL_CACHE_LOCK = asyncio.Lock()
+
+async def _refresh_symbol_universe():
+    while True:
+        try:
+            from market.nse_client import nse_client
+            if nse_client._init():
+                new_cache = {}
+                # Include standard names first
+                new_cache.update(_TICKER_MAP)
+                
+                indices = ["NIFTY 50", "NIFTY NEXT 50", "NIFTY MIDCAP 150"]
+                for idx in indices:
+                    # Execute in a thread to not block event loop
+                    data = await asyncio.to_thread(nse_client._nse.listEquityStocksByIndex, idx)
+                    if data and isinstance(data, dict) and "data" in data:
+                        for row in data["data"]:
+                            sym = row.get("symbol")
+                            if sym:
+                                # We only get symbol, so map lower(symbol) -> symbol
+                                new_cache[sym.lower()] = sym
+                
+                if new_cache:
+                    async with _SYMBOL_CACHE_LOCK:
+                        _SYMBOL_CACHE.clear()
+                        _SYMBOL_CACHE.update(new_cache)
+                    logger.info(f"[Intent Router] Refreshed symbol universe cache: {len(_SYMBOL_CACHE)} entries")
+        except Exception as e:
+            logger.error(f"[Intent Router] Failed to refresh symbol universe: {e}")
+            
+        await asyncio.sleep(86400) # 24h
+
+@router.on_event("startup")
+async def startup_event():
+    asyncio.create_task(_refresh_symbol_universe())
 
 def _resolve_ticker(message: str, tagged_ticker: Optional[str] = None) -> str:
     """
     Resolve a ticker from:
-      1. Explicit @ tag from UI (highest priority)
-      2. ALL-CAPS ticker in the message text (e.g. 'INFY is expensive')
-      3. Company name fuzzy lookup
-      4. Default to 'NIFTY' (market overview)
+      1. Explicit entity in the message text (highest priority)
+      2. Explicit @ tag from UI (UI context fallback)
+      3. Return no symbol when the request cannot be resolved
     """
-    if tagged_ticker:
-        return tagged_ticker.upper().strip()
-
+    # 1. Parse user message for explicit target entity
+    low = message.lower()
+    
     # Check for ALL-CAPS word that looks like a ticker (3-10 chars)
     caps = re.findall(r'\b([A-Z]{2,10})\b', message)
-    # Filter out common English words
     _SKIP = {"I", "IT", "IN", "AT", "IS", "BE", "BY", "OR", "IF", "OF",
               "TO", "ON", "AN", "AS", "DO", "GO", "NO", "SO", "UP", "US",
               "BUY", "SELL", "HOLD", "NSE", "BSE", "IPO", "FII", "DII",
               "ROE", "ROI", "EPS", "PE", "PB", "AI"}
+    
+    resolved_from_text = None
     for cap in caps:
         if cap not in _SKIP and len(cap) >= 2:
-            return cap
+            logger.info(f"[Ticker Resolution] Found ALL-CAPS ticker in message: {cap}")
+            resolved_from_text = cap
+            break
 
-    # Fuzzy company name → ticker
-    low = message.lower()
-    # Sort by length desc so "hdfc bank" matches before "hdfc"
-    for name, ticker in sorted(_TICKER_MAP.items(), key=lambda x: -len(x[0])):
-        if name in low:
-            return ticker
+    if not resolved_from_text:
+        try:
+            cache_to_use = dict(_TICKER_MAP)
+            if _SYMBOL_CACHE:
+                cache_to_use.update(_SYMBOL_CACHE)
+        except Exception as e:
+            logger.warning(f"[Ticker Resolution] Error building cache copy: {e}. Using hardcoded map.")
+            cache_to_use = dict(_TICKER_MAP)
+        
+        # Direct substring match (longest first)
+        for name, ticker in sorted(cache_to_use.items(), key=lambda x: -len(x[0])):
+            if name in low:
+                logger.info(f"[Ticker Resolution] Direct substring match in message: '{name}' -> {ticker}")
+                resolved_from_text = ticker
+                break
+        
+        # Try rapidfuzz if available
+        if not resolved_from_text:
+            try:
+                from rapidfuzz import process, fuzz
+                choices = list(cache_to_use.keys())
+                matches = process.extract(low, choices, scorer=fuzz.partial_ratio, limit=3)
+                if matches:
+                    high_matches = [m for m in matches if m[1] > 85]
+                    if len(high_matches) > 1:
+                        ambiguous_tickers = ','.join([cache_to_use[m[0]] for m in high_matches])
+                        logger.warning(f"[Ticker Resolution] Ambiguous match for '{message}': {ambiguous_tickers}")
+                        # If ambiguous, do not fallback to tagged_ticker, fail explicitly
+                        return f"AMBIGUOUS_TICKER:{ambiguous_tickers}"
+                        
+                    if matches[0][1] >= 70:
+                        resolved_from_text = cache_to_use[matches[0][0]]
+                        logger.info(f"[Ticker Resolution] Fuzzy match in message: '{matches[0][0]}' -> {resolved_from_text} (score: {matches[0][1]})")
+            except ImportError:
+                pass
 
-    # Try rapidfuzz if available
-    try:
-        from rapidfuzz import process, fuzz
-        choices = list(_TICKER_MAP.keys())
-        match = process.extractOne(low, choices, scorer=fuzz.partial_ratio)
-        if match and match[1] >= 70:
-            return _TICKER_MAP[match[0]]
-    except ImportError:
-        pass
+    if resolved_from_text:
+        return resolved_from_text
 
-    return "NIFTY"   # fallback — market overview
+    # 2. Otherwise, use tagged_ticker/UI context if present
+    if tagged_ticker:
+        resolved = tagged_ticker.upper().strip()
+        logger.info(f"[Ticker Resolution] Fallback to UI explicit tag: {resolved}")
+        return resolved
+
+    # 3. Otherwise, return missing-target state
+    logger.info(f"[Ticker Resolution] No match found for '{message}' and no UI tag provided.")
+    return ""
+
+
+def _is_research_query(message: str) -> bool:
+    """
+    Detect whether a message is asking for financial research.
+    
+    Returns True if the message contains research-related keywords.
+    Returns False for general conversational queries.
+    
+    This gates non-research queries like "who are you" or "hello"
+    from entering the CYRO financial research pipeline.
+    """
+    message_lower = message.lower().strip()
+    
+    # Non-research patterns (conversational)
+    non_research_patterns = [
+        r"\b(who\s+are\s+you|who\s+r\s+you|what\s+are\s+you|hello|hi|hey|thanks|thank\s+you|bye|goodbye)\b",
+        r"\bwhat\s+can\s+you\s+do\b",
+        r"\bexplain\s+(cyro|this|that)\b",
+        r"\b(i\s+need\s+help|help|assist|support)\b",
+    ]
+    
+    # Research patterns (financial/analysis keywords)
+    research_patterns = [
+        r"\b(analyse|analyze|research|study|check|look\s+at)\b",
+        r"\b(stocks?|shares?|equity|equities|tickers?|company|companies|security|securities)\b",
+        r"\b(buy|sell|hold|bullish|bearish|positive|negative|strong|weak)\b",
+        r"\b(fundamental|technical|valuation|price|pe\s+ratio|roe|debt|cash\s+flow)\b",
+        r"\b(long\s+term|short\s+term|intraday|swing|momentum|trend)\b",
+        r"\b(catalysts?|news|events?|guidance|earnings|quarters?|ipo|splits?|bonus)\b",
+        r"\b(compare|peers?|sectors?|macro|economic|gdp|inflation|rates?|policy)\b",
+        r"\b(risks?|concerns?|challenges?|threats?|opportunity|opportunities|upside|downside)\b",
+        r"\binfy\b|btcs\b|reliance\b|hdfc\b|icici\b|wipro\b|tcs\b",  # major stock names
+    ]
+    
+    import re
+    
+    # If message explicitly uses research keywords, it's research
+    for pattern in research_patterns:
+        if re.search(pattern, message_lower):
+            return True
+    
+    # If message explicitly uses non-research patterns, it's NOT research
+    for pattern in non_research_patterns:
+        if re.search(pattern, message_lower):
+            return False
+    
+    # Heuristic: if message has a ticker symbol (3+ digit CAPS), it's research
+    caps = re.findall(r'\b([A-Z]{2,10})\b', message)
+    _SKIP = {"I", "IT", "IN", "AT", "IS", "BE", "BY", "OR", "IF", "OF",
+              "TO", "ON", "AN", "AS", "DO", "GO", "NO", "SO", "UP", "US",
+              "BUY", "SELL", "HOLD", "NSE", "BSE", "IPO", "FII", "DII",
+              "ROE", "ROI", "EPS", "PE", "PB", "AI"}
+    if any(cap not in _SKIP and len(cap) >= 2 for cap in caps):
+        return True
+    
+    # Default: if no clear signal, assume it's NOT research
+    # (safer to fail/fallback than to launch research on "hello")
+    return False
+
+
+def _comparison_symbols(message: str) -> list[str]:
+    """Return distinct known symbols named in an explicit comparison request."""
+    lower = message.lower()
+    matches = {symbol for name, symbol in _TICKER_MAP.items() if name in lower}
+    matches.update(
+        cap for cap in re.findall(r"\b([A-Z]{2,10})\b", message)
+        if cap in set(_TICKER_MAP.values())
+    )
+    return sorted(matches)
 
 
 # ── Normal mode: quick single-analyst summary ───────────────────
@@ -533,21 +674,48 @@ async def cyro_stream(
 ):
     """
     CYRO SSE stream endpoint.
-
-    Query params:
-        message    — User's natural language question
-        ticker     — Pre-resolved NSE ticker (from @ mention), optional
-        mode       — "normal" (fast) or "reasoning" (deep multi-agent)
-        session_id — Client session identifier
-
-    Emits server-sent events until the analysis is complete.
+    Includes research-intent gate to reject non-financial queries.
     """
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
     stream_id = f"cyro_{session_id}_{uuid4().hex[:8]}"
 
+    # Check if this is actually a financial research query
+    if not _is_research_query(message):
+        # Not a research query — emit non-research response
+        async def _non_research_generator():
+            yield f"data: {json.dumps({'type': 'started', 'stream_id': stream_id, 'mode': 'conversation'})}\n\n"
+            cyro_response = "I am CYRO, FinPilot's AI research analyst for Indian equities. I can help you analyze stocks, compare companies, evaluate valuations, assess technical trends, and identify catalysts. Try asking me things like: \"Analyse TCS for long term\" or \"Compare INFY and WIPRO fundamentals\"."
+            yield f"data: {json.dumps({'type': 'done', 'stream_id': stream_id, 'conclusion': cyro_response})}\n\n"
+        
+        return StreamingResponse(
+            _non_research_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # CYRO is deliberately single-security until its evidence and quality
+    # contracts can preserve independent scopes end-to-end.
+    comparison_symbols = _comparison_symbols(message) if "compare" in message.lower() else []
+    if len(comparison_symbols) > 1:
+        async def _unsupported_comparison_generator():
+            yield f"data: {json.dumps({'type': 'error', 'error_type': 'MULTI_STOCK_UNSUPPORTED', 'message': 'CYRO comparison research is not yet supported safely. Please research one security at a time.', 'stream_id': stream_id})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'stream_id': stream_id})}\n\n"
+        return StreamingResponse(
+            _unsupported_comparison_generator(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     # Resolve ticker
     symbol = _resolve_ticker(message, ticker)
+    if not symbol:
+        async def _unresolved_security_generator():
+            yield f"data: {json.dumps({'type': 'error', 'error_type': 'SECURITY_RESOLUTION_ERROR', 'message': 'CYRO could not resolve a single NSE security. Please provide a ticker or company name.', 'stream_id': stream_id})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'stream_id': stream_id})}\n\n"
+        return StreamingResponse(
+            _unresolved_security_generator(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
     if ":" in symbol:
         exchange, symbol = symbol.split(":", 1)
         exchange = exchange.upper()
@@ -555,27 +723,76 @@ async def cyro_stream(
         exchange = "NSE"
 
     def _cb(event: dict):
+        event.setdefault("stream_id", stream_id)
         asyncio.run_coroutine_threadsafe(queue.put(event), loop)
 
     def _run():
         try:
-            if mode == "reasoning":
-                _run_reasoning_analysis(symbol, message, _cb, exchange)
-            else:
-                _run_normal_analysis(symbol, message, _cb)
+            from web.cyro_engine import CyroOrchestrator, MistralClient, ResearchRequest
+            client = MistralClient()
+            orchestrator = CyroOrchestrator(client)
+            req = ResearchRequest(
+                message=message,
+                ticker=symbol,
+                session_id=session_id,
+                mode=mode
+            )
+            orchestrator.run(req, _cb)
         except Exception as exc:
-            _cb({"type": "error", "message": str(exc)})
+            # Classify error by source for precise error messaging
+            error_type = "CYRO_RESEARCH_ERROR"
+            user_message = "CYRO research pipeline encountered an error. Please try again."
+            
+            # Check for typed exceptions first
+            if hasattr(exc, "error_type"):
+                error_type = exc.error_type
+                user_message = getattr(exc, "user_message", str(exc))
+            else:
+                # Classify by exception type and message content
+                exc_str = str(exc).lower()
+                exc_type_name = type(exc).__name__
+                
+                if "broker" in exc_str or "connection" in exc_str and "refused" in exc_str:
+                    error_type = "BROKER_CONNECTION_ERROR"
+                    user_message = "Could not connect to broker data service. Please try again."
+                elif "timeout" in exc_str or "deadlock" in exc_str:
+                    error_type = "TIMEOUT_ERROR"
+                    user_message = "Research took too long. Please try again."
+                elif "mistral" in exc_str.lower() or "llm" in exc_str.lower():
+                    error_type = "LLM_ERROR"
+                    user_message = "Language model service unavailable. Please try again."
+                elif "database" in exc_str or "sql" in exc_str:
+                    error_type = "DATABASE_ERROR"
+                    user_message = "Database service unavailable. Please try again."
+                elif "intent" in exc_str and "route" in exc_str:
+                    error_type = "INTENT_ROUTE_ERROR"
+                    user_message = "Could not understand the research request. Please be more specific."
+                elif "security" in exc_str or "ticker" in exc_str:
+                    error_type = "SECURITY_RESOLUTION_ERROR"
+                    user_message = "Could not resolve the security/ticker. Please try a different company name."
+                else:
+                    error_type = "CYRO_RESEARCH_ERROR"
+                    user_message = f"Research pipeline error: {exc_type_name}"
+            
+            try:
+                from web.cyro_engine import cyro_logger
+                cyro_logger.error(
+                    stream_id, "cyro", user_message, {"error_type": error_type, "exception": str(exc)[:500]}
+                )
+            except Exception:
+                pass
+            
+            _cb({
+                "type": "error",
+                "error_type": error_type,
+                "message": user_message,
+                "stream_id": stream_id
+            })
         finally:
             _active_cyro_streams.pop(stream_id, None)
             asyncio.run_coroutine_threadsafe(queue.put(None), loop)  # sentinel
 
     async def _generator():
-        # Immediately confirm stream open
-        yield f"data: {json.dumps({'type': 'started', 'stream_id': stream_id, 'symbol': symbol, 'exchange': exchange, 'mode': mode})}\n\n"
-
-        # Ticker resolution event
-        yield f"data: {json.dumps({'type': 'ticker_resolved', 'ticker': symbol, 'exchange': exchange})}\n\n"
-
         # Launch analysis in background thread
         asyncio.ensure_future(loop.run_in_executor(None, _run))
 
@@ -584,8 +801,6 @@ async def cyro_stream(
             if event is None:
                 break
             yield f"data: {json.dumps(event)}\n\n"
-
-        yield f"data: {json.dumps({'type': 'done', 'stream_id': stream_id})}\n\n"
 
     return StreamingResponse(
         _generator(),
@@ -601,41 +816,37 @@ async def cyro_analyze(req: CyroRequest):
     """
     Non-streaming CYRO analysis (for quick tests).
     Returns the full report as JSON when done.
-    Use /stream for the War Room real-time UI.
     """
-    from agent.source_tracker import TrackedToolRegistry
-    from agent.tools import build_registry
-    from agent.core import build_provider_from_env
-
-    symbol = _resolve_ticker(req.message, req.ticker)
-
-    base = build_registry()
-    registry = TrackedToolRegistry()
-    registry._tools = base._tools  # type: ignore[attr-defined]
+    from web.cyro_engine import CyroOrchestrator, MistralClient, ResearchRequest
+    client = MistralClient()
+    orchestrator = CyroOrchestrator(client)
 
     results: list[dict] = []
-
     def _cb(event: dict):
         results.append(event)
 
-    if req.mode == "reasoning":
-        _run_reasoning_analysis(symbol, req.message, _cb)
-    else:
-        _run_normal_analysis(symbol, req.message, _cb)
+    symbol = _resolve_ticker(req.message, req.ticker)
+    engine_req = ResearchRequest(
+        message=req.message,
+        ticker=symbol,
+        session_id=req.session_id,
+        mode=req.mode
+    )
 
-    final = next((e for e in reversed(results) if e.get("type") == "final_decision"), {})
+    loop = asyncio.get_running_loop()
+    final_report = await loop.run_in_executor(None, orchestrator.run, engine_req, _cb)
 
     return {
         "status": "ok",
         "data": {
-            "symbol": symbol,
+            "symbol": final_report.symbol,
             "exchange": "NSE",
             "mode": req.mode,
-            "signal": final.get("signal", "HOLD"),
-            "summary": final.get("summary", ""),
-            "trade_plans": final.get("trade_plans", {}),
-            "sources_used": final.get("sources_used", []),
+            "signal": final_report.conclusion,
+            "summary": final_report.summary,
+            "sources_used": [s.model_dump() for s in final_report.sources],
             "events": results,
+            "report": final_report.model_dump()
         },
     }
 
@@ -880,19 +1091,16 @@ async def cyro_news(ticker: str):
     loop = asyncio.get_running_loop()
 
     def _fetch():
-        from market.news import get_stock_news, get_nse_announcements
-        result = {"symbol": symbol, "news": [], "announcements": []}
+        from market.news import get_canonical_stock_news
+        result = {"symbol": symbol, "news": [], "announcements": [], "provider_audit": {}}
+        
         try:
-            news_items = get_stock_news(symbol, n=10)
-            result["news"] = [n.model_dump() if hasattr(n, 'model_dump') else n.__dict__ for n in news_items]
+            canonical = get_canonical_stock_news(symbol, n=10)
+            result["news"] = [n.to_dict() for n in canonical.get("news", [])]
+            result["announcements"] = [a.to_dict() for a in canonical.get("announcements", [])]
+            result["provider_audit"] = canonical.get("provider_audit", {})
         except Exception as e:
-            result["news_error"] = str(e)
-            
-        try:
-            ann_items = get_nse_announcements(symbol, n=5)
-            result["announcements"] = [a.model_dump() if hasattr(a, 'model_dump') else a.__dict__ for a in ann_items]
-        except Exception as e:
-            result["announcements_error"] = str(e)
+            result["error"] = str(e)
             
         return result
 
@@ -906,41 +1114,17 @@ async def cyro_news(ticker: str):
 @router.get("/market/alerts")
 async def cyro_alerts(ticker: str):
     """
-    Generate real-time risk and compliance alerts for the Right Panel.
+    Risk, momentum, ownership, event and news alerts for the Right Panel.
+
+    Each check (price action, options PCR, VIX, FII/DII, promoter holding, events,
+    bulk deals, news/filings risk) is independent — see market/alerts.py.
     """
     symbol = ticker.upper().strip()
     loop = asyncio.get_running_loop()
 
     def _fetch():
-        from market.options import get_pcr
-        from market.events import get_earnings
-        result = {"symbol": symbol, "alerts": []}
-        
-        # 1. Options PCR Alert
-        try:
-            pcr_data = get_pcr(symbol)
-            if pcr_data and "pcr" in pcr_data and pcr_data["pcr"]:
-                pcr_val = pcr_data["pcr"]
-                if pcr_val > 1.2:
-                    result["alerts"].append({"type": "warn", "title": "High Put-Call Ratio", "message": f"PCR is elevated at {pcr_val:.2f}, indicating potential over-leverage or strong put sentiment."})
-                elif pcr_val < 0.8:
-                    result["alerts"].append({"type": "info", "title": "Low Put-Call Ratio", "message": f"PCR is low at {pcr_val:.2f}, indicating heavy call writing and muted downside protection demand."})
-        except Exception:
-            pass
-            
-        # 2. Earnings Alert
-        try:
-            earnings = get_earnings(symbol)
-            if earnings and "next_date" in earnings and earnings["next_date"]:
-                result["alerts"].append({"type": "info", "title": "Upcoming Earnings", "message": f"Next earnings announcement is projected around {earnings['next_date']}."})
-        except Exception:
-            pass
-            
-        # Fallback if no alerts generated
-        if not result["alerts"]:
-            result["alerts"].append({"type": "info", "title": "System Check", "message": f"No immediate critical alerts or upcoming events detected for {symbol}."})
-            
-        return result
+        from market.alerts import build_alerts
+        return build_alerts(symbol)
 
     try:
         data = await loop.run_in_executor(None, _fetch)

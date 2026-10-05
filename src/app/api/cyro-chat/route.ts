@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
     // Return a synthetic SSE error event so the UI can show a toast
     const body = `data: ${JSON.stringify({
       type: "error",
+      error_type: "DATA_SOURCE_ERROR",
       message: `Cannot reach CYRO backend at ${BACKEND_URL}: ${errMsg}. Make sure india-trade-cli is running (uvicorn web.api:app --port 8765).`,
     })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`;
 
@@ -82,6 +83,7 @@ export async function GET(req: NextRequest) {
   if (!upstreamRes.ok || !upstreamRes.body) {
     const errBody = `data: ${JSON.stringify({
       type: "error",
+      error_type: "DATA_SOURCE_ERROR",
       message: `CYRO backend returned HTTP ${upstreamRes.status}`,
     })}\n\ndata: ${JSON.stringify({ type: "done" })}\n\n`;
     return new Response(errBody, {

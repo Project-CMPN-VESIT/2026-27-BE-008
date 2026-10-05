@@ -14,10 +14,18 @@ Main entry point: analyse(symbol) → FundamentalSnapshot
 from __future__ import annotations
 
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 import httpx
+
+# ── Screener.in TTL cache (6 hours) ─────────────────────────────────────────
+# Prevents hammering Screener.in during parallel agent fan-out.
+_SCREENER_CACHE: dict[str, tuple[float, dict]] = {}
+_SCREENER_CACHE_LOCK = threading.Lock()
+_SCREENER_TTL = 6 * 3600  # 6 hours in seconds
 
 
 # ── Result dataclass ─────────────────────────────────────────
@@ -139,11 +147,23 @@ HEADERS = {
 
 
 def _fetch_screener(symbol: str) -> dict:
-    """Fetch raw JSON from Screener.in for a BSE/NSE symbol."""
+    """
+    Fetch raw JSON from Screener.in for a BSE/NSE symbol.
+
+    Results are cached for _SCREENER_TTL (6 hours) per symbol to prevent
+    rate-limit blocks during parallel agent fan-out in the CYRO engine.
+    """
+    cache_key = symbol.upper()
+    with _SCREENER_CACHE_LOCK:
+        if cache_key in _SCREENER_CACHE:
+            ts, cached_data = _SCREENER_CACHE[cache_key]
+            if time.time() - ts < _SCREENER_TTL:
+                return cached_data
+
     url = SCREENER_URL.format(symbol.upper())
     r = httpx.get(url, headers=HEADERS, timeout=10, follow_redirects=True)
     if r.status_code == 404:
-        # Try with consolidated suffix
+        # Try with consolidated suffix (Screener uses RELIANCE vs RELIANCEC)
         r = httpx.get(
             SCREENER_URL.format(symbol.upper() + "C"),
             headers=HEADERS,
@@ -151,7 +171,12 @@ def _fetch_screener(symbol: str) -> dict:
             follow_redirects=True,
         )
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+
+    with _SCREENER_CACHE_LOCK:
+        _SCREENER_CACHE[cache_key] = (time.time(), data)
+
+    return data
 
 
 def _safe_float(data: dict, *keys: str) -> Optional[float]:
@@ -870,7 +895,37 @@ def _fetch_nse_announcements(symbol: str, limit: int = 5) -> list[dict]:
         return []
 
 
-def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
+_ANALYSE_CACHE: dict[str, tuple[float, "FundamentalSnapshot"]] = {}
+_ANALYSE_LOCKS: dict[str, threading.Lock] = {}
+_ANALYSE_TTL = 30 * 60  # 30 minutes
+
+
+def analyse(symbol: str, **_kwargs) -> "FundamentalSnapshot":
+    """
+    Cached wrapper around the full analysis (Screener + yfinance + scoring).
+
+    analyse() is called many times per CYRO run for the same symbols (financials adapter, the
+    peer table for the subject + 6 peers, several agent tools). Only the Screener leg was cached,
+    so every call re-fetched Yahoo. Results are now shared for 30 min, and concurrent callers for
+    the same symbol wait on one in-flight fetch instead of each doing their own.
+    """
+    import copy
+
+    key = symbol.upper().strip()
+    with _SCREENER_CACHE_LOCK:
+        lock = _ANALYSE_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        hit = _ANALYSE_CACHE.get(key)
+        if hit and time.time() - hit[0] < _ANALYSE_TTL:
+            return copy.copy(hit[1])
+        snap = _analyse_uncached(symbol)
+        # Don't pin an all-empty result (both sources failed) for 30 minutes.
+        if getattr(snap, "pe", None) is not None or getattr(snap, "roe", None) is not None:
+            _ANALYSE_CACHE[key] = (time.time(), snap)
+        return copy.copy(snap)
+
+
+def _analyse_uncached(symbol: str, **_kwargs) -> FundamentalSnapshot:
     """
     Full fundamental analysis for a stock symbol.
 
@@ -1073,3 +1128,87 @@ def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
         verdict=verdict,
         summary=summary,
     )
+
+
+# ── Peer Comparison ───────────────────────────────────────────
+
+
+def get_peers(symbol: str) -> list:
+    """
+    Parse the Peer Comparison table from Screener.in for a given symbol.
+
+    Screener.in's company page already contains a peer comparison section in
+    the same HTML/JSON response as the ratios — we parse it here without
+    making any additional HTTP request.
+
+    Returns a list of dicts, each with:
+        symbol, name, pe, roe, market_cap_cr, npm (net profit margin), cmp (current price)
+
+    Tags: source_quality="trusted_secondary", source_name="Screener.in — Peer Comparison"
+
+    Falls back to [] on any failure (graceful degradation).
+    """
+    try:
+        raw = _fetch_screener(symbol)
+    except Exception:
+        return []
+
+    peers = []
+
+    # Screener.in JSON may include a "peers" key with a list of peer companies,
+    # or they may appear under "ratios_map" / "peer_comparison" sections.
+    # We try multiple known response shapes.
+
+    # Shape 1: raw["peers"] is a list of dicts
+    peer_list = raw.get("peers") or raw.get("peer_comparison") or []
+
+    if isinstance(peer_list, list):
+        for p in peer_list:
+            if not isinstance(p, dict):
+                continue
+            try:
+                entry = {
+                    "symbol": p.get("ticker") or p.get("symbol") or p.get("name", ""),
+                    "name": p.get("name") or p.get("company_name", ""),
+                    "pe": _safe_float(p, "PE", "Stock P/E", "pe"),
+                    "roe": _safe_float(p, "ROE", "Return on equity", "roe"),
+                    "market_cap_cr": _safe_float(p, "Market Cap", "market_cap", "marketcap"),
+                    "npm": _safe_float(p, "OPM", "Net profit margin", "npm"),
+                    "cmp": _safe_float(p, "CMP", "currentPrice", "price"),
+                }
+                if entry["symbol"] or entry["name"]:
+                    peers.append(entry)
+            except Exception:
+                continue
+
+    # Shape 2: Raw HTML table fallback (Screener returns HTML for some endpoints)
+    if not peers and isinstance(raw, str):
+        try:
+            # If the response was HTML (unusual for the API endpoint but possible)
+            import re as _re
+            # Match simple table row patterns like: INFY | Infosys | 25.3 | 30.1
+            rows = _re.findall(
+                r'<tr[^>]*>.*?<td[^>]*>([A-Z0-9&]+)</td>.*?'
+                r'<td[^>]*>([\d,.]+)</td>.*?<td[^>]*>([\d,.]+)</td>',
+                raw, _re.DOTALL | _re.IGNORECASE
+            )
+            for row in rows[:10]:
+                sym_cell, pe_cell, roe_cell = row
+                if sym_cell.strip().upper() == symbol.upper():
+                    continue  # skip the subject company itself
+                try:
+                    peers.append({
+                        "symbol": sym_cell.strip().upper(),
+                        "name": sym_cell.strip(),
+                        "pe": float(pe_cell.replace(",", "")),
+                        "roe": float(roe_cell.replace(",", "")),
+                        "market_cap_cr": None,
+                        "npm": None,
+                        "cmp": None,
+                    })
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+
+    return peers

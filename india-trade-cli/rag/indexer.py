@@ -246,7 +246,7 @@ def index_ticker(symbol: str, *, verbose: bool = True) -> dict:
             n = _upsert_chunks(collection, chunks, symbol)
             total += n
             if verbose:
-                print(f"  [rag] JSON → {n} chunks indexed")
+                print(f"  [rag] JSON -> {n} chunks indexed")
         except json.JSONDecodeError as e:
             print(f"  [rag] JSON parse error for {symbol}: {e}")
     else:
@@ -267,7 +267,7 @@ def index_ticker(symbol: str, *, verbose: bool = True) -> dict:
             n = _upsert_chunks(collection, chunks, symbol)
             total += n
             if verbose:
-                print(f"  [rag] {csv_type}.csv → {n} chunks indexed")
+                print(f"  [rag] {csv_type}.csv -> {n} chunks indexed")
 
     # ── 3. Annual Report PDFs ────────────────────────────────
     pdf_prefix = f"{base}/annual_reports/"
@@ -281,10 +281,10 @@ def index_ticker(symbol: str, *, verbose: bool = True) -> dict:
             n = _upsert_chunks(collection, chunks, symbol)
             total += n
             if verbose:
-                print(f"  [rag] {filename} → {n} PDF chunks indexed")
+                print(f"  [rag] {filename} -> {n} PDF chunks indexed")
 
     if verbose:
-        print(f"[rag] {symbol}: total {total} chunks indexed ✓")
+        print(f"[rag] {symbol}: total {total} chunks indexed [OK]")
 
     return {
         "symbol": symbol,

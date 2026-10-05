@@ -168,8 +168,13 @@ def get_credential(
     if value:
         return value
 
-    # 3. Interactive prompt (skip in batch mode — e.g. CLI provider tool loop)
-    if os.environ.get("_CLI_BATCH_MODE"):
+    # 3. Interactive prompt (skip in non-interactive mode, server mode, or when not required)
+    import sys
+    is_interactive = (
+        bool(sys.stdin and hasattr(sys.stdin, "isatty") and sys.stdin.isatty())
+        and not os.environ.get("_CLI_BATCH_MODE")
+    )
+    if not is_interactive or not required:
         if required:
             raise RuntimeError(
                 f"Credential '{display}' is not configured.\n"

@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(backendUrl, {
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000), // 15s timeout
+      signal: AbortSignal.timeout(30_000), // 30s timeout
     });
 
     if (!res.ok) {
