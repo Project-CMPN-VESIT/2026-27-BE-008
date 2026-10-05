@@ -17,7 +17,8 @@ import {
   Zap,
   Activity,
   Map,
-  Layers
+  Layers,
+  Trophy
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/news-feed", label: "News Feed", icon: Newspaper },
   { href: "/heatmap", label: "Heatmap", icon: Map },
   { href: "/baskets", label: "AI Baskets", icon: Layers },
+  { href: "/invest-like", label: "Invest Like", icon: Trophy },
   { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
 ];

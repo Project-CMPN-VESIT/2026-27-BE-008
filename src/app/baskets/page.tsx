@@ -533,7 +533,7 @@ export default function BasketsPage() {
                             {detail.holdings.map((h) => (
                               <tr key={h.symbol} className="text-slate-700 dark:text-slate-200">
                                 <td className="px-3 py-2">
-                                  <div className="font-bold">{h.symbol}</div>
+                                  <a href={`/invest-like?symbol=${h.symbol}`} className="font-bold hover:text-blue-600 hover:underline">{h.symbol}</a>
                                   <div className="max-w-[220px] truncate text-[10px] text-slate-400">
                                     {h.name}{h.sector ? ` · ${h.sector}` : ""}
                                   </div>

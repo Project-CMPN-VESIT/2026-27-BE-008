@@ -7,7 +7,8 @@ import { createChart, IChartApi, LineSeries } from "lightweight-charts";
 import { Activity, BarChart3, Users, DollarSign } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { screenerApiUrl } from "@/lib/screener-api";
-import { Building2, Info } from "lucide-react";
+import { Building2, Info, Trophy } from "lucide-react";
+import LegendScores from "@/components/baskets/LegendScores";
 
 // Static company business summaries — will be replaced by live API in future
 const COMPANY_PROFILES: Record<string, { name: string; sector: string; summary: string }> = {
@@ -296,7 +297,8 @@ export default function CompanyPage() {
         {[
           { id: "overview", label: "Overview", icon: Activity },
           { id: "financials", label: "Financials", icon: DollarSign },
-          { id: "peers", label: "Peer Preview", icon: Users }
+          { id: "peers", label: "Peer Preview", icon: Users },
+          { id: "investors", label: "Invest Like", icon: Trophy }
         ].map(tab => (
           <button
             key={tab.id}
@@ -435,6 +437,13 @@ export default function CompanyPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Invest Like Tab: investor-style scores */}
+      {activeTab === "investors" && (
+        <div className="animate-in fade-in duration-300">
+          <LegendScores symbol={symbolStr} />
         </div>
       )}
 
