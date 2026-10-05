@@ -72,6 +72,17 @@ class Score(Base):
     as_of = Column(DateTime, default=utcnow)
 
 
+class Summary(Base):
+    """Cached AI 'read summary' per (symbol, model). Regenerated when the score moves or the note gets old."""
+    __tablename__ = "summaries"
+    symbol = Column(String(40), primary_key=True)
+    model = Column(String(24), primary_key=True)
+    content = Column(JSON, nullable=False)           # {summary, positives, negatives}
+    score = Column(Float)
+    source = Column(String(12))                       # llm | fallback
+    generated_at = Column(DateTime, default=utcnow)
+
+
 class Rebalance(Base):
     """A dated snapshot of a basket's holdings (the basket's live history is the chain of these)."""
     __tablename__ = "rebalances"

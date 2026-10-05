@@ -4,7 +4,8 @@ FastAPI router for AI Baskets.
     GET  /baskets                        list of baskets (cards) + filter metadata + data status
     GET  /baskets/{id}?range=ALL         one basket: holdings, performance series vs NIFTY 50 / FD, dates
     GET  /baskets/stocks/ranking         stocks ranked by an investor-style score (feature 7)
-    GET  /baskets/stocks/{symbol}/scores all five investor scores for one stock (feature 7)
+    GET  /baskets/stocks/{symbol}/scores all five investor scores + breakdown + peers (feature 7)
+    GET  /baskets/stocks/{symbol}/summary?model=  AI summary through one investor's lens (feature 7)
     GET  /baskets/pipeline/status        refresh progress / data freshness
     POST /baskets/pipeline/refresh       trigger a refresh (localhost only)
 """
@@ -24,11 +25,19 @@ from baskets import pipeline
 from baskets.config import BENCHMARK_SYMBOL, CAP_INDICES, DISCLAIMER, FD_RATE
 from baskets.db import Fundamental, Holding, Rebalance, Score, Stock, init_db, session_scope
 from baskets.definitions import BASKETS, BasketDef
+from baskets.insight import stock_insight
 from baskets.performance import build_series, headline_return, pct_return, slice_range, to_points
 from baskets.prices import load_close_frame
 from baskets.scoring import MODELS
+from baskets.scoring.labels import PHILOSOPHY
+from baskets.summaries import get_summary
 
 router = APIRouter(prefix="/baskets", tags=["Baskets"])
+
+try:                       # idempotent: creates any table added since the database was first built (e.g. summaries)
+    init_db()
+except Exception:          # never block the API from starting because of the baskets store
+    pass
 
 _perf_cache: Dict[Tuple, Tuple[float, pd.DataFrame]] = {}
 _perf_lock = threading.Lock()
@@ -156,34 +165,29 @@ def stock_ranking(model: str, cap: Optional[str] = Query(None, pattern="^(large|
         out = [{"rank": i + 1, "symbol": st.symbol, "name": st.name, "sector": st.sector, "cap_class": st.cap_class,
                 "price": st.last_price, "score": sc.score, "coverage": sc.coverage,
                 "tags_pos": sc.tags_pos or [], "tags_neg": sc.tags_neg or []} for i, (sc, st) in enumerate(rows)]
-    return _clean({"model": model, "label": MODELS[model].label, "cap": cap, "results": out, "disclaimer": DISCLAIMER})
+    return _clean({"model": model, "label": MODELS[model].label, "philosophy": PHILOSOPHY[model], "cap": cap,
+                   "results": out, "disclaimer": DISCLAIMER})
 
 
 @router.get("/stocks/{symbol}/scores")
 def stock_scores(symbol: str):
-    """All five investor-style scores (with reasons) for one stock."""
-    sym = symbol.strip().upper()
-    with session_scope() as s:
-        st = s.get(Stock, sym)
-        if st is None:
-            raise HTTPException(status_code=404, detail=f"{sym} is not in the Nifty 500 universe")
-        rows = {r.model: r for r in s.query(Score).filter(Score.symbol == sym).all()}
-        fund = s.get(Fundamental, sym)
-        in_baskets = []
-        for d in BASKETS.values():
-            last = s.query(Rebalance).filter(Rebalance.basket_id == d.id).order_by(Rebalance.as_of.desc()).first()
-            if last and s.query(Holding).filter(Holding.rebalance_id == last.id, Holding.symbol == sym).first():
-                in_baskets.append({"id": d.id, "name": d.name})
-        scores = [{"model": m.id, "label": m.label, "investor": m.investor,
-                   "score": rows[m.id].score if m.id in rows else None,
-                   "coverage": rows[m.id].coverage if m.id in rows else None,
-                   "tags_pos": (rows[m.id].tags_pos if m.id in rows else []) or [],
-                   "tags_neg": (rows[m.id].tags_neg if m.id in rows else []) or []} for m in MODELS.values()]
-        payload = {"symbol": sym, "name": st.name, "sector": st.sector, "cap_class": st.cap_class,
-                   "price": st.last_price, "mcap_cr": st.mcap_cr, "scores": scores, "in_baskets": in_baskets,
-                   "factors": {**((fund.factors if fund else {}) or {}), **((fund.price_factors if fund else {}) or {})},
-                   "disclaimer": DISCLAIMER}
-    return _clean(payload)
+    """All five investor-style scores for one stock, each with a why-this-score breakdown, plus similar stocks."""
+    insight = stock_insight(symbol)
+    if insight is None:
+        raise HTTPException(status_code=404, detail=f"{symbol.strip().upper()} is not in the Nifty 500 universe")
+    return _clean({**insight, "disclaimer": DISCLAIMER})
+
+
+@router.get("/stocks/{symbol}/summary")
+def stock_summary(symbol: str, model: str):
+    """AI 'Read Summary' of the stock through one investor's lens (cached; always returns, falls back to a template)."""
+    try:
+        out = get_summary(symbol, model)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"unknown model; choose from {list(MODELS)}")
+    if out is None:
+        raise HTTPException(status_code=404, detail=f"{symbol.strip().upper()} is not in the Nifty 500 universe")
+    return _clean(out)
 
 
 @router.get("/{basket_id}")

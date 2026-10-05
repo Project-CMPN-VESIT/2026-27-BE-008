@@ -11,53 +11,9 @@ from fastapi.testclient import TestClient
 from baskets import pipeline
 from baskets.api import router
 from baskets.config import BENCHMARK_SYMBOL
-from baskets.db import (Base, Fundamental, Holding, JobState, Price, Rebalance, Score, Stock, bulk_upsert, engine,
-                        init_db, session_scope, utcnow)
+from baskets.db import Base, Holding, Price, Rebalance, Score, Stock, engine, init_db, session_scope, utcnow
 from baskets.definitions import BASKETS
 from baskets.scoring import MODELS
-
-N_DAYS = 300
-
-
-@pytest.fixture()
-def seeded():
-    """40 stocks (10 large / 15 mid / 15 small) with scores, liquidity and 300 days of prices."""
-    Base.metadata.drop_all(engine)
-    init_db()
-    rng = np.random.default_rng(7)
-    idx = pd.bdate_range(end="2026-10-02", periods=N_DAYS)
-    sectors = ["IT", "Banks", "Pharma", "Auto", "Energy", "FMCG", "Metals", "Realty"]
-    plan = [("large", 10), ("mid", 15), ("small", 15)]
-    stocks, prices, scores, liq = [], [], [], {}
-    i = 0
-    for cap, n in plan:
-        for k in range(n):
-            sym = f"{cap[:1].upper()}{k:02d}"
-            sector = sectors[(i + k) % len(sectors)]
-            stocks.append({"symbol": sym, "name": f"{sym} Ltd", "sector": sector, "cap_class": cap,
-                           "mcap_cr": 1000.0 + i * 100, "last_price": 100.0, "in_universe": True, "updated_at": utcnow()})
-            walk = 100 * np.cumprod(1 + rng.normal(0.0006, 0.012, N_DAYS))
-            prices += [{"symbol": sym, "date": d.date(), "close": float(c), "volume": 1e6} for d, c in zip(idx, walk)]
-            for mid in MODELS:
-                base = 50 + ((i * 7 + hash(mid) % 13) % 45)
-                scores.append({"symbol": sym, "model": mid, "score": float(base), "coverage": 0.95,
-                               "tags_pos": ["Strong"], "tags_neg": [], "as_of": utcnow()})
-            liq[sym] = 100.0
-            i += 1
-    bench = 1000 * np.cumprod(1 + rng.normal(0.0004, 0.008, N_DAYS))
-    prices += [{"symbol": BENCHMARK_SYMBOL, "date": d.date(), "close": float(c), "volume": 0.0} for d, c in zip(idx, bench)]
-    with session_scope() as s:
-        bulk_upsert(s, Stock, stocks, ["symbol"])
-        bulk_upsert(s, Price, prices, ["symbol", "date"])
-        bulk_upsert(s, Score, scores, ["symbol", "model"])
-        bulk_upsert(s, JobState, [{"key": "liquidity", "value": liq, "updated_at": utcnow()}], ["key"])
-    # last_price used for entry prices
-    with session_scope() as s:
-        for st in s.query(Stock).all():
-            st.last_price = s.query(Price.close).filter(Price.symbol == st.symbol).order_by(Price.date.desc()).first()[0]
-    yield
-    Base.metadata.drop_all(engine)
-
 
 @pytest.fixture()
 def client(seeded):
