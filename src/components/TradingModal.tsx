@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import MentorMarkdown from "@/components/MentorMarkdown";
 import { X, Brain, AlertTriangle, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, ShieldCheck } from "lucide-react";
 
 type TradingModalProps = {
@@ -256,7 +257,7 @@ export default function TradingModal({
               <AlertTriangle className="h-3.5 w-3.5" />
               Mentor Feedback
             </div>
-            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">{feedback}</p>
+            <div className="max-h-64 overflow-y-auto pr-1 text-amber-900 dark:text-amber-200"><MentorMarkdown text={feedback} /></div>
           </div>
         )}
 

@@ -31,7 +31,7 @@ The SEBI Shield RK Score is {rk_score}.
 The PL Score is {pl_score}. 
 The user's thesis is: '{user_thesis}'. 
 
-Critique their logic in 3 short sentences. If the RK score is low due to management sanctions, heavily warn them."""
+Critique their logic as exactly 3 numbered points, each ONE short sentence (max 25 words), each starting with a 2-3 word **bold** label, e.g. "1. **Thesis gap**: ...". Put each point on its own line. No intro or closing text. If the RK score is low due to management sanctions, heavily warn them in one of the points."""
 
 class MentorAgent:
     def __init__(self, api_key: str = None):

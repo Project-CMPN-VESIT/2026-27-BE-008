@@ -22,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import TradingModal from "@/components/TradingModal";
+import MentorMarkdown from "@/components/MentorMarkdown";
 import Link from "next/link";
 
 type SearchSuggestion = {
@@ -1139,9 +1140,9 @@ export default function PaperTradingPage() {
                             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1 mb-1">
                               <Brain className="h-3 w-3" /> AI Mentor Critique
                             </span>
-                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                              {entry.ai_feedback}
-                            </p>
+                            <div className="text-slate-700 dark:text-slate-300">
+                              <MentorMarkdown text={entry.ai_feedback} />
+                            </div>
                           </div>
                         </div>
                       </div>
