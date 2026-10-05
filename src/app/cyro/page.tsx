@@ -1,9 +1,14 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePersistentMessages, clearSessionMessages } from "@/hooks/usePersistentMessages";
 import { useTheme } from "next-themes";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ResearchActivityPanel } from "@/components/research/ResearchActivityPanel";
+import { researchActivityReducer, initialResearchState, ResearchActivityState } from "@/components/research/researchActivityReducer";
+import { normalizeResearchEvent } from "@/components/research/researchEventMapper";
+import { CyroResearchOutlookChart, OutlookDomain } from "@/components/research/CyroResearchOutlookChart";
 import {
   Bell,
   Bookmark,
@@ -34,6 +39,7 @@ import {
 } from "lucide-react";
 
 type SourceCitation = {
+  evidenceId?: string;
   agent: string;
   tool_name: string;
   source_type: string;
@@ -41,6 +47,30 @@ type SourceCitation = {
   input_args: Record<string, unknown>;
   excerpt: string;
   timestamp: string;
+};
+
+type ReportClaim = {
+  id: string;
+  text: string;
+  category?: string;
+  stance: string;
+  importance: string;
+  evidence_ids: string[];
+  confidence?: number;
+  limitations?: string[];
+};
+
+type FinalResearchReport = {
+  research_id: string;
+  symbol: string;
+  horizon: string;
+  conclusion: string;
+  confidence: number;
+  summary: string;
+  sections?: Array<{ title?: string; content?: string }>;
+  claims: ReportClaim[];
+  data_limitations?: string[];
+  sources?: unknown[];
 };
 
 type AnalystStatus = {
@@ -95,7 +125,340 @@ type Message = {
   debateCards?: DebateCard[];
   tradePlans?: Record<string, TradePlan>;
   ragUsed?: boolean;
+  activityState?: ResearchActivityState;
+  requestId?: string;
+  researchId?: string;
+  report?: FinalResearchReport;
+  domainClaims?: Record<string, ReportClaim[]>;
 };
+
+function sourceCategory(source: Record<string, unknown>): string {
+  const text = `${source.category ?? ""} ${source.type ?? ""} ${source.title ?? ""}`.toLowerCase();
+  if (text.includes("shareholding") || text.includes("promoter")) return "Shareholding";
+  if (text.includes("corporate") || text.includes("event") || text.includes("news")) return "Events & news";
+  if (text.includes("quote") || text.includes("price") || text.includes("market")) return "Market data";
+  if (text.includes("annual") || text.includes("financial result") || text.includes("financial statement")) return "Financials";
+  if (text.includes("ratio") || text.includes("fundamental")) return "Fundamentals";
+  return "Research evidence";
+}
+
+function sourceProvider(source: Record<string, unknown>): string {
+  const name = String(source.source_name ?? source.label ?? "Source");
+  if (/screener/i.test(name)) return "Screener";
+  if (/upstox/i.test(name)) return "Upstox";
+  if (/nse/i.test(name)) return "NSE";
+  if (/yahoo/i.test(name)) return "Yahoo Finance";
+  return name.replace(/\s*\(.*\)$/, "");
+}
+
+function normalizeSource(source: unknown): SourceCitation {
+  const raw = (source && typeof source === "object" ? source : {}) as Record<string, unknown>;
+  const category = sourceCategory(raw);
+  return {
+    evidenceId: typeof raw.id === "string" ? raw.id : undefined,
+    agent: category,
+    tool_name: sourceProvider(raw),
+    source_type: category,
+    label: sourceProvider(raw),
+    input_args: {},
+    excerpt: String(raw.excerpt ?? ""),
+    timestamp: String(raw.fetched_at ?? raw.timestamp ?? ""),
+  };
+}
+
+function cleanInlineMarkdown(value: string): string {
+  return value
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function reportClaimText(claim: ReportClaim): string {
+  return cleanInlineMarkdown(claim.text
+    .replace(/^\[(BULL_CASE|BASE_CASE|BEAR_CASE)\]\s*/i, "")
+    .replace(/\s*[\[(]-?\d+[\])]\s*$/, "") // Remove parser index artifacts like (5) or [-2]
+  );
+}
+
+type ReportMetric = { label: string; value: string; note: string };
+
+const METRIC_PATTERNS: Array<{ label: string; pattern: RegExp; suffix?: string; note: string }> = [
+  { label: "ROE", pattern: /\bROE\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%", note: "Return on equity" },
+  { label: "ROCE", pattern: /\bROCE\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%", note: "Capital efficiency" },
+  { label: "P/E", pattern: /\bP\/?E\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i, note: "Earnings multiple" },
+  { label: "P/B", pattern: /\bP\/?B\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i, note: "Book-value multiple" },
+  { label: "D/E", pattern: /\bD\/?E\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i, note: "Debt to equity" },
+  { label: "Price", pattern: /(?:LTP|price)\s*(?:of|:|=|at)?\s*(₹\s?[\d,.]+)/i, note: "Reported market price" },
+];
+
+function extractMetrics(claims: ReportClaim[]): ReportMetric[] {
+  const text = claims.map(reportClaimText).join(" \n");
+  const seen = new Set<string>();
+  const metrics: ReportMetric[] = [];
+  for (const metric of METRIC_PATTERNS) {
+    const match = text.match(metric.pattern);
+    if (!match || seen.has(metric.label)) continue;
+    const raw = match[1].replace(/\s/g, "");
+    metrics.push({ label: metric.label, value: metric.suffix && !raw.includes("%") ? `${raw}${metric.suffix}` : raw, note: metric.note });
+    seen.add(metric.label);
+  }
+  return metrics.slice(0, 6);
+}
+
+function claimHeading(claim: ReportClaim): string {
+  const text = reportClaimText(claim);
+  const normalized = text.toLowerCase();
+  const positive = claim.stance.toLowerCase() === "positive";
+
+  if (/\broe\b|\broce\b|profitability|capital efficiency/.test(normalized)) return positive ? "Strong profitability" : "Profitability signal";
+  if (/\bd\/e\b|debt|leverage/.test(normalized)) return positive ? "Conservative leverage" : "Leverage sensitivity";
+  if (/promoter|pledge|governance/.test(normalized)) return positive ? "Stable promoter alignment" : "Promoter alignment";
+  if (/dividend|cash generation|cash flow/.test(normalized)) return positive ? "Cash-return capacity" : "Cash-flow evidence";
+  if (/\bp\/b\b|price.to.book|book value/.test(normalized)) return "Premium book valuation";
+  if (/\bp\/e\b|earnings growth/.test(normalized)) return "Earnings-growth evidence gap";
+  if (/piotroski|financial health/.test(normalized)) return "Financial-health signal";
+  if (/dcf|intrinsic value/.test(normalized)) return "Intrinsic-value evidence gap";
+  if (/contract|deal|catalyst|partnership/.test(normalized)) return "Business catalyst";
+
+  const firstClause = text
+    .replace(/^\s*(?:[-•]|\d+[.)])\s*/, "")
+    .replace(/\s*\(\d+\)\s*$/, "")
+    .split(/[.:;]/)[0]
+    .trim();
+  return firstClause.split(/\s+/).slice(0, 6).join(" ") || "Research finding";
+}
+
+const INSIGHT_METRICS: Array<{ label: string; pattern: RegExp; suffix?: string }> = [
+  { label: "ROE", pattern: /\bROE\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%" },
+  { label: "ROCE", pattern: /\bROCE\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%" },
+  { label: "D/E", pattern: /\bD\/?E\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i },
+  { label: "P/E", pattern: /\bP\/?E\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i },
+  { label: "P/B", pattern: /\bP\/?B\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?)/i },
+  { label: "Promoter", pattern: /promoter(?:\s+ownership|\s+holding)?\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%" },
+  { label: "Pledge", pattern: /(?:pledge|pledging)\s*(?:of|:|=)?\s*(\d+(?:\.\d+)?%?)/i, suffix: "%" },
+];
+
+function insightFacts(claim: ReportClaim): string[] {
+  const text = reportClaimText(claim);
+  return INSIGHT_METRICS.flatMap((metric) => {
+    const match = text.match(metric.pattern);
+    if (!match) return [];
+    const value = match[1].replace(/\s/g, "");
+    return [`${metric.label} ${metric.suffix && !value.includes("%") ? `${value}${metric.suffix}` : value}`];
+  }).slice(0, 2);
+}
+
+function sortClaims(claims: ReportClaim[], limit = 4): ReportClaim[] {
+  const importance = (claim: ReportClaim) => ({ high: 0, medium: 1, low: 2 }[claim.importance.toLowerCase()] ?? 3);
+  return [...claims].sort((a, b) => importance(a) - importance(b)).slice(0, limit);
+}
+
+function briefSummary(summary: string): string {
+  // Return the full summary as requested, do not truncate.
+  return cleanInlineMarkdown(summary).trim();
+}
+
+function domainKeyForAgent(agent: string): string | undefined {
+  const normalized = agent.toLowerCase();
+  if (normalized.includes("fundamental")) return "fundamental";
+  if (normalized.includes("governance") || normalized.includes("filing")) return "governance";
+  if (normalized.includes("technical")) return "technical";
+  if (normalized.includes("sector") || normalized.includes("macro")) return "sector_macro";
+  if (normalized.includes("news") || normalized.includes("catalyst")) return "catalysts";
+  if (normalized.includes("risk") || normalized.includes("contradiction")) return "risk";
+  return undefined;
+}
+
+function sourceForClaims(claims: ReportClaim[], sources: SourceCitation[]): SourceCitation | undefined {
+  const evidenceIds = new Set(claims.flatMap((claim) => claim.evidence_ids));
+  return sources.find((source) => source.evidenceId && evidenceIds.has(source.evidenceId));
+}
+
+function makeDomain(
+  id: string,
+  label: string,
+  claims: ReportClaim[],
+  specialistStatus: string | undefined,
+  sources: SourceCitation[],
+): OutlookDomain {
+  const source = sourceForClaims(claims, sources);
+  if (claims.length > 0) {
+    const stances = new Set(claims.map((claim) => claim.stance.toLowerCase()));
+    const tone = stances.size === 1 && stances.has("positive")
+      ? "positive" as const
+      : stances.size === 1 && (stances.has("negative") || stances.has("bearish"))
+        ? "negative" as const
+        : "neutral" as const;
+    const status = tone === "positive" ? "Positive" : tone === "negative" ? "Bearish" : "Mixed";
+    return { id, label, status, tone, detail: claims.map(reportClaimText).join(" · "), source };
+  }
+  if (specialistStatus === "warning" || specialistStatus === "error") {
+    return { id, label, status: "Unavailable", tone: "unavailable", detail: "This specialist ran but reported unavailable evidence." };
+  }
+  if (specialistStatus === "done") {
+    return { id, label, status: "Limited", tone: "limited", detail: "This specialist ran but did not produce an evidence-backed analytical claim." };
+  }
+  return { id, label, status: "Not assessed", tone: "not-assessed", detail: "This specialist was not routed for this research request." };
+}
+
+function makeRiskDomain(claims: ReportClaim[], riskStatus: string | undefined, sources: SourceCitation[]): OutlookDomain {
+  const source = sourceForClaims(claims, sources);
+  if (claims.length > 0) {
+    const hasNegative = claims.some((claim) => ["negative", "bearish"].includes(claim.stance.toLowerCase()));
+    return { id: "risk", label: "Risk", status: hasNegative ? "Risk flagged" : "Reviewed", tone: hasNegative ? "negative" : "neutral", detail: claims.map(reportClaimText).join(" · "), source };
+  }
+  if (riskStatus === "done") return { id: "risk", label: "Risk", status: "No flags found", tone: "neutral", detail: "The risk and contradiction engine completed without emitting a risk claim." };
+  return { id: "risk", label: "Risk", status: "Not assessed", tone: "not-assessed", detail: "The risk and contradiction engine did not run." };
+}
+
+function InvestmentStance({ conclusion, confidence }: Pick<FinalResearchReport, "conclusion" | "confidence">) {
+  const indeterminate = conclusion.toLowerCase() === "indeterminate";
+  return (
+    <section className={`report-stance ${indeterminate ? "is-indeterminate" : ""}`} aria-label="Investment stance">
+      <div className="stance-header">
+        <span className="stance-label">Investment stance</span>
+        <strong className="stance-value">{conclusion}</strong>
+      </div>
+      <div className="stance-confidence">
+        <span>Evidence confidence</span>
+        <b>{confidence}%</b>
+      </div>
+    </section>
+  );
+}
+
+function ReportHeader({ report, horizon }: { report: FinalResearchReport; horizon: string }) {
+  return (
+    <header className="report-header">
+      <div className="report-company">
+        <h2 className="report-title">{report.symbol}</h2>
+        {report.horizon && <p className="report-horizon">{horizon} View</p>}
+      </div>
+      <InvestmentStance conclusion={report.conclusion} confidence={report.confidence} />
+    </header>
+  );
+}
+
+function ExecutiveTakeaway({ summary }: { summary: string }) {
+  const paragraphs = summary.split(/\n\n+/).filter(Boolean);
+  return (
+    <section className="report-takeaway" aria-labelledby="takeaway-heading">
+      <h3 id="takeaway-heading" className="report-kicker">Executive takeaway</h3>
+      {paragraphs.map((p, i) => (
+        <p key={i}>{cleanInlineMarkdown(p)}</p>
+      ))}
+    </section>
+  );
+}
+
+function KeyMetrics({ metrics }: { metrics: ReportMetric[] }) {
+  if (metrics.length === 0) return null;
+  return (
+    <section className="report-section" aria-labelledby="metrics-heading">
+      <h3 id="metrics-heading" className="report-kicker">Key metrics</h3>
+      <div className="metric-grid">
+        {metrics.map((metric) => (
+          <article className="metric-card" key={metric.label}>
+            <span className="metric-label">{metric.label}</span>
+            <strong className="metric-value">{metric.value}</strong>
+            <small className="metric-note">{metric.note}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ResearchOutlook({ report, horizon, rationale, domains, onSourceClick }: {
+  report: FinalResearchReport;
+  horizon: string;
+  rationale: string;
+  domains: OutlookDomain[];
+  onSourceClick: (source: SourceCitation) => void;
+}) {
+  return <section className="report-section report-outlook" aria-labelledby="outlook-heading"><h3 id="outlook-heading" className="report-kicker">Research outlook</h3><CyroResearchOutlookChart symbol={report.symbol} horizon={horizon} decision={report.conclusion} driver={rationale || report.summary} domains={domains} onSourceClick={onSourceClick} /></section>;
+}
+
+function InsightList({ title, claims, kind }: { title: string; claims: ReportClaim[]; kind: "positive" | "concern" }) {
+  if (claims.length === 0) return null;
+  const mark = kind === "positive" ? "✓" : "!";
+  return <section className="report-section" aria-labelledby={`${kind}-heading`}><h3 id={`${kind}-heading`} className="report-kicker">{title}</h3><div className="finding-grid">{sortClaims(claims).map((claim) => {
+    const facts = insightFacts(claim);
+    return <article className={`finding ${kind}`} key={claim.id}><span className="finding-mark" aria-hidden="true">{mark}</span><div><strong>{claimHeading(claim)}</strong>{facts.length > 0 && <span className="finding-facts">{facts.join(" · ")}</span>}<p>{reportClaimText(claim)}</p></div></article>;
+  })}</div></section>;
+}
+
+function KeyPositives({ claims }: { claims: ReportClaim[] }) {
+  return <InsightList title="Key positives" claims={claims} kind="positive" />;
+}
+
+function KeyConcerns({ claims }: { claims: ReportClaim[] }) {
+  return <InsightList title="Key concerns" claims={claims} kind="concern" />;
+}
+
+function EvidenceGaps({ limitations }: { limitations: string[] }) {
+  if (limitations.length === 0) return null;
+  return <section className="report-section report-limitations" aria-labelledby="gaps-heading"><h3 id="gaps-heading" className="report-kicker">Evidence gaps</h3><ul>{limitations.slice(0, 5).map((item) => <li key={item}><span aria-hidden="true">○</span><p>{cleanInlineMarkdown(item)}</p></li>)}</ul></section>;
+}
+
+function sourceIcon(category: string) {
+  const categoryText = category.toLowerCase();
+  if (categoryText.includes("market")) return <ChartColumn size={13} aria-hidden="true" />;
+  if (categoryText.includes("event") || categoryText.includes("news")) return <Newspaper size={13} aria-hidden="true" />;
+  if (categoryText.includes("shareholding")) return <Wallet size={13} aria-hidden="true" />;
+  if (categoryText.includes("financial") || categoryText.includes("fundamental")) return <FileText size={13} aria-hidden="true" />;
+  return <Globe size={13} aria-hidden="true" />;
+}
+
+function SourceReferences({ sources, onSourceClick }: { sources: SourceCitation[]; onSourceClick: (source: SourceCitation) => void }) {
+  if (sources.length === 0) return null;
+  return <section className="report-sources" aria-labelledby="sources-heading"><h3 id="sources-heading" className="report-kicker">Sources</h3><div className="cite-list">{sources.map((source) => <button type="button" className="cite-card" key={`${source.source_type}:${source.label}`} onClick={() => onSourceClick(source)} aria-label={`Open ${source.source_type} source from ${source.label}`}><span className="cite-icon">{sourceIcon(source.source_type)}</span><span className="cite-copy"><b>{source.source_type}</b><small>{source.label}</small></span></button>)}</div></section>;
+}
+
+function CyroResearchReport({ report, sources, activityState, domainClaims = {}, onSourceClick }: {
+  report: FinalResearchReport;
+  sources: SourceCitation[];
+  activityState?: ResearchActivityState;
+  domainClaims?: Record<string, ReportClaim[]>;
+  onSourceClick: (source: SourceCitation) => void;
+}) {
+  const positives = report.claims.filter((claim) => ["positive", "bullish", "strength", "opportunity"].includes(claim.stance.toLowerCase()));
+  const concerns = report.claims.filter((claim) => ["negative", "bearish", "mixed", "cautionary", "risk"].includes(claim.stance.toLowerCase()));
+  const limitations = Array.from(new Set([
+    ...(report.data_limitations ?? []),
+    ...report.claims.flatMap((claim) => claim.limitations ?? []),
+  ].filter(Boolean)));
+  const sourceReferences = Array.from(new Map(sources.map((source) => [`${source.source_type}:${source.label}`, source])).values());
+  const horizonValue = report.horizon?.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Unspecified";
+  const horizon = horizonValue.toLowerCase() === "unspecified" ? "Research" : horizonValue;
+  const indeterminate = report.conclusion.toLowerCase() === "indeterminate";
+  const metrics = extractMetrics(report.claims);
+  const rationale = cleanInlineMarkdown(report.sections?.find((section) => section.content)?.content ?? "");
+  const specialistStatus = (domain: string) => activityState?.milestones.specialists.subStatuses?.find((item) => domainKeyForAgent(item.id) === domain)?.status;
+  const overviewDomains = [
+    makeDomain("fundamental", "Fundamental", domainClaims.fundamental ?? [], specialistStatus("fundamental"), sources),
+    makeDomain("governance", "Governance", domainClaims.governance ?? [], specialistStatus("governance"), sources),
+    makeDomain("technical", "Technical", domainClaims.technical ?? [], specialistStatus("technical"), sources),
+    makeDomain("sector_macro", "Sector / Macro", domainClaims.sector_macro ?? [], specialistStatus("sector_macro"), sources),
+    makeDomain("catalysts", "Catalysts", domainClaims.catalysts ?? [], specialistStatus("catalysts"), sources),
+    makeRiskDomain(domainClaims.risk ?? [], activityState?.milestones.risk.status, sources),
+  ];
+
+  return (
+    <article className="research-report">
+      <ReportHeader report={report} horizon={horizon} />
+      {indeterminate && <p className="report-status-note">Research completed. The available evidence does not support a sufficiently confident directional investment call.</p>}
+      <ExecutiveTakeaway summary={report.summary} />
+      <ResearchOutlook report={report} horizon={report.horizon} rationale={rationale} domains={overviewDomains} onSourceClick={onSourceClick} />
+      <KeyMetrics metrics={metrics} />
+      <KeyPositives claims={positives} />
+      <KeyConcerns claims={concerns} />
+      <EvidenceGaps limitations={limitations} />
+      <SourceReferences sources={sourceReferences} onSourceClick={onSourceClick} />
+    </article>
+  );
+}
 
 type FiiDiiData = {
   fii_dii_rows?: Array<{ date?: string; fii_net?: number; dii_net?: number }>;
@@ -133,6 +496,8 @@ type AlertItem = {
   type: "info" | "warn" | "error";
   title: string;
   message: string;
+  category?: string;
+  source?: string;
 };
 
 type RightPanelLive = {
@@ -143,16 +508,6 @@ type RightPanelLive = {
   alerts?: AlertItem[] | null;
   loading?: boolean;
 };
-
-const nifty50TickerOptions = [
-  "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
-  "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "MARUTI", "ASIANPAINT", "BAJFINANCE",
-  "HCLTECH", "TITAN", "WIPRO", "NTPC", "POWERGRID", "SUNPHARMA", "ULTRACEMCO",
-  "BAJAJFINSV", "NESTLEIND", "TECHM", "M&M", "ADANIENT", "ONGC", "COALINDIA", "JSWSTEEL",
-  "GRASIM", "TATASTEEL", "DRREDDY", "DIVISLAB", "CIPLA", "TATAMOTORS", "HINDALCO",
-  "APOLLOHOSP", "LTIM", "BPCL", "HEROMOTOCO", "INDUSINDBK", "EICHERMOT", "TATACONSUM",
-  "BRITANNIA", "HDFCLIFE", "SBILIFE", "BAJAJ-AUTO", "UPL", "ADANIPORTS"
-];
 
 type Session = {
   id: number;
@@ -207,57 +562,72 @@ export default function CyroPage() {
   const [stockDocError, setStockDocError] = useState("");
   // activeSessionId must be declared before usePersistentMessages which uses it
   const [activeSessionId, setActiveSessionId] = useState<number>(1);
-  // In-memory messages — starts completely clean and fresh on every page load
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Session-persistent messages — survives page reloads, keyed by activeSessionId
+  const [messages, setMessages] = usePersistentMessages<Message>(activeSessionId, []);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [sessionFilter, setSessionFilter] = useState("");
   const [input, setInput] = useState("");
   const [micOn, setMicOn] = useState(false);
+  const [attachName, setAttachName] = useState("");
   const [activeTab, setActiveTab] = useState<"news" | "alerts" | "flow" | "source">("source");
+  const [quickOn, setQuickOn] = useState<Record<string, boolean>>({
+    live: false,
+    news: false,
+    fundamentals: false,
+    chart: false,
+  });
   const [toastText, setToastText] = useState("");
   const [toastOn, setToastOn] = useState(false);
   // CYRO streaming state
   const [cyroMode, setCyroMode] = useState<CyroMode>("normal");
   const [isStreaming, setIsStreaming] = useState(false);
-  // @ mention picker state
-  const [atPickerOpen, setAtPickerOpen] = useState(false);
-  const [atPickerFilter, setAtPickerFilter] = useState("");
-  const [taggedTicker, setTaggedTicker] = useState<string | null>(null);
-  // Right panel live data
+  // Right panel live data (Week 5)
   const [rightPanel, setRightPanel] = useState<RightPanelLive>({});
   const [selectedSource, setSelectedSource] = useState<SourceCitation | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const msgWrapRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setMounted(true);
-    // Clear any previous stale chat keys from localStorage so each fresh start is completely blank
+    // Hydrate state from localStorage after initial render to avoid hydration mismatch
     try {
-      localStorage.removeItem("cyro_active_session");
-      localStorage.removeItem("cyro_sessions");
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("cyro_session_") || key.startsWith("warroom_session_"))) {
-          localStorage.removeItem(key);
-        }
+      const rawAct = localStorage.getItem("cyro_active_session");
+      if (rawAct) setActiveSessionId(Number(rawAct) || 1);
+    } catch {}
+    try {
+      const rawSess = localStorage.getItem("cyro_sessions");
+      const parsedSess = rawSess ? (JSON.parse(rawSess) as Session[]) : null;
+      if (Array.isArray(parsedSess) && parsedSess.length > 0) {
+        setSessions(parsedSess);
       }
     } catch {}
   }, []);
 
-  const activeSymbol = `NSE_${selectedTicker}`;
-
-
-  // ── Load right-panel live data whenever ticker changes ──
+  // Persist sessions list and active session ID on every change
   useEffect(() => {
-    if (!selectedTicker) {
-      setRightPanel({ loading: false });
-      return;
-    }
+    if (!mounted) return;
+    try { localStorage.setItem("cyro_sessions", JSON.stringify(sessions)); } catch { /* quota */ }
+  }, [sessions, mounted]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    try { localStorage.setItem("cyro_active_session", String(activeSessionId)); } catch { /* quota */ }
+  }, [activeSessionId, mounted]);
+
+  const activeSymbol = selectedTicker ? `NSE_${selectedTicker}` : "";
+
+
+  // ── Week 5: Load right-panel live data whenever ticker changes ──
+  useEffect(() => {
     let alive = true;
+    if (!selectedTicker) {
+      setRightPanel({});
+      return () => { alive = false; };
+    }
     setRightPanel({ loading: true });
 
     const loadRightPanel = async () => {
@@ -300,49 +670,19 @@ export default function CyroPage() {
     return () => { alive = false; clearInterval(t); };
   }, [selectedTicker]);
 
-  // ── @ mention picker filter ────────────────────────────────────
-  const filteredAtOptions = useMemo(() =>
-    atPickerFilter
-      ? nifty50TickerOptions.filter(t => t.toLowerCase().includes(atPickerFilter.toLowerCase())).slice(0, 8)
-      : nifty50TickerOptions.slice(0, 12),
-  [atPickerFilter]);
-
   const handleInputChange = (val: string) => {
     setInput(val);
-    // Detect @ trigger
-    const lastAt = val.lastIndexOf("@");
-    if (lastAt !== -1) {
-      const query = val.slice(lastAt + 1);
-      setAtPickerFilter(query);
-      setAtPickerOpen(true);
-    } else {
-      setAtPickerOpen(false);
-      setAtPickerFilter("");
-    }
-  };
-
-  const selectAtTicker = (ticker: string) => {
-    // Replace the @... fragment at the end of input with @TICKER
-    const lastAt = input.lastIndexOf("@");
-    const newInput = lastAt !== -1
-      ? input.slice(0, lastAt) + `@${ticker} `
-      : input + `@${ticker} `;
-    setInput(newInput);
-    setTaggedTicker(ticker);
-    setSelectedTicker(ticker);
-    setAtPickerOpen(false);
-    setAtPickerFilter("");
-    inputRef.current?.focus();
   };
 
   useEffect(() => {
-    if (!selectedTicker) {
-      setQuote(null);
-      return;
-    }
-
     let alive = true;
     let inFlight = false;
+
+    if (!selectedTicker) {
+      setQuote(null);
+      setQuoteError("");
+      return () => { alive = false; };
+    }
 
     const loadQuote = async () => {
       if (inFlight) {
@@ -383,11 +723,6 @@ export default function CyroPage() {
   }, [activeSymbol, selectedTicker]);
 
   useEffect(() => {
-    if (!selectedTicker) {
-      setStockDocData(null);
-      return;
-    }
-
     let alive = true;
     const controller = new AbortController();
 
@@ -474,11 +809,19 @@ export default function CyroPage() {
       time: nowTime(),
       streaming: true,
       citations: [],
-      analystStatuses: cyroMode === "reasoning"
-        ? ["TechnicalAnalyst","FundamentalAnalyst","OptionsAnalyst",
-           "NewsMacroAnalyst","SentimentAnalyst","SectorRotationAnalyst","RiskManager"]
-            .map(n => ({ name: n, status: "pending" as const }))
-        : [],
+      activityState: { ...initialResearchState },
+      analystStatuses: [
+        "IntentRouter",
+        "ContextBuilder",
+        "QualityGate",
+        "FundamentalAnalyst",
+        "FilingsGovernanceAnalyst",
+        "TechnicalAnalyst",
+        "SectorPeerMacroAnalyst",
+        "NewsCatalystAnalyst",
+        "RiskBearAnalyst",
+        "InvestmentCommittee"
+      ].map(n => ({ name: n, status: "pending" as const })),
     };
 
     setMessages((prev) => [...prev, userMsg, aiMsg]);
@@ -490,11 +833,11 @@ export default function CyroPage() {
     ));
 
     setInput("");
-    setTaggedTicker(null);
+    setAttachName("");
 
     setIsStreaming(true);
 
-    let finalTicker = taggedTicker;
+    let finalTicker: string | null = null;
     // Extract @TICKER manually from text if user typed it without selecting from dropdown
     const atMatch = txt.match(/@([A-Za-z0-9_]+)/);
     if (atMatch) {
@@ -511,11 +854,51 @@ export default function CyroPage() {
     const url = `/api/cyro-chat?${params.toString()}`;
     const es = new EventSource(url);
     esRef.current = es;
+    let cyroRequestId: string | null = null;
+    let cyroResearchId: string | null = null;
+    let isConversationStream = false;
 
     es.onmessage = (ev) => {
       try {
         const event = JSON.parse(ev.data) as Record<string, unknown>;
         const type = event.type as string;
+        const incomingRequestId = typeof event.request_id === "string" ? event.request_id : null;
+        const incomingResearchId = typeof event.research_id === "string" ? event.research_id : null;
+
+        // The UI message association is local, but every graph event must also
+        // belong to the one request/research pair established by `started`.
+        if (cyroRequestId && incomingRequestId && incomingRequestId !== cyroRequestId) return;
+        if (cyroResearchId && incomingResearchId && incomingResearchId !== cyroResearchId) return;
+        if ((cyroRequestId && !incomingRequestId) || (cyroResearchId && !incomingResearchId)) {
+          if (type !== "error") return;
+        }
+        if (incomingRequestId) cyroRequestId = incomingRequestId;
+        if (incomingResearchId) cyroResearchId = incomingResearchId;
+
+        if (incomingRequestId || incomingResearchId) {
+          setMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId ? {
+              ...m,
+              requestId: incomingRequestId ?? m.requestId,
+              researchId: incomingResearchId ?? m.researchId,
+            } : m
+          ));
+        }
+
+        if (type === "started" && event.mode === "conversation") {
+          isConversationStream = true;
+        }
+
+        const normalized = normalizeResearchEvent(type, event);
+        if (normalized.type !== "noop") {
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiMsgId || !m.activityState) return m;
+            return {
+              ...m,
+              activityState: researchActivityReducer(m.activityState, { type: "PROCESS_EVENT", payload: normalized })
+            };
+          }));
+        }
 
         if (type === "ticker_resolved") {
           // Update selected ticker if backend resolved a different one
@@ -545,6 +928,16 @@ export default function CyroPage() {
             );
             return { ...m, analystStatuses: statuses };
           }));
+        }
+
+        else if (type === "agent_claims_ready") {
+          const domain = domainKeyForAgent(String(event.agent ?? ""));
+          const claims = Array.isArray(event.claims) ? event.claims as ReportClaim[] : [];
+          if (!domain) return;
+          setMessages((prev) => prev.map((m) => m.id === aiMsgId ? {
+            ...m,
+            domainClaims: { ...(m.domainClaims ?? {}), [domain]: claims },
+          } : m));
         }
 
         else if (type === "source_captured") {
@@ -581,7 +974,7 @@ export default function CyroPage() {
             if (m.id !== aiMsgId) return m;
             
             const currentCards = m.debateCards ?? [];
-            let updatedCards = [...currentCards];
+            const updatedCards = [...currentCards];
             
             if (step === "bull_r1" || step === "bear_r1") {
               let r1Card = updatedCards.find(c => c.type === "round" && c.round === 1);
@@ -616,19 +1009,32 @@ export default function CyroPage() {
           }));
         }
 
+        else if (type === "final_report") {
+          const report = event.report as FinalResearchReport | undefined;
+          if (!report || !report.symbol) return;
+          const sources = (report.sources ?? []).map(normalizeSource);
+          setMessages((prev) => prev.map((m) => m.id === aiMsgId ? {
+            ...m,
+            report,
+            signal: report.conclusion,
+            text: report.summary,
+            citations: sources,
+          } : m));
+        }
+
         else if (type === "final_decision") {
           const signal = (event.signal as string) ?? "HOLD";
           const summary = (event.summary as string) ?? "";
-          const sources = (event.sources_used as SourceCitation[]) ?? [];
+          const sources = ((event.sources_used as unknown[]) ?? []).map(normalizeSource);
           const tradePlans = (event.trade_plans as Record<string, TradePlan>) ?? {};
           setMessages((prev) => prev.map((m) => {
             if (m.id !== aiMsgId) return m;
             return {
               ...m,
-              text: summary,
+              text: m.report ? m.text : summary,
               signal,
               streaming: false,
-              citations: [...(m.citations ?? []), ...sources],
+              citations: m.report ? m.citations : [...(m.citations ?? []), ...sources],
               tradePlans,
               ragUsed: !!(event.rag_used),
             };
@@ -640,13 +1046,16 @@ export default function CyroPage() {
           setMessages((prev) => prev.map((m) => {
             if (m.id !== aiMsgId) return m;
             
-            const isBrokerError = errMsg.includes("401") || errMsg.toLowerCase().includes("unauthorized") || errMsg.toLowerCase().includes("fyers");
+            const isBrokerError = event.error_type === "BROKER_AUTH_ERROR";
+            const isUnsupportedComparison = event.error_type === "MULTI_STOCK_UNSUPPORTED";
             
             return {
               ...m,
               text: isBrokerError 
                 ? `❌ **Broker Connection Failed**\n\nThe CYRO engine encountered an authentication error with your broker. This usually happens when your access token has expired. Please click the **Broker Settings** button in the sidebar to re-authenticate.\n\n_Technical details: ${errMsg}_`
-                : `❌ ${errMsg}`,
+                : isUnsupportedComparison
+                  ? `ℹ️ ${errMsg}`
+                : `❌ **CYRO Research Pipeline Error**\n\n${event.error_type ? "The research pipeline could not complete this request." : errMsg}`,
               streaming: false
             };
           }));
@@ -655,9 +1064,16 @@ export default function CyroPage() {
         }
 
         else if (type === "done") {
+          const conversationConclusion = event.conclusion as string | undefined;
           setIsStreaming(false);
           setMessages((prev) => prev.map((m) =>
-            m.id === aiMsgId ? { ...m, streaming: false } : m
+            m.id === aiMsgId
+              ? {
+                  ...m,
+                  text: isConversationStream && conversationConclusion ? conversationConclusion : m.text,
+                  streaming: false,
+                }
+              : m
           ));
           es.close();
           esRef.current = null;
@@ -725,6 +1141,20 @@ export default function CyroPage() {
     showToast("Response regenerated");
   };
 
+  const toggleActivityExpand = (id: number) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === id && m.activityState) {
+          return {
+            ...m,
+            activityState: researchActivityReducer(m.activityState, { type: "TOGGLE_EXPAND" }),
+          };
+        }
+        return m;
+      })
+    );
+  };
+
   const rateMessage = (id: number, positive: boolean) => {
     setMessages((prev) =>
       prev.map((m) =>
@@ -741,10 +1171,9 @@ export default function CyroPage() {
   };
 
   const newChat = () => {
+    // Clear stored history for the current session before switching
+    clearSessionMessages(activeSessionId);
     setMessages([]);
-    setSelectedTicker("");
-    setQuote(null);
-    setRightPanel({});
     const id = Date.now();
     const next: Session = {
       id,
@@ -755,6 +1184,14 @@ export default function CyroPage() {
     setSessions((prev) => [next, ...prev]);
     setActiveSessionId(id);
     showToast("New research session");
+  };
+
+  const onAttach = () => fileRef.current?.click();
+
+  const onFileChange = (file?: File | null) => {
+    if (!file) return;
+    setAttachName(file.name);
+    showToast("Attachment added");
   };
 
   const onExport = () => {
@@ -804,19 +1241,20 @@ export default function CyroPage() {
               New Research
             </button>
           </div>
-          {selectedTicker && quote && (
-            <div className="wl-block">
-              <div className="wl-top">
-                <span className="block-label">Active Stock</span>
-              </div>
-              <div className="wl-chip-wrap">
-                <div className={`wl-chip ${priceUp ? "up" : "dn"}`}>
-                  {quote.symbol}
-                  <span>{quote.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}</span>
-                </div>
+
+          <div className="wl-block">
+            <div className="wl-top">
+              <span className="block-label">Live Quote</span>
+              <button className="wl-add-btn" onClick={() => showToast("Add watch item")}>+
+              </button>
+            </div>
+            <div className="wl-chip-wrap">
+              <div className={`wl-chip ${priceUp ? "up" : "dn"}`}>
+                {quote?.symbol ?? "No stock selected"}
+                <span>{quote?.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}</span>
               </div>
             </div>
-          )}
+          </div>
 
           <div className="sb-search">
             <div className="sf">
@@ -845,13 +1283,8 @@ export default function CyroPage() {
                   className="xbtn"
                   onClick={(ev) => {
                     ev.stopPropagation();
+                    clearSessionMessages(s.id);
                     setSessions((prev) => prev.filter((x) => x.id !== s.id));
-                    if (activeSessionId === s.id) {
-                      setMessages([]);
-                      setSelectedTicker("");
-                      setQuote(null);
-                      setRightPanel({});
-                    }
                     showToast("Session removed");
                   }}
                 >
@@ -865,36 +1298,26 @@ export default function CyroPage() {
         <main className="chat-main">
           <div className="topbar">
             <div className="tb-l">
-              {selectedTicker && quote ? (
-                <div className="live-ticker">
-                  <span className="dot" />
-                  <span className="sym">{quote.symbol}</span>
-                  <span className="price">{quote.ltp ? `Rs ${quote.ltp.toFixed(2)}` : "--"}</span>
-                  <span className={`chg ${priceUp ? "up" : "dn"}`}>
-                    {quote.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}
-                  </span>
-                </div>
-              ) : (
-                <div className="live-ticker" style={{ opacity: 0.75 }}>
-                  <span className="sym" style={{ fontWeight: 500 }}>Type @ticker in chat to research</span>
-                </div>
-              )}
-              <div className="model-pill" onClick={() => showToast("CYRO AI Engine")}>
-                CYRO Analyst <ChevronDown size={12} />
+              <div className="live-ticker">
+                <span className="dot" />
+                <span className="sym">{quote?.symbol ?? "Select a stock"}</span>
+                <span className="price">{quote?.ltp ? `Rs ${quote.ltp.toFixed(2)}` : "--"}</span>
+                <span className={`chg ${priceUp ? "up" : "dn"}`}>
+                  {quote?.dayChangePerc !== undefined ? `${priceUp ? "+" : ""}${quote.dayChangePerc.toFixed(2)}%` : "--"}
+                </span>
               </div>
-              <select
+              <div className="model-pill" onClick={() => showToast("Model switched")}>CYRO Analyst <ChevronDown size={12} /></div>
+              <input
                 value={selectedTicker}
                 onChange={(e) => setSelectedTicker(e.target.value)}
                 className="company-picker"
-              >
-                <option value="">Select Stock...</option>
-                {nifty50TickerOptions.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </select>
+                placeholder="Ticker (optional)"
+                aria-label="Optional stock ticker"
+              />
             </div>
             <div className="tb-r">
-              <button className="tb-btn" onClick={() => showToast("Search chat")}><Search size={15} /></button>
+              <button className="tb-btn" onClick={() => showToast("Search chat")}
+              ><Search size={15} /></button>
               <button className="tb-btn" onClick={onExport}><File size={15} /></button>
               <button className="tb-btn" onClick={onCopyLink}><Share2 size={15} /></button>
               <button className="tb-btn" onClick={() => showToast("Notifications")}><Bell size={15} /></button>
@@ -910,45 +1333,7 @@ export default function CyroPage() {
 
           <div className="messages" ref={msgWrapRef}>
             {messages.length === 0 ? (
-              <div className="empty-state-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "360px", padding: "40px 16px", textAlign: "center" }}>
-                <div style={{ width: "52px", height: "52px", borderRadius: "16px", background: "linear-gradient(135deg, #2563eb, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 25px rgba(37,99,235,0.25)", marginBottom: "16px" }}>
-                  <Sparkles size={26} color="#fff" />
-                </div>
-                <h2 style={{ fontSize: "19px", fontWeight: "800", color: "var(--text-1)", margin: "0 0 6px" }}>CYRO AI Research Engine</h2>
-                <p style={{ fontSize: "13px", color: "var(--text-3)", maxWidth: "440px", margin: "0 0 24px", lineHeight: "1.5" }}>
-                  Autonomous multi-analyst research for Indian equities. Tag any stock with <strong style={{ color: "var(--accent)" }}>@ticker</strong> to generate institutional-grade trade plans and fundamental breakdowns.
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", maxWidth: "560px" }}>
-                  {[
-                    { label: "Analyze @RELIANCE", prompt: "@RELIANCE Provide a full institutional research breakdown and trade plan" },
-                    { label: "Evaluate @TATASTEEL", prompt: "@TATASTEEL Should I buy, hold, or sell at current levels?" },
-                    { label: "Check @HDFCBANK", prompt: "@HDFCBANK Key risks, valuations, and upside catalysts" },
-                    { label: "Scan @INFY", prompt: "@INFY Technical breakdown, support & resistance levels" },
-                  ].map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => {
-                        setInput(chip.prompt);
-                        inputRef.current?.focus();
-                      }}
-                      style={{
-                        padding: "8px 14px",
-                        borderRadius: "10px",
-                        background: "var(--bg-raised)",
-                        border: "1px solid var(--border-mid)",
-                        color: "var(--text-2)",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      {chip.label} →
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <div className="empty-state">Conversation is empty. Start with the input below.</div>
             ) : (
               messages.map((msg) => (
                 <div key={msg.id} className={`msg-row ${msg.role === "user" ? "user-row" : ""}`}>
@@ -958,7 +1343,7 @@ export default function CyroPage() {
                   <div className="msg-col">
                     <div className="msg-sender">
                       {msg.role === "assistant" ? "CYRO" : "You"} · {msg.time}
-                      {msg.signal && (
+                      {msg.signal && !msg.report && (
                         <span className={`signal-badge signal-${msg.signal.toLowerCase()}`}>
                           {msg.signal.replace("_", " ")}
                         </span>
@@ -966,22 +1351,18 @@ export default function CyroPage() {
                       {msg.streaming && <span className="streaming-dot">●</span>}
                     </div>
 
-                    {/* Analyst progress pills (reasoning mode) */}
-                    {msg.analystStatuses && msg.analystStatuses.length > 0 && (
-                      <div className="analyst-pills">
-                        {msg.analystStatuses.map((s) => (
-                          <span key={s.name} className={`a-pill a-pill-${s.status}`} title={s.verdict ? `${s.verdict} (${s.confidence}%)` : s.name}>
-                            {s.name.replace("Analyst", "").replace("Manager", " Mgr")}
-                            {s.status === "done" && s.verdict && (
-                              <span className={`a-pill-verdict ${s.verdict?.toLowerCase()}`}> {s.verdict}</span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
+                    {/* Research Activity Panel */}
+                    {msg.activityState && (
+                      <ResearchActivityPanel 
+                        state={msg.activityState} 
+                        onToggleExpand={() => toggleActivityExpand(msg.id)} 
+                      />
                     )}
 
-                    <div className={`bubble markdown-content ${msg.role === "assistant" ? "ai-bubble" : "user-bubble"}`}>
-                      {msg.text ? (
+                    <div className={`bubble ${msg.report ? "report-bubble" : "markdown-content"} ${msg.role === "assistant" ? "ai-bubble" : "user-bubble"}`}>
+                      {msg.report ? (
+                        <CyroResearchReport report={msg.report} sources={msg.citations ?? []} activityState={msg.activityState} domainClaims={msg.domainClaims} onSourceClick={(source) => { setSelectedSource(source); setActiveTab("source"); }} />
+                      ) : msg.text ? (
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {msg.text}
                         </ReactMarkdown>
@@ -989,15 +1370,14 @@ export default function CyroPage() {
                     </div>
 
                     {/* Source Citation Cards */}
-                    {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+                    {msg.role === "assistant" && !msg.report && msg.citations && msg.citations.length > 0 && (
                       <div className="citations">
                         <div className="cite-label">Sources used ({msg.citations.length})</div>
                         <div className="cite-list">
                           {msg.citations.slice(0, 6).map((c, i) => (
                             <div key={i} className="cite-card" onClick={() => { setSelectedSource(c); setActiveTab("source"); }}>
-                              <div className="cite-agent">{c.agent}</div>
+                              <div className="cite-agent">{c.source_type}</div>
                               <div className="cite-source">{c.label}</div>
-                              {c.excerpt && <div className="cite-excerpt">{c.excerpt.slice(0, 120)}…</div>}
                             </div>
                           ))}
                         </div>
@@ -1034,19 +1414,25 @@ export default function CyroPage() {
                     {msg.role === "assistant" && msg.debateCards && msg.debateCards.length > 0 && (
                       <div className="debate-section">
                         {msg.debateCards.map((card, i) => (
-                          <div key={i} className="debate-card">
+                          <div key={i} className={`debate-card dc-${card.type}`}>
                             {card.type === "round" && (
                               <>
-                                <div className="dc-label">Round {card.round}</div>
+                                <div className="dc-label">⚔️ Bull vs Bear — Round {card.round}</div>
                                 <div className="dc-row">
-                                  <div className="dc-side bull"><div className="dc-side-label">🐂 Bull Case</div><div className="dc-text">{card.bull}</div></div>
-                                  <div className="dc-side bear"><div className="dc-side-label">🐻 Bear Case</div><div className="dc-text">{card.bear}</div></div>
+                                  <div className="dc-side bull">
+                                    <div className="dc-side-label">🟢 Bull</div>
+                                    <div className="dc-text">{card.bull}</div>
+                                  </div>
+                                  <div className="dc-side bear">
+                                    <div className="dc-side-label">🔴 Bear</div>
+                                    <div className="dc-text">{card.bear}</div>
+                                  </div>
                                 </div>
                               </>
                             )}
                             {card.type === "rebuttal" && (
                               <>
-                                <div className="dc-label">Round {card.round} — Rebuttal</div>
+                                <div className="dc-label">🔄 Rebuttals — Round {card.round}</div>
                                 <div className="dc-row">
                                   <div className="dc-side bull"><div className="dc-side-label">Bull Rebuttal</div><div className="dc-text">{card.bull}</div></div>
                                   <div className="dc-side bear"><div className="dc-side-label">Bear Rebuttal</div><div className="dc-text">{card.bear}</div></div>
@@ -1104,38 +1490,76 @@ export default function CyroPage() {
             )}
           </div>
 
-          <form className="input-area" onSubmit={sendMsg} style={{ padding: "14px 20px" }}>
-            {/* @ mention picker dropdown */}
-            {atPickerOpen && (
-              <div className="at-picker">
-                <div className="at-picker-hint">@ Tag a stock</div>
-                {filteredAtOptions.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className="at-item"
-                    onMouseDown={(e) => { e.preventDefault(); selectAtTicker(t); }}
-                  >
-                    <span className="at-sym">{t}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+          <form className="input-area" onSubmit={sendMsg}>
+            <div className="quick-bar">
+              {/* Mode toggle */}
+              <button
+                type="button"
+                className={`q-pill mode-pill ${cyroMode === "normal" ? "on" : ""}`}
+                onClick={() => setCyroMode("normal")}
+                title="Normal mode: fast single-analyst research (~15s)"
+              >
+                ⚡ Normal
+              </button>
+              <button
+                type="button"
+                className={`q-pill mode-pill ${cyroMode === "reasoning" ? "on reasoning" : ""}`}
+                onClick={() => setCyroMode("reasoning")}
+                title="Reasoning mode: 7 analysts + debate (~3min)"
+              >
+                🧠 Deep
+              </button>
+              <div className="q-divider" />
+              <button
+                type="button"
+                className={`q-pill ${quickOn.live ? "on" : ""}`}
+                onClick={() => setQuickOn((p) => ({ ...p, live: !p.live }))}
+              >
+                <Globe size={11} /> Live Data
+              </button>
+              <button
+                type="button"
+                className={`q-pill ${quickOn.news ? "on" : ""}`}
+                onClick={() => setQuickOn((p) => ({ ...p, news: !p.news }))}
+              >
+                <Newspaper size={11} /> News
+              </button>
+              <button
+                type="button"
+                className={`q-pill ${quickOn.fundamentals ? "on" : ""}`}
+                onClick={() => setQuickOn((p) => ({ ...p, fundamentals: !p.fundamentals }))}
+              >
+                <Wallet size={11} /> Fundamentals
+              </button>
+              <button
+                type="button"
+                className={`q-pill ${quickOn.chart ? "on" : ""}`}
+                onClick={() => setQuickOn((p) => ({ ...p, chart: !p.chart }))}
+              >
+                <ChartColumn size={11} /> Chart
+              </button>
+              <button type="button" className="q-pill" onClick={onAttach}><Paperclip size={11} /> Attach</button>
+              <button type="button" className="q-pill" onClick={() => showToast("Screener module")}><FileSearch size={11} /> Screener</button>
+            </div>
 
-            <div className="input-shell" style={{ padding: "6px 14px" }}>
+            {attachName ? <div className="att-prev">{attachName}</div> : null}
+
+            <div className="input-shell">
+              <button type="button" className="in-left" onClick={onAttach}>
+                <Plus size={18} />
+              </button>
               <input
                 ref={inputRef}
                 className="msg-inp"
                 value={input}
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") { setAtPickerOpen(false); return; }
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (!atPickerOpen) sendMsg();
+                    sendMsg();
                   }
                 }}
-                placeholder="Ask CYRO about any stock... (type @ to tag a ticker)"
+                placeholder="Ask CYRO about a stock... (type @ to tag a ticker)"
               />
               <div className="inp-right">
                 {isStreaming && (
@@ -1165,6 +1589,15 @@ export default function CyroPage() {
               </div>
             </div>
 
+            <input
+              ref={fileRef}
+              type="file"
+              hidden
+              onChange={(e) => {
+                onFileChange(e.target.files?.[0]);
+                e.currentTarget.value = "";
+              }}
+            />
           </form>
         </main>
 
@@ -1178,15 +1611,10 @@ export default function CyroPage() {
           <div className="rp-body">
 
 
-            {/* Flow Intelligence Tab */}
+            {/* Week 5: Flow Intelligence Tab */}
             {activeTab === "flow" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading flow data…</div>}
-                {!selectedTicker && !rightPanel.loading && (
-                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
-                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> in chat to view live FII/DII flows, India VIX, and options chain metrics.
-                  </div>
-                )}
                 {/* VIX */}
                 {rightPanel.fiiDii?.vix != null && (
                   <div className="card">
@@ -1208,7 +1636,7 @@ export default function CyroPage() {
                 {/* Options data */}
                 {rightPanel.options && (
                   <div className="card">
-                    <div className="lbl">📈 Options — {selectedTicker}</div>
+                    <div className="lbl">📈 Options — {selectedTicker || "Selected stock"}</div>
                     <div className="txt">
                       PCR: <strong>{rightPanel.options.pcr?.toFixed(2) ?? "--"}</strong> · {rightPanel.options.pcr_interpretation}
                     </div>
@@ -1220,43 +1648,37 @@ export default function CyroPage() {
                     )}
                   </div>
                 )}
+                {!rightPanel.loading && !rightPanel.fiiDii && (
+                  <div className="txt">Flow data unavailable (CYRO backend offline?)</div>
+                )}
               </>
             ) : null}
             {activeTab === "alerts" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading alerts…</div>}
-                {!selectedTicker && !rightPanel.loading && (
-                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
-                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> to inspect regulatory filings and disparity alerts.
-                  </div>
-                )}
                 {rightPanel.alerts && rightPanel.alerts.length > 0 ? (
                   rightPanel.alerts.map((alert, i) => (
-                    <div key={i} className={`card ${alert.type === 'warn' ? 'warn' : 'info'}`}>
+                    <div key={i} className={`card ${alert.type === 'error' ? 'crit' : alert.type === 'warn' ? 'warn' : 'info'}`} title={alert.source || undefined}>
                       <div className="lbl">
-                        {alert.type === 'warn' ? <Bell size={12} /> : <Shield size={12} />} {alert.title}
+                        {alert.type === 'info' ? <Shield size={12} /> : <Bell size={12} />} {alert.title}
+                        {alert.category ? <span className="alert-cat">{alert.category}</span> : null}
                       </div>
                       <div className="txt">{alert.message}</div>
                     </div>
                   ))
                 ) : (
-                  selectedTicker && !rightPanel.loading && <div className="txt">No active alerts for {selectedTicker}.</div>
+                  !rightPanel.loading && <div className="txt">{selectedTicker ? `No active alerts for ${selectedTicker}.` : "Select a stock to view alerts."}</div>
                 )}
               </>
             ) : null}
             {activeTab === "news" ? (
               <>
                 {rightPanel.loading && <div className="txt">Loading news…</div>}
-                {!selectedTicker && !rightPanel.loading && (
-                  <div className="txt" style={{ color: "var(--text-3)", padding: "12px 4px" }}>
-                    Select a stock or type <strong style={{ color: "var(--accent)" }}>@ticker</strong> to stream corporate filings and live news.
-                  </div>
-                )}
                 {rightPanel.news?.announcements && rightPanel.news.announcements.length > 0 && (
                   <div className="card">
                     <div className="lbl">📣 Recent Announcements</div>
-                    {rightPanel.news.announcements.map((a, i) => (
-                      <div key={i} className="src-item" style={{ cursor: "default", border: "none", padding: "4px 0", background: "transparent" }}>
+                    {rightPanel.news.announcements.map((a: any, i: number) => (
+                      <div key={a.item_id || `${a.title}-${a.published_at || i}`} className="src-item" style={{ cursor: "default", border: "none", padding: "4px 0", background: "transparent" }}>
                         <strong style={{color: "var(--text-1)"}}>{a.title}</strong>
                         {a.summary && <div className="txt" style={{marginTop: "2px"}}>{a.summary}</div>}
                         <div className="txt" style={{fontSize: "9px", color: "var(--text-3)"}}>{a.published_at}</div>
@@ -1267,8 +1689,8 @@ export default function CyroPage() {
                 {rightPanel.news?.news && rightPanel.news.news.length > 0 && (
                   <div className="card">
                     <div className="lbl"><Newspaper size={12} /> Latest News</div>
-                    {rightPanel.news.news.map((n, i) => (
-                      <a key={i} href={n.url || "#"} target="_blank" rel="noreferrer" className="src-item" style={{ display: "block", cursor: n.url ? "pointer" : "default" }}>
+                    {rightPanel.news.news.map((n: any, i: number) => (
+                      <a key={n.item_id || `${n.title}-${n.published_at || i}`} href={n.url || "#"} target="_blank" rel="noreferrer" className="src-item" style={{ display: "block", cursor: n.url ? "pointer" : "default" }}>
                         <strong style={{color: "var(--text-1)"}}>{n.title}</strong>
                         {n.summary && <div className="txt" style={{marginTop: "2px"}}>{n.summary}</div>}
                         <div className="txt" style={{fontSize: "9px", color: "var(--text-3)", marginTop: "4px"}}>{n.source} {n.published_at ? `· ${n.published_at}` : ""}</div>
@@ -1276,8 +1698,8 @@ export default function CyroPage() {
                     ))}
                   </div>
                 )}
-                {selectedTicker && !rightPanel.loading && !rightPanel.news?.news?.length && !rightPanel.news?.announcements?.length && (
-                  <div className="txt">No recent news or announcements found for {selectedTicker}.</div>
+                {!rightPanel.loading && !rightPanel.news?.news?.length && !rightPanel.news?.announcements?.length && (
+                  <div className="txt">No recent news or announcements found.</div>
                 )}
               </>
             ) : null}
@@ -1286,18 +1708,8 @@ export default function CyroPage() {
                 {selectedSource ? (
                   <div className="card">
                     <div className="lbl"><FileText size={12} /> Source Details</div>
-                    <div className="txt"><strong>Agent:</strong> {selectedSource.agent}</div>
-                    <div className="txt"><strong>Tool:</strong> {selectedSource.tool_name}</div>
-                    <div className="txt"><strong>Type:</strong> {selectedSource.source_type}</div>
-                    <div className="txt"><strong>Label:</strong> {selectedSource.label}</div>
-                    {selectedSource.input_args && Object.keys(selectedSource.input_args).length > 0 && (
-                      <div className="txt">
-                        <strong>Input Args:</strong>
-                        <pre style={{ background: 'var(--bg-surface)', padding: '6px', borderRadius: '4px', fontSize: '10px', overflowX: 'auto', marginTop: '4px' }}>
-                          {JSON.stringify(selectedSource.input_args, null, 2)}
-                        </pre>
-                      </div>
-                    )}
+                    <div className="txt"><strong>{selectedSource.source_type}</strong> · {selectedSource.label}</div>
+                    <div className="txt" style={{ color: 'var(--text-3)', marginTop: '3px' }}>Used as supporting research evidence.</div>
                     {selectedSource.excerpt && (
                       <div className="txt">
                         <strong>Excerpt:</strong>
@@ -1313,22 +1725,22 @@ export default function CyroPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="txt" style={{ marginBottom: '10px', color: "var(--text-3)" }}>Click on a research citation in the chat to view complete evidence here.</div>
+                  <div className="txt" style={{ marginBottom: '10px' }}>Select a source reference in the research report to view its supporting detail.</div>
                 )}
 
                 <div className="card src">
-                  <div className="lbl"><FileText size={12} /> Source Evidence</div>
+                  <div className="lbl"><FileText size={12} /> Research Evidence</div>
                   {latestSources.length > 0 ? (
                     latestSources.map((c, i) => (
                       <div key={i} className="src-item" onClick={() => setSelectedSource(c)}>
-                        <strong>{c.agent}</strong> | {c.label}
+                        <strong>{c.source_type}</strong> · {c.label}
                         <div className="txt" style={{ marginTop: '4px', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: 'var(--text-3)' }}>
                           {c.excerpt ? c.excerpt.slice(0, 150) + "..." : "No excerpt available"}
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="txt" style={{ color: "var(--text-3)" }}>No citations in the active conversation yet.</div>
+                    <div className="txt">No source snippets used in the latest response.</div>
                   )}
                 </div>
               </>
@@ -1337,7 +1749,7 @@ export default function CyroPage() {
         </aside>
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         .cyro-page {
           height: calc(100vh - 56px);
           overflow: hidden;
@@ -1641,7 +2053,7 @@ export default function CyroPage() {
         .msg-row {
           display: flex;
           gap: 10px;
-          width: min(760px, calc(100% - 28px));
+          width: min(920px, calc(100% - 36px));
           margin: 0 auto 10px;
         }
         .msg-row.user-row {
@@ -1675,7 +2087,7 @@ export default function CyroPage() {
         .av-you {
           font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
-        .msg-col { max-width: 80%; }
+        .msg-col { max-width: 90%; min-width: 0; }
         .msg-sender { font-size: 11px; color: var(--text-3); margin-bottom: 3px; }
         .bubble {
           border-radius: 14px;
@@ -1851,6 +2263,7 @@ export default function CyroPage() {
         .signal-buy, .signal-strong_buy { background: rgba(16,185,129,0.15); color: #10b981; }
         .signal-sell { background: rgba(239,68,68,0.15); color: #ef4444; }
         .signal-hold { background: rgba(234,179,8,0.15); color: #eab308; }
+        .signal-indeterminate { background: rgba(148,163,184,0.16); color: #94a3b8; }
         /* Streaming indicator */
         .streaming-dot {
           display: inline-block;
@@ -1923,11 +2336,10 @@ export default function CyroPage() {
         }
         .cite-card {
           background: var(--bg-raised);
-          border: 1px solid var(--border-faint);
-          border-radius: 7px;
-          padding: 5px 8px;
-          max-width: 220px;
-          min-width: 120px;
+          border: 1px solid var(--border-mid);
+          border-radius: 999px;
+          padding: 6px 10px;
+          max-width: 260px;
           cursor: pointer;
           transition: background 0.15s, border-color 0.15s;
         }
@@ -1935,26 +2347,59 @@ export default function CyroPage() {
           background: var(--bg-hover);
           border-color: var(--border-mid);
         }
-        .cite-agent {
-          font-size: 9px;
-          color: var(--accent);
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .cite-source {
-          font-size: 10px;
-          color: var(--text-2);
-          font-weight: 600;
-          margin-top: 1px;
-        }
-        .cite-excerpt {
-          font-size: 9px;
-          color: var(--text-3);
-          margin-top: 3px;
-          line-height: 1.4;
-          font-family: ui-monospace, monospace;
-        }
+        button.cite-card { text-align: left; font: inherit; }
+        .cite-card > span { display: block; color: var(--text-2); font-size: 10px; font-weight: 700; line-height: 1.25; }
+        .cite-agent { font-size: 9px; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        .cite-source { font-size: 10px; color: var(--text-2); font-weight: 600; margin-top: 1px; }
+        .research-report { display: flex; flex-direction: column; gap: 22px; width: min(100%, 780px); padding: 22px; border: 1px solid var(--border-faint); border-radius: 16px; background: var(--bg-surface); }
+        .report-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border-faint); }
+        .report-company { min-width: 0; }.report-title { margin: 0; font-size: 28px; line-height: 1.05; letter-spacing: -0.03em; font-weight: 800; color: var(--text-1); }
+        .report-horizon { margin: 6px 0 0; font-size: 14px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+        .report-stance { min-width: 190px; padding: 14px 16px; border: 1px solid var(--border-mid); border-radius: 12px; background: var(--bg-raised); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .stance-header { display: flex; flex-direction: column; gap: 4px; }
+        .stance-label, .stance-confidence span { color: var(--text-3); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+        .stance-value { color: var(--text-1); font-size: 18px; line-height: 1.15; letter-spacing: .02em; font-weight: 800; text-transform: uppercase; }
+        .stance-confidence { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--border-faint); }.stance-confidence b { color: var(--text-1); font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+        .report-stance.is-indeterminate { border-color: rgba(202, 138, 4, .32); }
+        .report-kicker { margin: 0; font-size: 10px; color: var(--text-3); font-weight: 750; text-transform: uppercase; letter-spacing: .115em; }
+        .report-status-note { margin: -8px 0 0; max-width: 610px; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+        .report-takeaway { display: grid; gap: 8px; max-width: 680px; border-left: 2px solid var(--accent); padding: 3px 0 3px 14px; }
+        .report-takeaway p, .report-rationale p { margin: 0; color: var(--text-1); font-size: 15px; line-height: 1.6; }
+        .report-section { display: grid; gap: 10px; }.report-section > .report-kicker, .report-sources > .report-kicker { padding-bottom: 7px; border-bottom: 1px solid var(--border-faint); }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; }
+        .metric-card { min-width: 0; padding: 16px; border: 1px solid var(--border-faint); border-radius: 12px; background: var(--bg-raised); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.02); transition: transform 0.15s, box-shadow 0.15s; }
+        .metric-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .metric-label { color: var(--text-3); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+        .metric-value { color: var(--text-1); font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -.03em; margin-top: auto; }
+        .metric-note { color: var(--text-2); font-size: 12px; line-height: 1.3; font-weight: 500; }
+        .finding-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+        .finding { min-width: 0; padding: 14px 16px; border-radius: 12px; background: var(--bg-raised); border-left: 3px solid var(--border-faint); display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; transition: background 0.15s; }
+        .finding:hover { background: var(--bg-hover); }
+        .finding.positive { border-left-color: var(--green); }
+        .finding.concern { border-left-color: #d97706; }
+        .finding-mark { width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
+        .positive .finding-mark { color: var(--green); background: rgba(16,185,129,.12); }
+        .concern .finding-mark { color: #a96d15; background: rgba(183,121,31,.12); }
+        .finding strong { display: block; color: var(--text-1); font-size: 15px; line-height: 1.4; font-weight: 700; }
+        .finding-facts { display: block; margin-top: 4px; color: var(--accent); font-size: 12px; font-weight: 600; }
+        .finding p { max-width: 680px; margin: 6px 0 0; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+        .report-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+        .report-section li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 12px; background: var(--bg-raised); border-radius: 8px; }
+        .report-section li span { color: var(--text-3); font-size: 12px; margin-top: 2px; }
+        .report-section li p { margin: 0; }
+        .report-limitations { padding: 16px; border: 1px solid var(--border-faint); border-radius: 12px; background: var(--bg-surface); }
+        .report-limitations ul { color: var(--text-3); }
+        .report-rationale { padding-top: 2px; }
+        .report-sources { display: grid; gap: 12px; padding-top: 8px; }
+        .report-sources .cite-list { display: flex; flex-wrap: wrap; gap: 10px; }
+        .report-sources .cite-card { display: inline-flex; align-items: center; gap: 10px; max-width: 260px; min-height: 48px; padding: 8px 12px; border-radius: 12px; background: var(--bg-raised); border: 1px solid var(--border-faint); transition: all 0.15s; }
+        .report-sources .cite-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+        .report-sources .cite-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .cite-icon { display: inline-flex; color: var(--accent); background: var(--accent-dim); padding: 6px; border-radius: 8px; }
+        .cite-copy { display: grid !important; gap: 2px; text-align: left; }
+        .cite-copy b { color: var(--text-3); font-size: 10px; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: .06em; }
+        .cite-copy small { color: var(--text-1); font-size: 12px; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @media (max-width: 560px) { .msg-row { width: min(100% - 20px, 920px); }.msg-col { max-width: 100%; }.research-report { padding: 15px; gap: 19px; }.report-header { flex-direction: column; }.report-stance { width: 100%; }.metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.report-sources .cite-card { max-width: 100%; }.finding-grid { grid-template-columns: 1fr; } }
         .att-prev {
           border: 1px solid var(--border-faint);
           background: var(--bg-raised);
@@ -2096,6 +2541,21 @@ export default function CyroPage() {
         .warn {
           border-color: rgba(239, 68, 68, 0.25);
           background: rgba(239, 68, 68, 0.08);
+        }
+        .crit {
+          border-color: rgba(220, 38, 38, 0.45);
+          background: rgba(220, 38, 38, 0.14);
+        }
+        .alert-cat {
+          margin-left: auto;
+          padding: 1px 6px;
+          border-radius: 999px;
+          font-size: 9px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          background: var(--bg-surface);
+          color: var(--text-3);
+          border: 1px solid var(--border-faint);
         }
         .info {
           border-color: rgba(16, 185, 129, 0.25);
