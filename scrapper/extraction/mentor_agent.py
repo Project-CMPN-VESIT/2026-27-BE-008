@@ -22,7 +22,8 @@ load_dotenv(find_dotenv(usecwd=True), override=True)
 logger = logging.getLogger(__name__)
 MistralClientClass = _resolve_mistral_client_class()
 
-MODEL = "mistral-small-latest"
+# mistral-small-latest has zero quota on this plan (HTTP 429); override with MISTRAL_MODEL if yours differs.
+MODEL = os.getenv("MISTRAL_MODEL", "ministral-8b-latest")
 
 MENTOR_PROMPT = """You are the FinPilot AI Mentor, evaluating a user's simulated trade using Warren Buffett's framework. 
 The user wants to {action} {quantity} shares of {ticker}. 
