@@ -74,6 +74,43 @@ cyro_security_master.db
 /chroma_db/
 opt-expiry.json
 pipeline_data.db
+src/data/nifty_shorts_cache.json
+
+# Video files & generated video renders
+*.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+public/videos/
+video-engine/frontend/public/videos/
+video-engine/backend/output/
+videos/
+
+# Ephemeral generated TTS audio & scene images (preserve static audio like background-music.mp3)
+public/audio/*/
+public/images/nifty-shorts/
+video-engine/frontend/public/audio/*/
+video-engine/frontend/public/audio/test_*
+video-engine/frontend/public/audio/scene_*.mp3
+video-engine/frontend/public/images/nifty-shorts/
+
+# AI models & ONNX binary weights
+video-engine/backend/models/
+*.onnx
+*.bin
+
+# Video engine dependencies & environments
+video-engine/**/node_modules/
+video-engine/**/venv/
+video-engine/**/.venv/
+video-engine/**/__pycache__/
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
 
 # Claude / Editor artifacts
 .claude/
+

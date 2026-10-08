@@ -1,0 +1,31 @@
+{
+  "name": "finpilot-video-engine-frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "remotion": "remotion"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.440",
+    "@remotion/tailwind": "^4.0.440",
+    "framer-motion": "^11.2.6",
+    "postcss-loader": "^8.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.440",
+    "webpack": "^5.105.4"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.1"
+  }
+}

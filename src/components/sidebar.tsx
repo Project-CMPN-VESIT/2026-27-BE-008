@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Zap,
   Activity,
-  Map
+  Map,
+  Flame
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/heatmap", label: "Heatmap", icon: Map },
   { href: "/results-calendar", label: "Results Calendar", icon: CalendarDays },
   { href: "/paper-trading", label: "Paper Trading", icon: Activity },
+  { href: "/nifty-shorts", label: "Nifty Shorts", icon: Flame },
 ];
 
 export function Sidebar() {

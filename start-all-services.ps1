@@ -22,6 +22,7 @@ $indiaTradeCliDir = Join-Path $repoRoot "india-trade-cli"
 $newsFeedDir = Join-Path $repoRoot "news-feed"
 $paperTradingDir = Join-Path $repoRoot "paper-trading"
 $scrapperDir = Join-Path $repoRoot "scrapper"
+$videoEngineDir = Join-Path $repoRoot "video-engine\backend"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Python executable not found at $pythonExe. Create/activate your project .venv first."
@@ -31,7 +32,7 @@ if (-not (Test-Path $activateScript)) {
     throw "Activation script not found at $activateScript."
 }
 
-foreach ($path in @($frontendDir, $indiaTradeCliDir, $newsFeedDir, $paperTradingDir, $scrapperDir)) {
+foreach ($path in @($frontendDir, $indiaTradeCliDir, $newsFeedDir, $paperTradingDir, $scrapperDir, $videoEngineDir)) {
     if (-not (Test-Path $path)) {
         throw "Required directory not found: $path"
     }
@@ -151,6 +152,11 @@ $screenerApiCommand = @"
 & '$safePython' run.py serve-screener
 "@
 
+$videoEngineCommand = @"
+& '$safeActivate'
+& '$safePython' -m uvicorn main:app --host 127.0.0.1 --port 8500 --reload
+"@
+
 # ── ChromaDB server (port 8100) ───────────────────────────────────────────────
 $safeChromaPath = $chromaDbPath.Replace("'", "''")
 $chromaExe = (Join-Path $repoRoot "$venvDirName\Scripts\chroma.exe").Replace("'", "''")
@@ -266,6 +272,7 @@ Start-ServiceTerminal -Title "FinPilot News Feed Backend (8002)" -WorkingDirecto
 Start-ServiceTerminal -Title "FinPilot Paper Trading Backend (8001)" -WorkingDirectory $paperTradingDir -Command $paperTradingCommand
 Start-ServiceTerminal -Title "FinPilot Regulatory API (8000)" -WorkingDirectory $scrapperDir -Command $regulatoryApiCommand
 Start-ServiceTerminal -Title "FinPilot Screener API (8003)" -WorkingDirectory $scrapperDir -Command $screenerApiCommand
+Start-ServiceTerminal -Title "FinPilot Video Engine (8500)" -WorkingDirectory $videoEngineDir -Command $videoEngineCommand
 Start-ServiceTerminal -Title "FinPilot Regulatory Scraper" -WorkingDirectory $scrapperDir -Command $pipelineScraperCommand
 Start-ServiceTerminal -Title "CYRO Structured Log Viewer" -WorkingDirectory $repoRoot -Command $cyroLogCommand
 
@@ -277,8 +284,9 @@ Write-Host "4. News Feed backend   -> http://localhost:8002"
 Write-Host "5. Paper Trading       -> http://localhost:8001"
 Write-Host "6. Regulatory API      -> http://localhost:8000"
 Write-Host "7. Screener API        -> http://localhost:8003"
-Write-Host "8. Regulatory scraper  -> pipeline all at startup, then recurring"
-Write-Host "9. CYRO Log Viewer     -> logs/cyro.ndjson viewer"
+Write-Host "8. Video Engine (MP4)  -> http://localhost:8500"
+Write-Host "9. Regulatory scraper  -> pipeline all at startup, then recurring"
+Write-Host "10. CYRO Log Viewer    -> logs/cyro.ndjson viewer"
 Write-Host ""
 Write-Host "ChromaDB data path: $chromaDbPath" -ForegroundColor DarkGray
 Write-Host "(Override via env: `$env:CHROMA_DB_PATH = 'D:\your\path')" -ForegroundColor DarkGray

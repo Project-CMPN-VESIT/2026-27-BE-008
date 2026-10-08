@@ -1,4 +1,5 @@
 import TradingView from "@mathieuc/tradingview";
+import { getMarketSessionInfo } from "@/lib/marketHours";
 
 type SearchResult = {
   id: string;
@@ -210,7 +211,10 @@ class MarketDataService {
   
   private reconnectTimer: NodeJS.Timeout | null = null;
   private staleCheckTimer: NodeJS.Timeout | null = null;
-  private STALE_THRESHOLD_MS = 60000; // 1 minute
+  private STALE_THRESHOLD_MS = 300000; // 5 minutes (market-aware)
+  private isReconnecting = false;
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 5;
 
   constructor() {
     this.startStaleCheck();
@@ -226,20 +230,31 @@ class MarketDataService {
 
   private connect() {
     if (this.client) {
-      this.client.end();
+      const oldClient = this.client;
+      this.client = null;
+      try {
+        oldClient.onError(() => {});
+        oldClient.onDisconnected(() => {});
+        oldClient.end();
+      } catch (e) {
+        // ignore
+      }
     }
     
-    this.client = new TradingView.Client();
-    this.quoteSession = new this.client.Session.Quote({ fields: "all" });
+    const clientInstance = new TradingView.Client();
+    this.client = clientInstance;
+    this.quoteSession = new clientInstance.Session.Quote({ fields: "all" });
     this.isConnected = true;
     
     // Handle global client errors/disconnects
-    this.client.onError((...error: any[]) => {
+    clientInstance.onError((...error: any[]) => {
+      if (this.client !== clientInstance) return;
       console.error("[MarketDataService] Client error:", error);
       this.scheduleReconnect();
     });
 
-    this.client.onDisconnected(() => {
+    clientInstance.onDisconnected(() => {
+      if (this.client !== clientInstance) return;
       console.warn("[MarketDataService] Client disconnected");
       this.isConnected = false;
       this.scheduleReconnect();
@@ -254,14 +269,28 @@ class MarketDataService {
   }
 
   private scheduleReconnect() {
+    if (this.isReconnecting) return;
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      console.warn(
+        `[MarketDataService] Max reconnect attempts (${this.MAX_RECONNECT_ATTEMPTS}) reached. Connection paused until next active request.`
+      );
+      this.isConnected = false;
+      return;
+    }
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
     }
     this.isConnected = false;
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+
+    const delay = Math.min(30000, 5000 * Math.pow(1.5, this.reconnectAttempts - 1));
     this.reconnectTimer = setTimeout(() => {
-      console.log("[MarketDataService] Reconnecting...");
+      this.isReconnecting = false;
+      console.log(`[MarketDataService] Reconnecting (attempt ${this.reconnectAttempts})...`);
       this.connect();
-    }, 5000);
+    }, delay);
   }
 
   public subscribe(symbols: string[]) {
@@ -348,6 +377,7 @@ class MarketDataService {
     };
 
     this.store.set(symbol, updated);
+    this.reconnectAttempts = 0; // Successful receipt resets backoff counter
 
     // Notify listeners
     this.listeners.forEach(listener => listener(updated));
@@ -359,25 +389,31 @@ class MarketDataService {
 
   private startStaleCheck() {
     this.staleCheckTimer = setInterval(() => {
+      // Check market session status - outside 09:00-15:30 IST Mon-Fri, quotes are static
+      const session = getMarketSessionInfo();
+      if (!session.isLive) {
+        // Market is closed, static quotes are completely expected and valid
+        return;
+      }
+
       const now = Date.now();
       let allStale = true;
       let hasData = false;
       
-      for (const [symbol, quote] of this.store.entries()) {
+      for (const [, quote] of this.store.entries()) {
         hasData = true;
-        if (now - quote.updatedAt > this.STALE_THRESHOLD_MS) {
-          console.warn(`[MarketDataService] Data for ${symbol} is stale (last updated ${now - quote.updatedAt}ms ago)`);
-        } else {
+        if (now - quote.updatedAt <= this.STALE_THRESHOLD_MS) {
           allStale = false;
+          break;
         }
       }
       
-      // If we have active subs, data, and ALL data is stale, we might be disconnected silently
-      if (this.activeSubscriptions.size > 0 && hasData && allStale && this.isConnected) {
-        console.warn("[MarketDataService] All data is stale. Forcing reconnect...");
+      // Only during live market hours, if we have active subscriptions and zero updates for 5+ min
+      if (this.activeSubscriptions.size > 0 && hasData && allStale && this.isConnected && !this.isReconnecting) {
+        console.warn("[MarketDataService] All data is stale during live market session (>5m). Forcing reconnect...");
         this.scheduleReconnect();
       }
-    }, 30000); // Check every 30s
+    }, 60000); // Check every 60s
   }
 
   public cleanup() {

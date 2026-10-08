@@ -1,0 +1,178 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:        #0a0b0d;
+  --surface:   #111318;
+  --card:      #181c24;
+  --border:    #252a35;
+  --amber:     #f5a623;
+  --amber-dim: #b8741a;
+  --green:     #1fd97a;
+  --red:       #ff4d4d;
+  --blue:      #4d9fff;
+  --muted:     #6b7280;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: #e8eaf0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  margin: 0;
+}
+
+/* Grid noise overlay */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(245,166,35,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,166,35,.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Subtle scanlines for the phone frame */
+.scanlines {
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,.03) 3px, rgba(0,0,0,.03) 6px
+  );
+}
+
+/* Bar fill animation triggered via inline style */
+.bar-fill-anim {
+  transition: width 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ── Fade up ──────────────────────────────────────────────────────────── */
+@keyframes fadeUpIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fadeUpIn 0.55s ease forwards; }
+.animate-fade-up-delay { animation: fadeUpIn 0.55s 0.2s ease both; }
+
+/* ── Shimmer ──────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.shimmer-bar {
+  position: relative; overflow: hidden;
+}
+.shimmer-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Glow pulse (price direction arrows) ─────────────────────────────── */
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
+  50%      { filter: drop-shadow(0 0 14px currentColor) drop-shadow(0 0 24px currentColor); }
+}
+.animate-glow-pulse {
+  animation: glowPulse 1.8s ease-in-out infinite;
+}
+
+/* ── Gradient sweep (intro backgrounds) ──────────────────────────────── */
+@keyframes gradientSweep {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-gradient-sweep {
+  background-size: 200% 200%;
+  animation: gradientSweep 6s ease infinite;
+}
+
+/* ── Float (ambient particle dots) ───────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); opacity: 0.3; }
+  25%      { transform: translateY(-15px) translateX(5px); opacity: 0.7; }
+  50%      { transform: translateY(-8px) translateX(-3px); opacity: 0.5; }
+  75%      { transform: translateY(-20px) translateX(8px); opacity: 0.8; }
+}
+
+/* ── Logo shimmer text ───────────────────────────────────────────────── */
+@keyframes logoShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-logo-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--amber) 0%,
+    #ffe082 30%,
+    var(--amber) 60%,
+    #fff8e1 80%,
+    var(--amber) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: logoShimmer 3s linear infinite;
+}
+
+/* ── Count up number styling ─────────────────────────────────────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Unsplash background image layer ─────────────────────────────────── */
+.scene-bg-image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  z-index: 1;
+  transition: opacity 0.8s ease;
+}
+
+/* ── Single-line subtitle strip ─────────────────────────────────────── */
+.scene-subtitle {
+  width: 100%;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.96);
+  text-align: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(7, 10, 16, 0.62);
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Audio wave indicator ────────────────────────────────────────────── */
+@keyframes audioWave {
+  0%, 100% { transform: scaleY(0.3); }
+  50%      { transform: scaleY(1); }
+}
+.audio-wave-bar {
+  width: 2px;
+  height: 12px;
+  background: var(--amber);
+  border-radius: 1px;
+  animation: audioWave 0.6s ease-in-out infinite;
+}

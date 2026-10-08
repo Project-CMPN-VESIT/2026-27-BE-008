@@ -1,6 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:is(.dark, .dark *));
 
 @theme inline {
   --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -42,32 +43,32 @@ body.sidebar-collapsed .app-shell {
   }
 }
 
-/* â”€â”€ Light mode professional card styling â”€â”€ */
-:root:not(:where(.dark, .dark *)) .bg-white {
+/* ── Light mode professional card styling ── */
+:root:not(:is(.dark, .dark *)) .bg-white {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
 }
 
-:root:not(:where(.dark, .dark *)) table {
+:root:not(:is(.dark, .dark *)) table {
   border-color: #cbd5e1;
 }
 
 /* Stronger light-mode table header */
-:root:not(:where(.dark, .dark *)) thead tr {
+:root:not(:is(.dark, .dark *)) thead tr {
   background-color: #f8fafc;
   border-bottom: 2px solid #cbd5e1;
 }
 
 /* Light mode sidebar & top bar stronger presence */
-:root:not(:where(.dark, .dark *)) aside {
+:root:not(:is(.dark, .dark *)) aside {
   box-shadow: 1px 0 4px rgba(0, 0, 0, 0.06);
 }
 
-:root:not(:where(.dark, .dark *)) header {
+:root:not(:is(.dark, .dark *)) header {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 /* Light mode page background texture */
-:root:not(:where(.dark, .dark *)) .bg-grid-pattern {
+:root:not(:is(.dark, .dark *)) .bg-grid-pattern {
   background-color: #f8fafc;
 }
 
@@ -162,3 +163,120 @@ body.sidebar-collapsed .app-shell {
   background-color: rgba(148, 163, 184, 0.1);
   font-weight: 600;
 }
+
+/* ── Video Engine Custom Styling & Fidelity to et-video-engine ── */
+.font-display {
+
+  font-family: 'Bebas Neue', sans-serif !important;
+}
+
+/* Color classes used by video engine visual components */
+.text-amber { color: #f5a623 !important; }
+.bg-amber { background-color: #f5a623 !important; }
+.bg-amber\/10 { background-color: rgba(245, 166, 35, 0.1) !important; }
+.border-amber { border-color: #f5a623 !important; }
+.border-amber\/30 { border-color: rgba(245, 166, 35, 0.3) !important; }
+
+.text-green { color: #1fd97a !important; }
+.bg-green { background-color: #1fd97a !important; }
+.bg-green\/10 { background-color: rgba(31, 217, 122, 0.1) !important; }
+.border-green { border-color: #1fd97a !important; }
+.border-green\/30 { border-color: rgba(31, 217, 122, 0.3) !important; }
+
+.text-red { color: #ff4d4d !important; }
+.bg-red { background-color: #ff4d4d !important; }
+.bg-red\/10 { background-color: rgba(255, 77, 77, 0.1) !important; }
+.border-red { border-color: #ff4d4d !important; }
+.border-red\/30 { border-color: rgba(255, 77, 77, 0.3) !important; }
+
+.text-muted { color: #8892b0 !important; }
+.bg-muted { background-color: #8892b0 !important; }
+.bg-muted\/10 { background-color: rgba(136, 146, 176, 0.1) !important; }
+.border-muted { border-color: #8892b0 !important; }
+.border-muted\/30 { border-color: rgba(136, 146, 176, 0.3) !important; }
+
+.scanlines {
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,.04) 3px, rgba(0,0,0,.04) 6px
+  );
+}
+
+.scene-bg-image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  z-index: 1;
+  transition: opacity 0.8s ease;
+}
+
+.scene-subtitle {
+  width: 100%;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.96);
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(7, 10, 16, 0.75);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes audioWave {
+  0%, 100% { transform: scaleY(0.3); }
+  50%      { transform: scaleY(1); }
+}
+
+.audio-wave-bar {
+  width: 2px;
+  height: 12px;
+  background: #f5a623;
+  border-radius: 1px;
+  animation: audioWave 0.6s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
+  50%      { filter: drop-shadow(0 0 14px currentColor) drop-shadow(0 0 24px currentColor); }
+}
+.animate-glow-pulse {
+  animation: glowPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes gradientSweep {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.animate-gradient-sweep {
+  background-size: 200% 200%;
+  animation: gradientSweep 6s ease infinite;
+}
+
+@keyframes logoShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-logo-shimmer {
+  background: linear-gradient(
+    90deg,
+    #f5a623 0%,
+    #ffe082 30%,
+    #f5a623 60%,
+    #fff8e1 80%,
+    #f5a623 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: logoShimmer 3s linear infinite;
+}
+
