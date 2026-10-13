@@ -261,6 +261,11 @@ from baskets.api import router as _baskets_router
 
 app.include_router(_baskets_router)
 
+# ── CYRO conversational agent (chat, sessions, memory) ───────
+from cyro_chat.api import router as _cyro_chat_router
+
+app.include_router(_cyro_chat_router)
+
 
 
 @app.get("/health", tags=["System"])
