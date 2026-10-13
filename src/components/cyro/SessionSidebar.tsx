@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import type { SessionSummary } from "./useCyroChat";
 
 function bucket(iso: string): string {
@@ -77,10 +77,18 @@ export function SessionSidebar({
                     <div className="cy-item-sub">{s.focus.length ? s.focus.join(" · ") : s.preview || "No messages yet"}</div>
                   </>
                 )}
-                <button className="cy-item-del" aria-label={`Delete ${s.title}`}
-                        onClick={(e) => { e.stopPropagation(); if (confirm("Delete this chat?")) onDelete(s.id); }}>
-                  <Trash2 size={14} />
-                </button>
+                {editing !== s.id && (
+                  <div className="cy-item-acts">
+                    <button aria-label={`Rename ${s.title}`} title="Rename"
+                            onClick={(e) => { e.stopPropagation(); setEditing(s.id); setDraft(s.title); }}>
+                      <Pencil size={13} />
+                    </button>
+                    <button className="del" aria-label={`Delete ${s.title}`} title="Delete"
+                            onClick={(e) => { e.stopPropagation(); if (confirm("Delete this chat?")) onDelete(s.id); }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

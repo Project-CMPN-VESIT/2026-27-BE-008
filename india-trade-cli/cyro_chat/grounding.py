@@ -113,6 +113,10 @@ def tidy(text: str, max_bold: int = 3) -> str:
     t = re.sub(r"\n+\s*[-*_]{3,}\s*(?=\n|$)", "\n", t)
     t = re.sub(r"(?is)\n+\s*(?:\*\*)?(?:suggested )?(?:follow[- ]?ups?|next steps|what to explore next|you (?:might|could) also)"
                r"[^\n]*\n.*$", "", t)
+    t = re.sub(r"\s*\((?:from|per|in|based on) (?:the )?DATA\)", "", t)             # never leak the prompt's vocabulary
+    t = re.sub(r"\b(?:from|per|in|based on) (?:the )?DATA\b,?\s*", "", t)
+    # an engagement question tacked onto the last paragraph
+    t = re.sub(r"(?<=[.!?])\s+(?:Would you like|Want me to|Should we|Do you want|Shall I)\b[^.?!\n]*\?\s*$", "", t)
     paras = t.split("\n\n")
     if len(paras) > 1 and _TAIL_Q.match(paras[-1].strip().lstrip("*_ ")) and len(paras[-1]) < 220:
         paras = paras[:-1]

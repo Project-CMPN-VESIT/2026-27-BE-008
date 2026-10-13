@@ -234,6 +234,10 @@ def _validate_plan(p: Plan, message: str, tickers: List[str], focus: List[str], 
         p.intent = "report"
     elif p.intent == "report":                      # asked for a report but it cannot run (no single company)
         p.intent = "stock_qa" if p.tickers else "general"
+    if p.tickers and p.intent in ("general", "stock_qa") and not p.wants_report:
+        p.intent = "stock_qa"                      # a named company always gets live data behind the answer
+        if "stock_snapshot" not in p.tools:
+            p.tools = ["stock_snapshot"] + p.tools
     if p.intent != "report" and not p.tools:
         p.tools = _default_tools(p)
     return p
@@ -255,6 +259,7 @@ Hard rules:
 - Every number you state must appear in DATA. Never cite a figure from memory: no peer averages, historical
   averages, targets, or other companies' ratios unless they are in DATA. If a figure you'd like isn't there, say it
   isn't available rather than estimating.
+- When the user asks about a company, mention its current price (DATA "price", in rupees) and market cap if present.
 - Never recommend specific stocks, thresholds or numbers unless DATA contains them.
 - Investor scores are rule-based lenses (Buffett, Lynch, Jhunjhunwala, 100 Baggers, CANSLIM), not predictions.
 
@@ -295,7 +300,12 @@ def build_messages(message: str, history: List[Dict[str, Any]], mem: Dict[str, A
     sys = (f"{_PERSONA}\n" + (f"\nFOR THIS MESSAGE: {note}\n" if note else "") + f"\nTODAY: {today}\n\nUSER_PROFILE:\n{memory.describe(mem)}\n"
            f"FOCUS (companies in the current conversation): {', '.join(focus) or 'none'}\n"
            + (f"EARLIER CHATS (for continuity only): {json.dumps(past, default=str)}\n" if past else "")
-           + (f"\nDATA (computed by CYRO tools just now):\n{_compact(data)}\n" if data else "\nDATA: none needed for this message.\n"))
+           + (f"\nDATA (computed by CYRO tools just now):\n{_compact(data)}\n" if data else "\nDATA: none for this message.\n")
+           + ("\nNo live figures were retrieved. State NO prices, market caps, ratios, growth rates, dividends or any other "
+              "financial numbers. If the user needs figures, say you could not fetch them right now and suggest retrying.\n"
+              if not any(r["ok"] for r in results) and (plan.tickers or plan.intent in ("stock_qa", "compare", "sector", "discovery", "portfolio", "market", "basket")) else
+              "\nNo company figures are available: do not quote prices, ratios or other financial numbers.\n"
+              if not any(r["ok"] for r in results) else ""))
     msgs: List[llm.Message] = [("system", sys)]
     msgs += _history_for_prompt(history, 10)
     msgs.append(("user", message))
@@ -314,6 +324,14 @@ def fallback_answer(plan: Plan, results: List[Dict[str, Any]], llm_down: bool = 
         d = r["data"]
         if r["name"] == "stock_snapshot":
             lines.append(f"**{d['name']} ({d['symbol']})** · {d['sector']} · {d['size']}")
+            m = d.get("metrics") or {}
+            facts = [f"Price ₹{d['price']:,.2f}"] if d.get("price") else []
+            for key, label in (("mcap_cr", "Market cap ₹{:,.0f} Cr"), ("pe", "P/E {:.1f}"), ("roe", "ROE {:.1f}%"),
+                               ("ret_12m", "12-month return {:+.1f}%")):
+                if m.get(key) is not None:
+                    facts.append(label.format(m[key]))
+            if facts:
+                lines.append(" · ".join(facts))
             lines.append("\n| Investor lens | Score | Rating |\n|---|---|---|")
             for s in d["investor_scores"]:
                 lines.append(f"| {s['investor']} | {s['score']:.0f} | {s['band']} |" if s["score"] is not None else f"| {s['investor']} | n/a | n/a |")
@@ -533,36 +551,22 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
         # a lone report-request without a report runner or ticker still gets a normal answer
     # 3. answer
     msgs = build_messages(message, history, mem, plan, results, store.recent_user_topics(user_id, sid), focus)
-    has_data = any(r["ok"] for r in results)
     answer = ""
     try:
-        if has_data:
-            # Facts matter more than typing effects: generate fully, verify every figure, then reveal.
-            yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "running"})
+        # Facts matter more than typing effects: generate fully, verify every figure, then reveal.
+        # Applies with or without tool data: with none, any financial figure is by definition ungrounded.
+        yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "running"})
 
-            def produce(emit):
-                return _grounded_answer(msgs, results, message, history)
+        def produce(emit):
+            return _grounded_answer(msgs, results, message, history)
 
-            async for kind, val in _threaded(produce):
-                if kind == "result":
-                    answer = val
-            yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "done"})
-            for chunk in _chunks(answer):
-                yield _sse({"type": "delta", "text": chunk})
-                await asyncio.sleep(0.012)
-        else:
-            parts: List[str] = []
-
-            def gen(emit):
-                for piece in llm.stream_text(msgs):
-                    emit({"type": "delta", "text": piece})
-
-            async for kind, val in _threaded(gen):
-                if kind == "event":
-                    parts.append(val["text"])
-                    yield _sse(val)
-            answer = grounding.tidy("".join(parts))
-            yield _sse({"type": "final_text", "text": answer})
+        async for kind, val in _threaded(produce):
+            if kind == "result":
+                answer = val
+        yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "done"})
+        for chunk in _chunks(answer):
+            yield _sse({"type": "delta", "text": chunk})
+            await asyncio.sleep(0.012)
     except Exception as exc:                                       # noqa: BLE001
         logger.warning("[CyroChat] answer generation failed: %s", exc)
         answer = fallback_answer(plan, results)
@@ -599,7 +603,8 @@ def _grounded_answer(msgs: List[llm.Message], results: List[Dict[str, Any]], mes
                      history: List[Dict[str, Any]]) -> str:
     """Generate, verify every number against DATA, regenerate once if needed, scrub what's still unsupported."""
     allowed = grounding.data_numbers([r["data"] for r in results if r["ok"]])
-    extra = [message] + [m["content"] for m in history[-10:]]
+    # only what the user themselves said counts as a source: earlier assistant text must not vouch for itself
+    extra = [message] + [m["content"] for m in history[-10:] if m["role"] == "user"]
     text = llm.complete_text(msgs)
     bad = grounding.ungrounded(text, allowed, extra)
     if bad:

@@ -24,7 +24,10 @@
 
   height: calc(100vh - 56px);
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr) 328px;
+  --side-w: 244px;
+  --ctx-w: 300px;
+  grid-template-columns: var(--side-w) minmax(0, 1fr) var(--ctx-w);
+  grid-template-areas: "side main ctx";
   background: var(--bg-base);
   color: var(--text-1);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -53,9 +56,21 @@
 .cyro-root *, .cyro-root *::before, .cyro-root *::after { box-sizing: border-box; }
 .cyro-root button { font: inherit; color: inherit; cursor: pointer; }
 .cyro-root :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.cyro-root textarea:focus-visible, .cyro-root .cy-search input:focus-visible { outline: none; }
 
-@media (max-width: 1280px) { .cyro-root { grid-template-columns: 248px minmax(0, 1fr); } .cy-context { display: none; } }
-@media (max-width: 820px) { .cyro-root { grid-template-columns: minmax(0, 1fr); } .cy-side { display: none; } }
+.cy-side { grid-area: side; }
+.cy-main { grid-area: main; }
+.cy-context { grid-area: ctx; }
+/* panels can be folded away; the context panel is folded by default on narrower screens */
+.cyro-root.side-off { --side-w: 0px; }
+.cyro-root.side-off .cy-side { display: none; }
+.cyro-root.ctx-off { --ctx-w: 0px; }
+.cyro-root.ctx-off .cy-context { display: none; }
+@media (max-width: 1499px) {
+  .cyro-root:not(.ctx-on) { --ctx-w: 0px; }
+  .cyro-root:not(.ctx-on) .cy-context { display: none; }
+}
+@media (max-width: 820px) { .cyro-root { --side-w: 0px; --ctx-w: 0px; } .cy-side, .cy-context { display: none; } }
 
 /* ── left: chats ─────────────────────────────────────────────────────────────────────────────────── */
 .cy-side { background: var(--bg-surface); border-right: 1px solid var(--border-faint); display: flex; flex-direction: column; min-height: 0; }
@@ -71,20 +86,24 @@
 .cy-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
 .cy-list { flex: 1; overflow-y: auto; padding: 4px 8px 12px; }
 .cy-group { padding: 12px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); }
-.cy-item { position: relative; display: block; width: 100%; text-align: left; padding: 9px 36px 9px 12px; border-radius: 10px; border: 1px solid transparent; background: transparent; }
+.cy-item { position: relative; display: block; width: 100%; text-align: left; padding: 9px 62px 9px 12px; border-radius: 10px; border: 1px solid transparent; background: transparent; }
 .cy-item:hover { background: var(--bg-hover); }
 .cy-item.on { background: var(--accent-dim); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .cy-item-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cy-item-sub { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cy-item-del { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0; border: none; background: transparent; color: var(--text-3); padding: 6px; border-radius: 8px; }
-.cy-item:hover .cy-item-del, .cy-item:focus-within .cy-item-del { opacity: 1; }
-.cy-item-del:hover { color: var(--red); background: var(--bg-raised); }
+.cy-item-acts { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; }
+.cy-item:hover .cy-item-acts, .cy-item:focus-within .cy-item-acts, .cy-item.on .cy-item-acts { opacity: 1; }
+.cy-item-acts button { border: none; background: transparent; color: var(--text-3); padding: 5px; border-radius: 7px; display: grid; place-items: center; }
+.cy-item-acts button:hover { color: var(--text-1); background: var(--bg-raised); }
+.cy-item-acts button.del:hover { color: var(--red); }
 .cy-item-edit { width: 100%; border: 1px solid var(--accent); background: var(--bg-input); color: var(--text-1); border-radius: 8px; padding: 5px 8px; font-size: 13px; }
 .cy-empty-list { padding: 24px 16px; text-align: center; color: var(--text-3); font-size: 13px; }
 
 /* ── center: conversation ─────────────────────────────────────────────────────────────────────────── */
 .cy-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-base); }
 .cy-head { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border-faint); background: var(--bg-surface); min-height: 54px; }
+.cy-icon-btn { border: 1px solid transparent; background: transparent; color: var(--text-2); width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.cy-icon-btn:hover { background: var(--bg-hover); color: var(--text-1); }
 .cy-head-title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cy-focus { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 .cy-focus-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: 12px; font-weight: 700; }
@@ -147,20 +166,22 @@
 .cy-error { color: var(--red); }
 
 /* empty state */
-.cy-welcome { width: min(100%, 820px); margin: 6vh auto 0; text-align: center; }
-.cy-welcome h1 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 14px 0 6px; }
-.cy-welcome p { color: var(--text-2); max-width: 560px; margin: 0 auto; font-size: 14.5px; }
-.cy-starters { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 28px; text-align: left; }
-.cy-starter { padding: 14px; border: 1px solid var(--border-faint); border-radius: 14px; background: var(--bg-surface); transition: border-color .15s, box-shadow .15s, transform .15s; box-shadow: var(--shadow); }
-.cy-starter:hover { border-color: var(--accent); transform: translateY(-1px); }
-.cy-starter-ico { width: 30px; height: 30px; border-radius: 9px; background: var(--accent-dim); color: var(--accent); display: grid; place-items: center; margin-bottom: 10px; }
-.cy-starter b { display: block; font-size: 13.5px; margin-bottom: 2px; }
-.cy-starter span { display: block; font-size: 12.5px; color: var(--text-3); }
+.cy-welcome { width: min(100%, 640px); margin: 8vh auto 0; text-align: center; }
+.cy-welcome h1 { font-size: 22px; font-weight: 750; letter-spacing: -.015em; margin: 12px 0 4px; }
+.cy-welcome p { color: var(--text-3); margin: 0 auto; font-size: 14px; }
+.cy-starters { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; text-align: left; }
+.cy-starter { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid var(--border-faint); border-radius: 12px; background: var(--bg-surface); transition: border-color .15s, background .15s; text-align: left; }
+.cy-starter:hover { border-color: var(--accent); background: var(--bg-raised); }
+.cy-starter:disabled { opacity: .6; cursor: default; }
+.cy-starter-ico { width: 28px; height: 28px; flex: none; border-radius: 8px; background: var(--accent-dim); color: var(--accent); display: grid; place-items: center; }
+.cy-starter-body { min-width: 0; }
+.cy-starter b { display: block; font-size: 13.5px; }
+.cy-starter span { display: block; font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* composer */
 .cy-composer-wrap { padding: 10px 20px 16px; background: linear-gradient(to top, var(--bg-base) 70%, transparent); }
 .cy-composer { width: min(100%, 800px); margin: 0 auto; border: 1px solid var(--border-mid); border-radius: 18px; background: var(--bg-surface); box-shadow: var(--shadow); padding: 8px 8px 8px 16px; display: flex; align-items: flex-end; gap: 8px; transition: border-color .15s, box-shadow .15s; }
-.cy-composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim), var(--shadow); }
+.cy-composer:focus-within { border-color: var(--text-3); }
 .cy-composer textarea { field-sizing: content; flex: 1; resize: none; overflow-y: auto; border: none; outline: none; background: transparent; color: var(--text-1); font: inherit; font-size: 15px; line-height: 1.5; padding: 8px 0; max-height: 180px; min-height: 24px; }
 .cy-composer textarea::placeholder { color: var(--text-3); }
 .cy-send { width: 38px; height: 38px; border-radius: 12px; border: none; background: var(--accent); color: #fff; display: grid; place-items: center; transition: opacity .15s, transform .1s; flex: 0 0 auto; }

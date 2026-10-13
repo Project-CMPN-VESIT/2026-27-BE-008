@@ -302,3 +302,40 @@ def test_compound_self_description_is_remembered():
     got = {u["key"]: u["value"] for u in agent._heuristic_memory("hi, I'm a beginner and a conservative long-term investor")}
     assert got.get("risk_appetite") == "conservative" and got.get("investment_horizon") == "long_term"
     assert got.get("experience_level") == "beginner"
+
+
+# ── grounding regressions: a named company must never be answered from the model's memory ──
+def test_lowercase_symbols_and_plain_words_are_resolved():
+    assert tools.resolve_tickers("i want know about tcs stock") == ["TCS"]
+    assert tools.resolve_tickers("what do you think about infy and suzlon") == ["INFY", "SUZLON"]
+    assert tools.resolve_tickers("how do i invest in a good bank") == []
+
+
+def test_named_company_always_fetches_live_data_even_if_planner_returns_nothing(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="general"))
+    p = make_plan("tell me about tcs", [], {}, [], ["TCS"])
+    assert p.intent == "stock_qa" and "stock_snapshot" in p.tools
+
+
+def test_answer_without_data_has_invented_figures_removed(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="general"))
+    monkeypatch.setattr(llm, "complete_text", lambda msgs, **kw: "TCS is a big IT firm.\n\nIt trades at Rs 4,200 with a P/E of 28.")
+    ev = run(collect(None, "u1", "hello there"))
+    text = "".join(e["text"] for e in ev if e["type"] == "delta")
+    assert "4,200" not in text and "28" not in text and "big IT firm" in text
+
+
+def test_earlier_assistant_numbers_do_not_count_as_evidence(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="general"))
+    sid = store.create_session("u1")["id"]
+    store.add_message(sid, "user", "hi")
+    store.add_message(sid, "assistant", "TCS trades at 4200.")
+    monkeypatch.setattr(llm, "complete_text", lambda msgs, **kw: "As said, price is 4200.")
+    ev = run(collect(sid, "u1", "and now?"))
+    assert "4200" not in "".join(e["text"] for e in ev if e["type"] == "delta")
+
+
+def test_tidy_drops_data_leaks_and_trailing_offer_questions():
+    from cyro_chat import grounding
+    out = grounding.tidy("Trades at 100 (from DATA). Margins look fine. Would you like to explore growth next?")
+    assert "DATA" not in out and "Would you like" not in out and "Margins look fine." in out

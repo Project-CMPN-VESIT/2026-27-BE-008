@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Briefcase, Compass, FileText, Layers, Lightbulb, Sparkles, X } from "lucide-react";
+import { BarChart3, Briefcase, Compass, FileText, PanelLeft, PanelRight, Sparkles, X } from "lucide-react";
 import { ChatMessage } from "@/components/cyro/ChatMessage";
 import { Composer } from "@/components/cyro/Composer";
 import { ContextPanel } from "@/components/cyro/ContextPanel";
@@ -12,16 +12,17 @@ import "@/components/cyro/cyro.css";
 
 const STARTERS = [
   { icon: BarChart3, title: "Ask about a stock", text: "Is TCS expensive right now?" },
+  { icon: Compass, title: "Find stocks", text: "Find me high-quality small cap stocks" },
   { icon: FileText, title: "Full research report", text: "Run a full research report on Infosys for the long term" },
-  { icon: Compass, title: "Discover stocks", text: "Find me high-quality small cap stocks" },
-  { icon: Layers, title: "Sectors & themes", text: "How is the banking sector looking?" },
-  { icon: Lightbulb, title: "Investing frameworks", text: "Explain the CANSLIM method with an example" },
-  { icon: Briefcase, title: "My portfolio", text: "Review my portfolio and tell me where I'm concentrated" },
+  { icon: Briefcase, title: "Review my portfolio", text: "Where is my portfolio concentrated?" },
 ];
 
 export default function CyroPage() {
   const chat = useCyroChat();
   const [source, setSource] = useState<SourceCitation | null>(null);
+  const [sideOpen, setSideOpen] = useState(true);
+  // null = automatic (shown on wide screens only); true/false once the user picks
+  const [ctxOpen, setCtxOpen] = useState<boolean | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
@@ -45,7 +46,7 @@ export default function CyroPage() {
   const lastAssistant = [...chat.messages].reverse().find((m) => m.role === "assistant");
 
   return (
-    <div className="cyro-root">
+    <div className={`cyro-root ${sideOpen ? "" : "side-off"} ${ctxOpen === true ? "ctx-on" : ctxOpen === false ? "ctx-off" : ""}`}>
       <SessionSidebar
         sessions={chat.sessions}
         activeId={chat.activeId}
@@ -57,6 +58,9 @@ export default function CyroPage() {
 
       <main className="cy-main">
         <header className="cy-head">
+          <button className="cy-icon-btn" onClick={() => setSideOpen((v) => !v)} aria-label={sideOpen ? "Hide chats" : "Show chats"} title={sideOpen ? "Hide chats" : "Show chats"}>
+            <PanelLeft size={17} />
+          </button>
           <div className="cy-head-title">{empty ? "CYRO" : title}</div>
           {chat.focus.length > 0 && (
             <div className="cy-focus" aria-label="Companies in this chat">
@@ -65,6 +69,11 @@ export default function CyroPage() {
               ))}
             </div>
           )}
+          <button className="cy-icon-btn" style={chat.focus.length ? undefined : { marginLeft: "auto" }}
+                  onClick={() => setCtxOpen((v) => (v === null ? !window.matchMedia("(min-width: 1500px)").matches : !v))}
+                  aria-label="Toggle sources panel" title="Sources, memory and market">
+            <PanelRight size={17} />
+          </button>
         </header>
 
         {chat.notice && (
@@ -77,18 +86,17 @@ export default function CyroPage() {
         <div className="cy-thread" ref={threadRef} onScroll={onScroll}>
           {empty ? (
             <div className="cy-welcome">
-              <div className="cy-avatar" style={{ margin: "0 auto", width: 44, height: 44, borderRadius: 14 }}><Sparkles size={22} /></div>
+              <div className="cy-avatar" style={{ margin: "0 auto", width: 40, height: 40, borderRadius: 12 }}><Sparkles size={20} /></div>
               <h1>What would you like to research?</h1>
-              <p>
-                Ask in plain language: about a company, a sector, how an investing method works, or your portfolio.
-                CYRO answers conversationally and only runs a full research report when it will actually help.
-              </p>
+              <p>Ask about a company, a sector, an investing idea, or your portfolio.</p>
               <div className="cy-starters">
                 {STARTERS.map((s) => (
                   <button key={s.title} className="cy-starter" onClick={() => chat.send(s.text)} disabled={chat.busy}>
-                    <div className="cy-starter-ico"><s.icon size={16} /></div>
-                    <b>{s.title}</b>
-                    <span>{s.text}</span>
+                    <div className="cy-starter-ico"><s.icon size={15} /></div>
+                    <div className="cy-starter-body">
+                      <b>{s.title}</b>
+                      <span>{s.text}</span>
+                    </div>
                   </button>
                 ))}
               </div>

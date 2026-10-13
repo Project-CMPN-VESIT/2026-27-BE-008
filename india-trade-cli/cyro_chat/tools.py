@@ -59,6 +59,13 @@ _SUFFIX = re.compile(r"\b(limited|ltd|corporation|corp|company|co|inc|india|indu
                      r"technologies|technology|services|solutions|the)\b\.?", re.I)
 
 
+# NSE symbols that are also everyday words: only treated as a company when the message has a stock-ish cue
+_ENGLISH_SYMBOLS = {"page", "sail", "gail", "best", "bata", "cera", "coal", "can", "one", "all", "now", "pel", "man",
+                    "power", "bank", "gold", "time", "fine", "deep", "just", "kaya", "lux", "nava", "rain", "star",
+                    "safe", "good", "info", "intel", "orient", "relaxo", "praj", "eros", "hub", "pvr", "uno", "sun",
+                    "ace", "oil", "tata", "vip", "ashok", "orient"}
+
+
 def _norm_name(name: str) -> str:
     return re.sub(r"\s+", " ", _SUFFIX.sub(" ", re.sub(r"[^a-zA-Z0-9& ]", " ", name or ""))).strip().lower()
 
@@ -81,6 +88,12 @@ def resolve_tickers(text: str, hint: Optional[str] = None, limit: int = 4) -> Li
             add(tok)
     low = " " + re.sub(r"[^a-z0-9& ]", " ", (text or "").lower()) + " "
     low = re.sub(r"\s+", " ", low)
+    # lowercase symbols ("tcs", "infy"): accept exact universe symbols; ambiguous English words need a cue word
+    cue = re.search(r"\b(stock|share|shares|price|ltd|limited|company|results?|invest\w*|buy|sell)\b", low) is not None
+    for tok in re.findall(r"[a-z][a-z0-9&]{2,14}", low):
+        sym = tok.upper()
+        if sym in symbols and sym not in NOT_TICKERS and (tok not in _ENGLISH_SYMBOLS or cue):
+            add(sym)
     try:
         from web.cyro_skill import _TICKER_MAP
 
