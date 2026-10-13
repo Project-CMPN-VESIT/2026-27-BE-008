@@ -77,6 +77,15 @@ _load_keychain()
 async def lifespan(app: FastAPI):
     """Initialize the auth database and restore broker sessions on startup."""
     init_auth_db()
+
+    # AI Baskets: keep universe / prices / scores / baskets fresh in the background
+    try:
+        from baskets.pipeline import start_scheduler as _start_baskets_scheduler
+
+        _start_baskets_scheduler()
+    except Exception as exc:
+        import logging as _lg
+        _lg.warning("[startup] Baskets scheduler not started: %s", exc)
     
     import logging
     from brokers.session import register_broker
@@ -246,6 +255,16 @@ app.include_router(_skills_router)
 from web.cyro_skill import router as _cyro_router
 
 app.include_router(_cyro_router)
+
+# ── AI Baskets (investor-style stock baskets) ─────────────────
+from baskets.api import router as _baskets_router
+
+app.include_router(_baskets_router)
+
+# ── CYRO conversational agent (chat, sessions, memory) ───────
+from cyro_chat.api import router as _cyro_chat_router
+
+app.include_router(_cyro_chat_router)
 
 
 

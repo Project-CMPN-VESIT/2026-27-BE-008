@@ -114,3 +114,5 @@ video-engine/**/__pycache__/
 # Claude / Editor artifacts
 .claude/
 
+# AI Baskets local database (rebuilt automatically)
+india-trade-cli/data/
