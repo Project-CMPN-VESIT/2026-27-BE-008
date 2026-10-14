@@ -26,6 +26,13 @@ export default function CyroPage() {
   const threadRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches) {
+      setSideOpen(false);
+      setCtxOpen(false);
+    }
+  }, []);
+
   // keep the newest content in view unless the user has scrolled up to read
   const onScroll = () => {
     const el = threadRef.current;
@@ -47,11 +54,33 @@ export default function CyroPage() {
 
   return (
     <div className={`cyro-root ${sideOpen ? "" : "side-off"} ${ctxOpen === true ? "ctx-on" : ctxOpen === false ? "ctx-off" : ""}`}>
+      {(sideOpen || ctxOpen === true) && (
+        <div
+          className="cy-drawer-backdrop"
+          onClick={() => {
+            setSideOpen(false);
+            setCtxOpen(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
       <SessionSidebar
         sessions={chat.sessions}
         activeId={chat.activeId}
-        onNew={() => { chat.newChat(); setSource(null); }}
-        onOpen={(id) => { setSource(null); chat.openSession(id); }}
+        onNew={() => {
+          chat.newChat();
+          setSource(null);
+          if (typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches) {
+            setSideOpen(false);
+          }
+        }}
+        onOpen={(id) => {
+          setSource(null);
+          chat.openSession(id);
+          if (typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches) {
+            setSideOpen(false);
+          }
+        }}
         onRename={chat.rename}
         onDelete={chat.remove}
       />

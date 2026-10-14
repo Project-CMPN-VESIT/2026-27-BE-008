@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import threading
 
 import pytest
 
@@ -142,6 +143,17 @@ def test_planner_failure_falls_back_to_rules(monkeypatch):
     assert p.intent == "stock_qa" and p.tools == ["stock_snapshot"]
 
 
+def test_threaded_success_does_not_mark_turn_cancelled():
+    cancel_event = threading.Event()
+
+    async def consume():
+        return [item async for item in agent._threaded(lambda emit: "worker result", cancel_event=cancel_event)]
+
+    result = asyncio.run(consume())
+    assert result == [("result", "worker result")]
+    assert not cancel_event.is_set()
+
+
 # ── whole turns ──
 def test_chat_turn_streams_answer_saves_messages_and_does_not_run_a_report(monkeypatch):
     monkeypatch.setattr(llm, "structured", plan_with(intent="stock_qa", tickers=["TCS"], tools=["stock_snapshot"]))
@@ -156,6 +168,20 @@ def test_chat_turn_streams_answer_saves_messages_and_does_not_run_a_report(monke
     msgs = store.get_messages(sid)
     assert [m["role"] for m in msgs] == ["user", "assistant"] and msgs[1]["content"] == "Here is the answer."
     assert store.get_session(sid)["focus"] == ["TCS"] and store.get_session(sid)["title"].startswith("how is TCS")
+
+
+def test_empty_model_answer_streams_and_saves_fallback(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="framework", tickers=[], tools=[]))
+    monkeypatch.setattr(agent, "_grounded_answer", lambda *a, **k: "")
+
+    ev = run(collect(None, "u-empty", "explain investing basics"))
+
+    sid = next(e["session_id"] for e in ev if e["type"] == "session")
+    saved = store.get_messages(sid)[-1]["content"]
+    streamed = "".join(e["text"] for e in ev if e["type"] == "delta")
+    assert streamed
+    assert saved == streamed
+    assert ev[-1]["type"] == "done"
 
 
 def test_report_turn_delegates_with_a_canonical_message_and_forwards_events(monkeypatch):

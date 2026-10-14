@@ -181,9 +181,11 @@ def stock_alerts(symbol: str) -> Dict[str, Any]:
 
 def discover(model: Optional[str] = None, cap: Optional[str] = None, sector: Optional[str] = None,
              keywords: Optional[List[str]] = None, limit: int = 8) -> Dict[str, Any]:
-    """Stock discovery: rank the universe by an investor lens (or the average of all five), with filters."""
+    """Stock discovery: rank the universe by investor lens and include the latest stored daily close."""
     try:
-        from baskets.db import Score, Stock, session_scope
+        from sqlalchemy import and_, func
+
+        from baskets.db import Price, Score, Stock, session_scope
         from baskets.scoring import MODELS
 
         kws = [k.lower() for k in (keywords or []) if k and len(k) > 2]
@@ -193,6 +195,21 @@ def discover(model: Optional[str] = None, cap: Optional[str] = None, sector: Opt
             if model and model in MODELS:
                 q = q.filter(Score.model == model)
             rows = q.all()
+            latest_dates = (
+                s.query(Price.symbol.label("symbol"), func.max(Price.date).label("date"))
+                .filter(Price.symbol.in_(list(stocks)))
+                .group_by(Price.symbol)
+                .subquery()
+            ) if stocks else None
+            latest_prices = {}
+            if latest_dates is not None:
+                latest_prices = {
+                    row.symbol: {"price": row.close, "as_of": row.date.isoformat()}
+                    for row in s.query(Price.symbol, Price.close, Price.date).join(
+                        latest_dates,
+                        and_(Price.symbol == latest_dates.c.symbol, Price.date == latest_dates.c.date),
+                    ).all()
+                }
         by_sym: Dict[str, List[Any]] = {}
         for r in rows:
             by_sym.setdefault(r.symbol, []).append(r)
@@ -209,16 +226,45 @@ def discover(model: Optional[str] = None, cap: Optional[str] = None, sector: Opt
                 continue
             score = sum(r.score or 0 for r in rs) / len(rs)
             best = max(rs, key=lambda r: r.score or 0)
+            price = latest_prices.get(sym, {})
             out.append({"symbol": sym, "name": st.name, "sector": st.sector, "size": f"{st.cap_class} cap",
                         "score": round(score, 1), "best_lens": best.model if not model else model,
+                        "price": price.get("price", st.last_price), "price_as_of": price.get("as_of"),
                         "strengths": (best.tags_pos or [])[:3], "watch_outs": (best.tags_neg or [])[:2]})
         out.sort(key=lambda x: -x["score"])
         note = ""
         if not out and kws:                       # keywords were too narrow: retry without them rather than say "none"
             return discover(model=model, cap=cap, sector=sector, keywords=None, limit=limit)
+
+        if not out and stocks:
+            matched = [st for st in stocks.values() if (not cap or st.cap_class == cap) and (not sector or sector.lower() in f"{st.sector or ''} {st.industry or ''}".lower())]
+            if kws:
+                narrowed = [st for st in matched if any(k in f"{st.name or ''} {st.symbol} {st.sector or ''} {st.industry or ''}".lower() for k in kws)]
+                if narrowed:
+                    matched = narrowed
+            matched.sort(key=lambda st: (st.mcap_cr or 0, st.last_price or 0), reverse=True)
+            for st in matched[:limit]:
+                out.append({
+                    "symbol": st.symbol,
+                    "name": st.name or st.symbol,
+                    "sector": st.sector or "Equity",
+                    "size": f"{st.cap_class} cap" if st.cap_class else "small cap",
+                    "price": latest_prices.get(st.symbol, {}).get("price", st.last_price),
+                    "price_as_of": latest_prices.get(st.symbol, {}).get("as_of"),
+                    "mcap_cr": round(st.mcap_cr, 1) if st.mcap_cr else None,
+                    "year_high": st.year_high,
+                    "year_low": st.year_low,
+                    "score": None,
+                    "best_lens": model or "Nifty " + (st.cap_class.capitalize() if st.cap_class else "500"),
+                    "strengths": [f"Nifty {st.cap_class.capitalize() if st.cap_class else '500'} constituent", f"Free-float market cap ~{round(st.mcap_cr, 1) if st.mcap_cr else 'N/A'} Cr"],
+                    "watch_outs": [],
+                })
+
         label = MODELS[model].label if model in MODELS else "average of five investor lenses"
         return _result("discover", bool(out), out[:limit], [{"label": "Nifty 500 investor-style ranking", "type": "Investor scoring model",
-                       "detail": f"Ranked by {label}" + (f", {cap} cap" if cap else "") + (f", {sector}" if sector else "")}],
+                       "detail": f"Ranked by {label}" + (f", {cap} cap" if cap else "") + (f", {sector}" if sector else "")},
+                       {"label": "Latest stored daily close", "type": "Historical price data",
+                        "detail": "Most recent daily close available in CYRO's price history; this is not a live quote."}],
                        "" if out else "no stocks matched those filters", "Stock discovery")
     except Exception as exc:
         return _result("discover", False, error=str(exc), title="Stock discovery")
@@ -318,12 +364,12 @@ def basket_info(query: str = "") -> Dict[str, Any]:
         return _result("basket_info", False, error=str(exc), title="AI Baskets")
 
 
-def portfolio_review(user_id: str = "test_user") -> Dict[str, Any]:
+def portfolio_review(user_id: str, authorization: Optional[str] = None) -> Dict[str, Any]:
     """The user's paper-trading portfolio, enriched with investor scores and sector mix."""
     try:
         import httpx
 
-        r = httpx.get(f"http://127.0.0.1:8001/api/portfolio/{user_id}", timeout=6)
+        r = httpx.get("http://127.0.0.1:8001/api/portfolio", headers={"Authorization": authorization or ""}, timeout=6)
         r.raise_for_status()
         pf = r.json()
     except Exception as exc:
@@ -384,19 +430,22 @@ def market_pulse() -> Dict[str, Any]:
 
 # ── parallel execution helper ────────────────────────────────────────────────────────────────────────────
 def run_tools(calls: List[tuple], on_start: Optional[Callable[[str], None]] = None,
-              on_done: Optional[Callable[[Dict[str, Any]], None]] = None) -> List[Dict[str, Any]]:
+              on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+              cancel_event: Optional[threading.Event] = None) -> List[Dict[str, Any]]:
     """calls = [(label, fn, kwargs)]. Runs concurrently, preserves order, never raises."""
     def one(c):
         label, fn, kw = c
-        if on_start:
+        if cancel_event and cancel_event.is_set():
+            return _result(getattr(fn, "__name__", "tool"), False, error="cancelled", title=label)
+        if on_start and not (cancel_event and cancel_event.is_set()):
             on_start(label)
         try:
-            r = fn(**kw)
+            r = fn(**kw) if not (cancel_event and cancel_event.is_set()) else _result(getattr(fn, "__name__", "tool"), False, error="cancelled", title=label)
         except Exception as exc:
             r = _result(getattr(fn, "__name__", "tool"), False, error=str(exc), title=label)
         r.setdefault("title", label)
         r["_label"] = label
-        if on_done:
+        if on_done and not (cancel_event and cancel_event.is_set()):
             on_done(r)
         return r
 

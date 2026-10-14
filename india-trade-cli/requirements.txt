@@ -27,6 +27,7 @@ feedparser>=6.0.11          # RSS feed parsing
 newsapi-python>=0.2.7       # NewsAPI.org client
 
 # ── Web ──────────────────────────────────────────────────────
+firebase-admin>=6.5.0       # Verify Firebase Authentication ID tokens
 fastapi>=0.110.0            # Web API framework
 uvicorn>=0.29.0             # ASGI server (with --reload for dev)
 

@@ -259,7 +259,8 @@ Hard rules:
 - Every number you state must appear in DATA. Never cite a figure from memory: no peer averages, historical
   averages, targets, or other companies' ratios unless they are in DATA. If a figure you'd like isn't there, say it
   isn't available rather than estimating.
-- When the user asks about a company, mention its current price (DATA "price", in rupees) and market cap if present.
+- When DATA includes a price, describe it as the latest stored close, not a live quote; include its as-of date when present.
+- If the user explicitly asks for a live quote and DATA only has stored closing prices, say a live quote is unavailable.
 - Never recommend specific stocks, thresholds or numbers unless DATA contains them.
 - Investor scores are rule-based lenses (Buffett, Lynch, Jhunjhunwala, 100 Baggers, CANSLIM), not predictions.
 
@@ -393,29 +394,46 @@ def _sources_from(results: List[Dict[str, Any]]) -> List[dict]:
 
 
 # ── async plumbing ───────────────────────────────────────────────────────────────────────────────────────
-async def _threaded(producer: Callable[[Callable[[dict], None]], Any]) -> AsyncIterator[Tuple[str, Any]]:
-    """Run a blocking `producer(emit)` in a thread; yield ("event", dict) as it emits, then ("result", value)."""
+async def _threaded(producer: Callable[..., Any], cancel_event: Optional[threading.Event] = None) -> AsyncIterator[Tuple[str, Any]]:
+    """Run a blocking `producer(emit, cancel_event)` in a thread; yield ("event", dict) as it emits, then ("result", value)."""
     loop = asyncio.get_running_loop()
     q: asyncio.Queue = asyncio.Queue()
+    ev_cancel = cancel_event or threading.Event()
 
     def emit(ev: dict) -> None:
+        if ev_cancel.is_set():
+            return
         loop.call_soon_threadsafe(q.put_nowait, ("event", ev))
 
     def worker() -> None:
         try:
-            res = producer(emit)
-            loop.call_soon_threadsafe(q.put_nowait, ("result", res))
+            import inspect
+            sig = inspect.signature(producer)
+            if len(sig.parameters) >= 2:
+                res = producer(emit, ev_cancel)
+            else:
+                res = producer(emit)
+            if not ev_cancel.is_set():
+                loop.call_soon_threadsafe(q.put_nowait, ("result", res))
         except Exception as exc:                                  # noqa: BLE001
-            loop.call_soon_threadsafe(q.put_nowait, ("error", exc))
+            if not ev_cancel.is_set():
+                loop.call_soon_threadsafe(q.put_nowait, ("error", exc))
 
-    threading.Thread(target=worker, daemon=True, name="cyro-chat-worker").start()
-    while True:
-        kind, val = await q.get()
-        if kind == "error":
-            raise val
-        yield kind, val
-        if kind == "result":
-            return
+    t = threading.Thread(target=worker, daemon=True, name="cyro-chat-worker")
+    t.start()
+    try:
+        while True:
+            if ev_cancel.is_set():
+                return
+            kind, val = await q.get()
+            if kind == "error":
+                raise val
+            yield kind, val
+            if kind == "result":
+                return
+    except (asyncio.CancelledError, GeneratorExit):
+        ev_cancel.set()
+        raise
 
 
 def _sse(ev: dict) -> str:
@@ -430,12 +448,15 @@ def _title_from(message: str, tickers: List[str]) -> str:
 
 # ── the turn ─────────────────────────────────────────────────────────────────────────────────────────────
 async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticker_hint: Optional[str] = None,
-                    report_runner: Optional[Callable[..., Any]] = None) -> AsyncIterator[str]:
+                    report_runner: Optional[Callable[..., Any]] = None,
+                    authorization: Optional[str] = None,
+                    cancel_event: Optional[threading.Event] = None) -> AsyncIterator[str]:
     """
     Async generator of SSE strings for one user message.
     `report_runner(message, ticker, mode, session_id)` must return an object with an async `body_iterator`
     (the existing cyro_stream does).
     """
+    ce = cancel_event or threading.Event()
     store.init_db()
     message = (message or "").strip()
     if not message:
@@ -445,17 +466,18 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
 
     sess = store.get_session(session_id, user_id) if session_id else None
     if sess is None:
-        sess = store.create_session(user_id, session_id=session_id)
+        # Never collide with a session ID owned by another account.
+        sess = store.create_session(user_id, session_id=session_id if not session_id else None)
     sid = sess["id"]
-    history = store.get_messages(sid, limit=24)
+    history = store.get_messages(sid, limit=24, user_id=user_id)
     first_turn = not history
     yield _sse({"type": "session", "session_id": sid, "title": sess["title"]})
 
-    user_msg = store.add_message(sid, "user", message)
+    user_msg = store.add_message(sid, "user", message, user_id=user_id)
     yield _sse({"type": "user_message", "message": user_msg})
     if first_turn:
         title = _title_from(message, [])
-        store.touch_session(sid, title=title)
+        store.touch_session(sid, title=title, user_id=user_id)
         yield _sse({"type": "session", "session_id": sid, "title": title})
 
     mem = store.get_memory(user_id)
@@ -477,9 +499,53 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
     yield _sse({"type": "step", "id": "plan", "label": "Understanding your question", "status": "done"})
     if plan.tickers:
         focus = plan.tickers[:3] + [f for f in focus if f not in plan.tickers][:2]
-        store.touch_session(sid, focus=focus)
+        store.touch_session(sid, focus=focus, user_id=user_id)
     yield _sse({"type": "plan", "intent": plan.intent, "tickers": plan.tickers, "wants_report": plan.wants_report,
                 "reason": plan.reason})
+
+    # 2.0 additive, opt-in agentic research for complex single-company questions.
+    # Explicit report requests and every existing chat intent retain their current paths.
+    from cyro_chat import agentic_v2
+    if agentic_v2.enabled() and agentic_v2.should_research(message, plan) and report_runner is not None:
+        yield _sse({"type": "step", "id": "research", "label": "Gathering evidence across CYRO research sources", "status": "running"})
+        try:
+            answer, research_sources, report = await agentic_v2.run_research(
+                report_runner=report_runner,
+                ticker=plan.tickers[0],
+                horizon=plan.report_horizon or mem.get("investment_horizon"),
+                session_id=sid,
+                cancel_event=ce,
+            )
+            if ce.is_set():
+                return
+            yield _sse({"type": "step", "id": "research", "label": "Gathering evidence across CYRO research sources", "status": "done"})
+            for chunk in _chunks(answer):
+                if ce.is_set():
+                    return
+                yield _sse({"type": "delta", "text": chunk})
+                await asyncio.sleep(0.012)
+            if research_sources:
+                yield _sse({"type": "sources", "items": research_sources})
+            sugg = suggestions_for(plan, [], mem)
+            if sugg:
+                yield _sse({"type": "suggestions", "items": sugg})
+            msg = store.add_message(
+                sid,
+                "assistant",
+                answer,
+                payload={"sources": research_sources, "suggestions": sugg, "plan": plan.model_dump(),
+                         "agentic_v2": True, "research_id": report.get("research_id")},
+                user_id=user_id,
+            )
+            yield _sse({"type": "message", "message": msg})
+            yield _sse({"type": "done"})
+            return
+        except (asyncio.CancelledError, GeneratorExit, InterruptedError):
+            ce.set()
+            return
+        except Exception as exc:  # noqa: BLE001 - preserve the established tool path on v2 failure
+            logger.warning("[CyroChat] agentic v2 failed; falling back to the current chat tools: %s", exc)
+            yield _sse({"type": "step", "id": "research", "label": "Research source unavailable; using the standard chat tools", "status": "failed"})
 
     # 2a. full research report (existing pipeline, untouched)
     if plan.intent == "report" and plan.wants_report and plan.tickers and report_runner is not None:
@@ -495,6 +561,8 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
         try:
             resp = await report_runner(message=canon, ticker=sym, mode="reasoning" if plan.deep else "normal", session_id=sid)
             async for chunk in resp.body_iterator:
+                if ce.is_set():
+                    return
                 text = chunk.decode() if isinstance(chunk, (bytes, bytearray)) else chunk
                 for line in text.split("\n"):
                     if not line.startswith("data:"):
@@ -513,17 +581,22 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
                     if t == "error":
                         err = ev.get("message") or "The research pipeline hit an error."
                     yield _sse(ev)
+        except (asyncio.CancelledError, GeneratorExit):
+            ce.set()
+            return
         except Exception as exc:                                   # noqa: BLE001
             logger.exception("[CyroChat] report delegation failed")
             err = str(exc)
+        if ce.is_set():
+            return
         if final_report:
             content = f"{lead}\n\n{final_report.get('summary', '')}".strip()
             msg = store.add_message(sid, "assistant", content, kind="report",
-                                    payload={"events": events, "symbol": sym, "plan": plan.model_dump()})
+                                    payload={"events": events, "symbol": sym, "plan": plan.model_dump()}, user_id=user_id)
         else:
             fail = f"The research report for {sym} couldn't be completed" + (f" ({err})" if err else "") + \
                    ". I can still answer questions about it in chat."
-            msg = store.add_message(sid, "assistant", fail, payload={"error": True})
+            msg = store.add_message(sid, "assistant", fail, payload={"error": True}, user_id=user_id)
             yield _sse({"type": "delta", "text": "\n\n" + fail})
         yield _sse({"type": "suggestions", "items": suggestions_for(plan, [], mem)})
         yield _sse({"type": "message", "message": msg})
@@ -531,24 +604,31 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
         return
 
     # 2b. gather facts with tools (parallel)
-    calls = _tool_calls(plan, mem, user_id)
+    calls = _tool_calls(plan, mem, user_id, authorization)
     results: List[Dict[str, Any]] = []
     if calls:
-        def produce(emit):
+        if ce.is_set():
+            return
+        def produce_tools(emit, c_ev):
             def start(label):
-                emit({"type": "step", "id": label, "label": label, "status": "running"})
+                if not c_ev.is_set():
+                    emit({"type": "step", "id": label, "label": label, "status": "running"})
 
             def done(r):
-                lbl = r.get("_label") or r.get("title")
-                emit({"type": "step", "id": lbl, "label": lbl, "status": "done" if r["ok"] else "failed"})
-            return tools.run_tools(calls, start, done)
+                if not c_ev.is_set():
+                    lbl = r.get("_label") or r.get("title")
+                    emit({"type": "step", "id": lbl, "label": lbl, "status": "done" if r["ok"] else "failed"})
+            return tools.run_tools(calls, start, done, cancel_event=c_ev)
 
-        async for kind, val in _threaded(produce):
+        async for kind, val in _threaded(produce_tools, cancel_event=ce):
             if kind == "event":
                 yield _sse(val)
             else:
                 results = val
-        # a lone report-request without a report runner or ticker still gets a normal answer
+
+    if ce.is_set():
+        return
+
     # 3. answer
     msgs = build_messages(message, history, mem, plan, results, store.recent_user_topics(user_id, sid), focus)
     answer = ""
@@ -557,22 +637,48 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
         # Applies with or without tool data: with none, any financial figure is by definition ungrounded.
         yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "running"})
 
-        def produce(emit):
-            return _grounded_answer(msgs, results, message, history)
+        def produce_ans(emit, c_ev):
+            if c_ev.is_set():
+                return ""
+            return _grounded_answer(msgs, results, message, history, cancel_event=c_ev)
 
-        async for kind, val in _threaded(produce):
+        async for kind, val in _threaded(produce_ans, cancel_event=ce):
             if kind == "result":
                 answer = val
+
+        if ce.is_set():
+            return
+
+        # A provider can finish normally while yielding no usable text. Resolve
+        # that case before streaming so the persisted answer and visible answer
+        # are always the same.
+        answer = (answer or "").strip()
+        if not answer:
+            answer = fallback_answer(plan, results)
+
         yield _sse({"type": "step", "id": "write", "label": "Writing the answer", "status": "done"})
         for chunk in _chunks(answer):
+            if ce.is_set():
+                return
             yield _sse({"type": "delta", "text": chunk})
             await asyncio.sleep(0.012)
+    except (asyncio.CancelledError, GeneratorExit):
+        ce.set()
+        logger.info("[CyroChat] Turn was cancelled by client")
+        return
     except Exception as exc:                                       # noqa: BLE001
+        if ce.is_set():
+            return
         logger.warning("[CyroChat] answer generation failed: %s", exc)
         answer = fallback_answer(plan, results)
         yield _sse({"type": "delta", "text": answer})
         yield _sse({"type": "final_text", "text": answer})
-    answer = answer.strip() or fallback_answer(plan, results)
+
+    if ce.is_set():
+        logger.info("[CyroChat] Turn cancelled before database commit")
+        return
+
+    answer = (answer or "").strip() or fallback_answer(plan, results)
 
     srcs = _sources_from(results)
     sugg = suggestions_for(plan, results, mem)
@@ -581,7 +687,7 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
     if sugg:
         yield _sse({"type": "suggestions", "items": sugg})
     msg = store.add_message(sid, "assistant", answer, payload={"sources": srcs, "suggestions": sugg,
-                                                               "plan": plan.model_dump(), "memory_changed": changed})
+                                                               "plan": plan.model_dump(), "memory_changed": changed}, user_id=user_id)
     yield _sse({"type": "message", "message": msg})
     yield _sse({"type": "done"})
 
@@ -600,14 +706,20 @@ def _chunks(text: str, size: int = 28) -> List[str]:
 
 
 def _grounded_answer(msgs: List[llm.Message], results: List[Dict[str, Any]], message: str,
-                     history: List[Dict[str, Any]]) -> str:
+                     history: List[Dict[str, Any]], cancel_event: Optional[threading.Event] = None) -> str:
     """Generate, verify every number against DATA, regenerate once if needed, scrub what's still unsupported."""
+    if cancel_event and cancel_event.is_set():
+        return ""
     allowed = grounding.data_numbers([r["data"] for r in results if r["ok"]])
     # only what the user themselves said counts as a source: earlier assistant text must not vouch for itself
     extra = [message] + [m["content"] for m in history[-10:] if m["role"] == "user"]
     text = llm.complete_text(msgs)
+    if cancel_event and cancel_event.is_set():
+        return ""
     bad = grounding.ungrounded(text, allowed, extra)
     if bad:
+        if cancel_event and cancel_event.is_set():
+            return ""
         logger.info("[CyroChat] ungrounded numbers %s: regenerating", bad[:6])
         fix = ("Rewrite your answer. These figures are NOT in DATA and must not appear: "
                + ", ".join(str(b) for b in bad[:10]) + ". Use only figures present in DATA; if something is not "
@@ -622,7 +734,7 @@ def _grounded_answer(msgs: List[llm.Message], results: List[Dict[str, Any]], mes
     return grounding.tidy(text)
 
 
-def _tool_calls(plan: Plan, mem: Dict[str, Any], user_id: str) -> List[tuple]:
+def _tool_calls(plan: Plan, mem: Dict[str, Any], user_id: str, authorization: Optional[str] = None) -> List[tuple]:
     calls: List[tuple] = []
     t = set(plan.tools)
     sym = plan.tickers[0] if plan.tickers else None
@@ -646,7 +758,8 @@ def _tool_calls(plan: Plan, mem: Dict[str, Any], user_id: str) -> List[tuple]:
     if "basket_info" in t:
         calls.append(("Looking up AI Baskets", tools.basket_info, {"query": " ".join(plan.topics)}))
     if "portfolio_review" in t:
-        calls.append(("Reviewing your portfolio", tools.portfolio_review, {"user_id": "test_user"}))
+        calls.append(("Reviewing your portfolio", tools.portfolio_review,
+                      {"user_id": user_id, "authorization": authorization}))
     if "market_pulse" in t:
         calls.append(("Checking market pulse", tools.market_pulse, {}))
     return calls

@@ -41,6 +41,7 @@ pydantic>=2.0.0             # Data validation
 thefuzz>=0.22.0             # Fuzzy matching
 python-Levenshtein>=0.25.0  # Faster distance calculation
 psycopg2-binary>=2.9.9      # PostgreSQL database adapter
+firebase-admin>=6.5.0       # Verify Firebase Authentication ID tokens
 
 # ── News & Events ────────────────────────────────────────────
 feedparser>=6.0.11          # RSS feed parsing

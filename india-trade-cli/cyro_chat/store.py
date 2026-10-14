@@ -1,7 +1,7 @@
 """
 Server-side chat store for CYRO: sessions, messages and long-term user memory.
 
-SQLite by default (data/cyro_chat.db); set CYRO_CHAT_DATABASE_URL to use Postgres.
+Uses CYRO_CHAT_DATABASE_URL or DATABASE_URL for PostgreSQL; SQLite is a local-development fallback.
 Memory is an explicit, inspectable key/value store (never hidden): the user can see and edit every fact.
 """
 
@@ -10,16 +10,37 @@ from __future__ import annotations
 import datetime as dt
 import os
 import uuid
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from sqlalchemy import JSON, Column, DateTime, Integer, String, Text, create_engine, func
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, create_engine, func, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
+logger = logging.getLogger(__name__)
+
+def is_production() -> bool:
+    env_name = (os.getenv("ENV") or os.getenv("NODE_ENV") or os.getenv("ENVIRONMENT") or "").lower()
+    return env_name in ("production", "prod") or os.getenv("REQUIRE_POSTGRES", "0") == "1"
 
 _DATA_DIR = Path(os.getenv("CYRO_CHAT_DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
-DATABASE_URL = os.getenv("CYRO_CHAT_DATABASE_URL", f"sqlite:///{(_DATA_DIR / 'cyro_chat.db').as_posix()}")
+
+_raw_url = os.getenv("CYRO_CHAT_DATABASE_URL") or os.getenv("DATABASE_URL")
+if not _raw_url:
+    if is_production():
+        raise RuntimeError(
+            "PostgreSQL database URL is required in production. Please set CYRO_CHAT_DATABASE_URL or DATABASE_URL. "
+            "Local SQLite fallback is disabled in production environments."
+        )
+    logger.warning("[CyroChat] Neither CYRO_CHAT_DATABASE_URL nor DATABASE_URL configured. Falling back to SQLite.")
+    DATABASE_URL = f"sqlite:///{(_DATA_DIR / 'cyro_chat.db').as_posix()}"
+else:
+    DATABASE_URL = _raw_url
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 Base = declarative_base()
 _args = {"check_same_thread": False, "timeout": 30} if DATABASE_URL.startswith("sqlite") else {}
@@ -29,14 +50,24 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 DEFAULT_TITLE = "New chat"
 
 
+class AppUser(Base):
+    __tablename__ = "app_users"
+    firebase_uid = Column(String(128), primary_key=True)
+    email = Column(String(320))
+    display_name = Column(String(200))
+    photo_url = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now())
+
+
 def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
 
 class ChatSession(Base):
-    __tablename__ = "chat_sessions"
+    __tablename__ = "cyro_chat_sessions"
     id = Column(String(40), primary_key=True)
-    user_id = Column(String(80), index=True, nullable=False)
+    user_id = Column("firebase_uid", String(128), ForeignKey("app_users.firebase_uid", ondelete="CASCADE"), index=True, nullable=False)
     title = Column(String(200), default=DEFAULT_TITLE)
     focus = Column(JSON, default=list)               # tickers currently being discussed (resolves "its", "that stock")
     created_at = Column(DateTime, default=utcnow)
@@ -44,9 +75,10 @@ class ChatSession(Base):
 
 
 class ChatMessage(Base):
-    __tablename__ = "chat_messages"
+    __tablename__ = "cyro_chat_messages"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(String(40), index=True, nullable=False)
+    session_id = Column(String(40), ForeignKey("cyro_chat_sessions.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id = Column("firebase_uid", String(128), ForeignKey("app_users.firebase_uid", ondelete="CASCADE"), index=True, nullable=False)
     role = Column(String(12), nullable=False)        # user | assistant
     kind = Column(String(12), default="text")        # text | report
     content = Column(Text, default="")
@@ -55,9 +87,9 @@ class ChatMessage(Base):
 
 
 class MemoryFact(Base):
-    __tablename__ = "chat_memory"
-    user_id = Column(String(80), primary_key=True)
-    key = Column(String(60), primary_key=True)
+    __tablename__ = "cyro_user_memory"
+    user_id = Column("firebase_uid", String(128), ForeignKey("app_users.firebase_uid", ondelete="CASCADE"), primary_key=True)
+    key = Column(String(80), primary_key=True)
     value = Column(JSON)
     source = Column(String(12), default="chat")      # chat | user
     updated_at = Column(DateTime, default=utcnow)
@@ -65,6 +97,29 @@ class MemoryFact(Base):
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+
+
+def check_health() -> Dict[str, Any]:
+    backend = "sqlite" if DATABASE_URL.startswith("sqlite") else "postgresql"
+    try:
+        with scope() as s:
+            s.execute(text("SELECT 1"))
+        return {"ok": True, "backend": backend, "error": None}
+    except Exception as exc:
+        return {"ok": False, "backend": backend, "error": str(exc)}
+
+
+def ensure_user(user_id: str, email: Optional[str] = None, name: Optional[str] = None, picture: Optional[str] = None) -> None:
+    with scope() as s:
+        row = s.get(AppUser, user_id)
+        if row is None:
+            row = AppUser(firebase_uid=user_id, email=email, display_name=name, photo_url=picture)
+            s.add(row)
+        else:
+            row.email = email or row.email
+            row.display_name = row.display_name or name
+            row.photo_url = row.photo_url or picture
+            row.updated_at = utcnow()
 
 
 @contextmanager
@@ -134,9 +189,12 @@ def delete_session(session_id: str, user_id: str) -> bool:
         return True
 
 
-def touch_session(session_id: str, title: Optional[str] = None, focus: Optional[List[str]] = None) -> None:
+def touch_session(session_id: str, title: Optional[str] = None, focus: Optional[List[str]] = None, user_id: Optional[str] = None) -> None:
     with scope() as s:
-        row = s.get(ChatSession, session_id)
+        q = s.query(ChatSession).filter(ChatSession.id == session_id)
+        if user_id:
+            q = q.filter(ChatSession.user_id == user_id)
+        row = q.first()
         if row is None:
             return
         row.updated_at = utcnow()
@@ -152,9 +210,15 @@ def _msg_dict(m: ChatMessage) -> Dict[str, Any]:
             "created_at": m.created_at.isoformat()}
 
 
-def add_message(session_id: str, role: str, content: str, kind: str = "text", payload: Optional[dict] = None) -> Dict[str, Any]:
+def add_message(session_id: str, role: str, content: str, kind: str = "text", payload: Optional[dict] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
     with scope() as s:
-        row = ChatMessage(session_id=session_id, role=role, kind=kind, content=content, payload=payload or {})
+        owner_query = s.query(ChatSession).filter(ChatSession.id == session_id)
+        if user_id:
+            owner_query = owner_query.filter(ChatSession.user_id == user_id)
+        owner = owner_query.first()
+        if owner is None:
+            raise ValueError("Chat session not found")
+        row = ChatMessage(session_id=session_id, user_id=owner.user_id, role=role, kind=kind, content=content, payload=payload or {})
         s.add(row)
         s.flush()
         sess = s.get(ChatSession, session_id)
@@ -163,9 +227,12 @@ def add_message(session_id: str, role: str, content: str, kind: str = "text", pa
         return _msg_dict(row)
 
 
-def get_messages(session_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def get_messages(session_id: str, limit: Optional[int] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     with scope() as s:
-        q = s.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.id)
+        q = s.query(ChatMessage).filter(ChatMessage.session_id == session_id)
+        if user_id:
+            q = q.filter(ChatMessage.user_id == user_id)
+        q = q.order_by(ChatMessage.id)
         rows = q.all()
         if limit:
             rows = rows[-limit:]

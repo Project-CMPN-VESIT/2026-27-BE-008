@@ -17,6 +17,7 @@ import {
 } from "@/components/research/researchActivityReducer";
 import { normalizeResearchEvent } from "@/components/research/researchEventMapper";
 import { FinalResearchReport, ReportClaim, SourceCitation, domainKeyForAgent, normalizeSource } from "./report";
+import { useAuth } from "@/lib/auth-context";
 
 /* ───────────────────────────── types ───────────────────────────── */
 
@@ -85,19 +86,6 @@ const blank = (role: "user" | "assistant", text = ""): UiMessage => ({
   key: nextKey(), role, kind: "text", text, steps: [], sources: [], suggestions: [], learned: [], streaming: false,
 });
 
-function clientId(): string {
-  try {
-    let id = localStorage.getItem("cyro_client_id");
-    if (!id) {
-      id = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/-/g, "").slice(0, 24);
-      localStorage.setItem("cyro_client_id", id);
-    }
-    return id;
-  } catch {
-    return "anonymous";
-  }
-}
-
 /** Fold one research-pipeline event into a message (shared by live streaming and stored-report replay). */
 function applyReportEvent(m: UiMessage, ev: Record<string, unknown>): UiMessage {
   const type = String(ev.type ?? "");
@@ -135,7 +123,7 @@ function fromServer(m: ServerMessage): UiMessage {
 /* ───────────────────────────── hook ───────────────────────────── */
 
 export function useCyroChat() {
-  const [uid, setUid] = useState("");
+  const { user, isLoading: authLoading, getIdToken } = useAuth();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -149,22 +137,18 @@ export function useCyroChat() {
 
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
+      const token = await getIdToken();
       const res = await fetch(`/api/cyro-agent${path}`, {
         ...init,
-        headers: { "Content-Type": "application/json", "X-CYRO-User": uid || clientId(), ...(init.headers ?? {}) },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
         cache: "no-store",
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
       return data;
     },
-    [uid],
+    [getIdToken],
   );
-
-  // boot: client id, sessions, memory
-  useEffect(() => {
-    setUid(clientId());
-  }, []);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -185,12 +169,24 @@ export function useCyroChat() {
   }, [api]);
 
   useEffect(() => {
-    if (!uid) return;
+    if (authLoading) return;
+    if (!user) {
+      setSessions([]);
+      setActiveId(null);
+      setMessages([]);
+      setMemory([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setSessions([]);
+    setActiveId(null);
+    setMessages([]);
     (async () => {
       await Promise.all([refreshSessions(), refreshMemory()]);
       setLoading(false);
     })();
-  }, [uid, refreshSessions, refreshMemory]);
+  }, [user?.id, authLoading, refreshSessions, refreshMemory]);
 
   const openSession = useCallback(
     async (id: string) => {
@@ -243,7 +239,7 @@ export function useCyroChat() {
       try {
         const res = await fetch("/api/cyro-agent/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-CYRO-User": uid || clientId() },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${await getIdToken()}` },
           body: JSON.stringify({ message: msg, session_id: sid, ticker }),
           signal: ac.signal,
         });
@@ -254,10 +250,14 @@ export function useCyroChat() {
         const reader = res.body.getReader();
         const dec = new TextDecoder();
         let buf = "";
+        let receivedAnswer = false;
         for (;;) {
           const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
+          buf += done ? dec.decode() : dec.decode(value, { stream: true });
+          // SSE permits LF, CRLF, and CR line endings. Normalize before
+          // splitting so chunk boundaries or CRLF framing cannot hide events.
+          buf = buf.replace(/\r\n?/g, "\n");
+          if (done && buf.trim()) buf += "\n\n"; // dispatch a final unterminated frame
           let idx: number;
           while ((idx = buf.indexOf("\n\n")) >= 0) {
             const raw = buf.slice(0, idx);
@@ -291,9 +291,13 @@ export function useCyroChat() {
                   : [...m.steps, step],
               }));
             } else if (type === "delta") {
-              patch((m) => ({ ...m, text: m.text + String(ev.text ?? "") }));
+              const delta = String(ev.text ?? "");
+              if (delta) receivedAnswer = true;
+              patch((m) => ({ ...m, text: m.text + delta }));
             } else if (type === "final_text") {
-              patch((m) => ({ ...m, text: String(ev.text ?? m.text) }));
+              const finalText = String(ev.text ?? "");
+              if (finalText) receivedAnswer = true;
+              patch((m) => ({ ...m, text: finalText || m.text }));
             } else if (type === "sources") {
               patch((m) => ({ ...m, sources: (ev.items as ChatSource[]) ?? [] }));
             } else if (type === "suggestions") {
@@ -305,8 +309,11 @@ export function useCyroChat() {
             } else if (type === "plan") {
               if (ev.wants_report) patch((m) => ({ ...m, kind: "report", activity: m.activity ?? { ...initialResearchState } }));
             } else if (type === "message") {
-              const saved = ev.message as { id?: number } | undefined;
-              patch((m) => ({ ...m, serverId: saved?.id }));
+              const saved = ev.message as { id?: number; content?: string } | undefined;
+              if (saved?.content) receivedAnswer = true;
+              // Deltas are the normal streaming path, but use the persisted
+              // server content if a provider completed without emitting text.
+              patch((m) => ({ ...m, serverId: saved?.id, text: m.text || saved?.content || "" }));
             } else if (type === "error") {
               patch((m) => ({ ...m, text: m.text || String(ev.message ?? "Something went wrong."), error: true }));
             } else if (type === "done") {
@@ -316,6 +323,14 @@ export function useCyroChat() {
               patch((m) => applyReportEvent(m, ev));
             }
           }
+          if (done) break;
+        }
+        if (!receivedAnswer && !ac.signal.aborted) {
+          patch((m) => ({
+            ...m,
+            text: "CYRO ended the response without returning an answer. Please try again.",
+            error: true,
+          }));
         }
       } catch (e) {
         if (!(e instanceof DOMException && e.name === "AbortError")) {
@@ -328,7 +343,7 @@ export function useCyroChat() {
         refreshSessions();
       }
     },
-    [busy, uid, refreshMemory, refreshSessions],
+    [busy, getIdToken, refreshMemory, refreshSessions],
   );
 
   const rename = useCallback(

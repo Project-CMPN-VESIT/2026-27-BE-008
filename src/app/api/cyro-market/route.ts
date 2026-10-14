@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuth } from "@/lib/server-auth";
 
 const BACKEND = process.env.INDIA_TRADE_CLI_URL ?? "http://127.0.0.1:8765";
 
@@ -26,6 +27,17 @@ const ALLOWED_ENDPOINTS = new Set([
 ]);
 
 export async function GET(req: NextRequest) {
+  let user: Awaited<ReturnType<typeof requireAuth>>;
+  try {
+    user = await requireAuth(req);
+  } catch (error) {
+    if (error instanceof AuthRequiredError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 401 });
+    }
+    console.error("[cyro-market] Authentication failed", error);
+    return NextResponse.json({ ok: false, error: "Could not authenticate request" }, { status: 500 });
+  }
+
   const sp = req.nextUrl.searchParams;
   const endpoint = sp.get("endpoint") ?? "";
 
@@ -47,6 +59,10 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(backendUrl, {
       cache: "no-store",
+      headers: {
+        "X-CYRO-User": user.uid,
+        Authorization: req.headers.get("authorization") ?? "",
+      },
       signal: AbortSignal.timeout(30_000), // 30s timeout
     });
 

@@ -4,12 +4,26 @@ import { useMemo, useState } from "react";
 import { Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import type { SessionSummary } from "./useCyroChat";
 
+function normalizeDate(iso: string): Date {
+  if (!iso) return new Date();
+  if (/[Z+-]\d\d(?::?\d\d)?$/i.test(iso) || iso.endsWith("Z")) {
+    const d = new Date(iso);
+    if (!isNaN(d.getTime())) return d;
+  }
+  const d = new Date(`${iso}Z`);
+  return isNaN(d.getTime()) ? new Date(iso) : d;
+}
+
 function bucket(iso: string): string {
-  const d = new Date(iso.endsWith("Z") ? iso : `${iso}Z`);
-  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
-  if (days < 1) return "Today";
-  if (days < 2) return "Yesterday";
-  if (days < 8) return "Previous 7 days";
+  const d = normalizeDate(iso);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dTime = d.getTime();
+  const daysDiff = Math.floor((todayStart - dTime) / 86_400_000);
+
+  if (dTime >= todayStart) return "Today";
+  if (daysDiff === 0) return "Yesterday";
+  if (daysDiff < 7) return "Previous 7 days";
   return "Older";
 }
 

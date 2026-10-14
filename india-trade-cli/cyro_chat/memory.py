@@ -93,7 +93,7 @@ def clean_update(key: str, value: Any) -> Optional[Any]:
                 continue
             if t and t not in out:
                 out.append(t)
-        return out[:MAX_LIST] or None
+        return out[:MAX_LIST]
     return None
 
 

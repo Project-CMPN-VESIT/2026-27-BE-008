@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BookOpen, Brain, Radar, X } from "lucide-react";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import type { SourceCitation } from "./report";
 import type { ChatSource, MemoryItem, UiMessage } from "./useCyroChat";
 
@@ -38,8 +39,8 @@ export function ContextPanel({
     if (tab !== "market" || !symbol) return;
     let alive = true;
     Promise.allSettled([
-      fetch(`/api/cyro-market?endpoint=alerts&ticker=${symbol}`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`/api/cyro-market?endpoint=news&ticker=${symbol}`, { cache: "no-store" }).then((r) => r.json()),
+      authenticatedFetch(`/api/cyro-market?endpoint=alerts&ticker=${symbol}`, { cache: "no-store" }).then((r) => r.json()),
+      authenticatedFetch(`/api/cyro-market?endpoint=news&ticker=${symbol}`, { cache: "no-store" }).then((r) => r.json()),
     ]).then(([a, n]) => {
       if (!alive) return;
       setAlerts(a.status === "fulfilled" ? (a.value?.data?.alerts ?? []) : []);
@@ -123,7 +124,19 @@ export function ContextPanel({
                     {(m.value as string[]).map((v) => (
                       <span key={v} className="cy-tag">
                         {v}
-                        <button aria-label={`Remove ${v}`} onClick={() => onSaveMemory(m.key, (m.value as string[]).filter((x) => x !== v))}>×</button>
+                        <button
+                          aria-label={`Remove ${v}`}
+                          onClick={() => {
+                            const next = (m.value as string[]).filter((x) => x !== v);
+                            if (next.length === 0) {
+                              onForget(m.key);
+                            } else {
+                              onSaveMemory(m.key, next);
+                            }
+                          }}
+                        >
+                          ×
+                        </button>
                       </span>
                     ))}
                   </div>

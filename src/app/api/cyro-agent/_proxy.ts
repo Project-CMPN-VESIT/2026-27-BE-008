@@ -1,15 +1,26 @@
 /** Shared forwarder for the CYRO chat-agent endpoints (leading underscore: not a route). */
 
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuth } from "@/lib/server-auth";
 
 const BACKEND = process.env.INDIA_TRADE_CLI_URL ?? "http://127.0.0.1:8765";
 
 export async function forward(req: NextRequest, path: string, opts: { stream?: boolean; timeoutMs?: number } = {}) {
+  let user: Awaited<ReturnType<typeof requireAuth>>;
+  try {
+    user = await requireAuth(req);
+  } catch (error) {
+    if (error instanceof AuthRequiredError) return NextResponse.json({ detail: error.message }, { status: 401 });
+    console.error("[cyro-proxy] Authentication failed", error);
+    return NextResponse.json({ detail: "Could not authenticate request" }, { status: 500 });
+  }
   const qs = req.nextUrl.searchParams.toString();
   const url = `${BACKEND}/skills/cyro/chat${path}${qs ? `?${qs}` : ""}`;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const uid = req.headers.get("x-cyro-user");
-  if (uid) headers["X-CYRO-User"] = uid;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-CYRO-User": user.uid,
+    Authorization: req.headers.get("authorization") ?? "",
+  };
   const hasBody = !["GET", "HEAD", "DELETE"].includes(req.method);
   try {
     const res = await fetch(url, {
