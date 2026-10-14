@@ -22,6 +22,8 @@ import {
   Trophy
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -39,18 +41,38 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("finpilot-sidebar-collapsed") === "1";
-  });
+  const { user } = useAuth();
+  const [preferencesUid, setPreferencesUid] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setPreferencesUid("");
+    if (!user) return () => { active = false; };
+    void authenticatedFetch("/api/user/preferences")
+      .then((response) => response.json())
+      .then(({ preferences }) => {
+        if (!active) return;
+        if (typeof preferences?.sidebarCollapsed === "boolean") setCollapsed(preferences.sidebarCollapsed);
+        else setCollapsed(window.localStorage.getItem(`finpilot-sidebar-collapsed:${user.id}`) === "1");
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setPreferencesUid(user.id); });
+    return () => { active = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     document.body.classList.toggle("sidebar-collapsed", collapsed);
-    window.localStorage.setItem("finpilot-sidebar-collapsed", collapsed ? "1" : "0");
+    if (user) window.localStorage.setItem(`finpilot-sidebar-collapsed:${user.id}`, collapsed ? "1" : "0");
+    if (user && preferencesUid === user.id) {
+      void authenticatedFetch("/api/user/preferences", {
+        method: "PUT", body: JSON.stringify({ preferences: { sidebarCollapsed: collapsed } }),
+      }).catch(() => undefined);
+    }
     return () => {
       document.body.classList.remove("sidebar-collapsed");
     };
-  }, [collapsed]);
+  }, [collapsed, user?.id, preferencesUid]);
 
   return (
     <aside

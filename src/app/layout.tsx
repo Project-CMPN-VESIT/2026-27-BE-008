@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Sidebar } from "@/components/sidebar";
-import { TopBar } from "@/components/top-bar";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -24,6 +22,8 @@ export const metadata: Metadata = {
 };
 
 import { AuthProvider } from "@/lib/auth-context";
+import { AuthGate } from "@/components/auth-gate";
+import { UserPreferenceSync } from "@/components/user-preference-sync";
 
 export default function RootLayout({
   children,
@@ -37,11 +37,10 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <AuthProvider>
-            <Sidebar />
-            <div className="app-shell min-h-screen">
-              <TopBar />
-              <main>{children}</main>
-            </div>
+            <UserPreferenceSync />
+            <AuthGate>
+              {children}
+            </AuthGate>
           </AuthProvider>
         </ThemeProvider>
       </body>

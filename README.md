@@ -32,7 +32,7 @@ Core product areas:
 **Backend services**:
 - `india-trade-cli` (CYRO Engine): FastAPI, Mistral API (via `mistralai`), ChromaDB for RAG, `yfinance`, `nsetools`. Orchestrates 7 concurrent AI analysts and streams debate progress.
 - `scrapper`: FastAPI + SQLite, requests/BeautifulSoup/XML parsing, Mistral extraction.
-- `paper-trading`: FastAPI + SQLite, Mistral mentor critique.
+- `paper-trading`: FastAPI + PostgreSQL, Firebase-authenticated user accounts and Mistral mentor critique.
 - `news-feed`: FastAPI + SQLite, APScheduler, requests-based BSE/NSE scraping.
 
 ## 3) Feature Status
@@ -43,7 +43,7 @@ Core product areas:
 - **Explainable AI (XAI)**: Tool execution is transparently recorded via a `TrackedToolRegistry` and rendered as Source Citation cards (e.g., "Screener.in + Yahoo Finance").
 - **RAG Pipeline**: Semantic search over S3-hosted JSON/CSV/PDF financial documents using ChromaDB. Auto-injects ticker-specific context into the LLM synthesis.
 - **Ticker Tagging**: `@` mention detection with a dynamic Nifty 50 picker dropdown.
-- **Session Persistence**: Chat history and sessions survive page reloads via a custom `localStorage` hook (`usePersistentMessages`).
+- **Session Persistence**: CYRO chat history and sessions are stored server-side in PostgreSQL and scoped to the signed-in Firebase user.
 - **Market Intelligence**: Live background-polled data integration for FII/DII netflows, Options analytics, and RAG freshness.
 
 ### Live Market Overview & Charts
@@ -60,7 +60,7 @@ Core product areas:
 - Screening endpoint with exact-ID + fuzzy + booster scoring waterfall.
 
 ### Paper Trading Crucible
-- Independent FastAPI service and local SQLite ledger.
+- Independent FastAPI service and PostgreSQL ledger scoped to authenticated Firebase users.
 - Virtual cash, holdings, and journal tracking.
 - Server-side live execution price fetch before order execution.
 - Mentor critique endpoint using Mistral prompt.
@@ -168,5 +168,5 @@ cyro_skill.py /_run_reasoning_analysis()
 War Room: analyst pills → scorecard card → debate cards → trade plans → signal badge
         │
         ▼
-usePersistentMessages → localStorage (survives page reload)
+Firebase Auth → verified API identity → PostgreSQL user-owned chat history
 ```
