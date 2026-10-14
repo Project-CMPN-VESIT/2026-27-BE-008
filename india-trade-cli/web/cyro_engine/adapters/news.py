@@ -101,27 +101,7 @@ class NewsAdapter(SourceAdapter):
                 logger.warning(f"Failed to fetch live canonical news for {symbol}: {e}")
 
         # Deduplicate across persistent and live results
-        from market.news import deduplicate_news, NewsItem
-        news_objs = [
-            NewsItem(
-                title=a["title"],
-                source=a.get("source") or a.get("publisher") or "News",
-                url=a.get("url", ""),
-                published=a.get("published_at", ""),
-                summary=a.get("summary", ""),
-                provider=a.get("provider", ""),
-                publisher=a.get("publisher", ""),
-                source_quality=a.get("source_quality", "SECONDARY"),
-                relevance_score=a.get("relevance_score", 1.0),
-                relevance_reason=a.get("relevance_reason", ""),
-                relevance_type=a.get("relevance_type", "DIRECT"),
-                news_type=a.get("news_type", "COMPANY"),
-                item_id=a.get("item_id", ""),
-            )
-            for a in articles
-        ]
-        deduped = deduplicate_news(news_objs, symbol=symbol)
-        final_articles = [n.to_dict() for n in deduped]
+        final_articles = self._deduplicate(articles, symbol=symbol)
 
         if not final_articles:
             logger.info(f"No relevant news articles found for {symbol} across all providers.")
@@ -129,16 +109,41 @@ class NewsAdapter(SourceAdapter):
 
         return final_articles
 
+    @staticmethod
+    def _deduplicate(articles: List[Dict[str, Any]], symbol: str = "") -> List[Dict[str, Any]]:
+        """Normalize provider rows and apply the shared cross-source deduplicator."""
+        from market.news import deduplicate_news, NewsItem
+
+        news_items = [
+            NewsItem(
+                title=item.get("title", ""),
+                source=item.get("source") or item.get("publisher") or "News",
+                url=item.get("url", ""),
+                published=item.get("published_at") or item.get("published", ""),
+                summary=item.get("summary", ""),
+                provider=item.get("provider", ""),
+                publisher=item.get("publisher", ""),
+                source_quality=item.get("source_quality", "SECONDARY"),
+                relevance_score=item.get("relevance_score", 1.0),
+                relevance_reason=item.get("relevance_reason", ""),
+                relevance_type=item.get("relevance_type", "DIRECT"),
+                news_type=item.get("news_type", "COMPANY"),
+                item_id=item.get("item_id", ""),
+            )
+            for item in articles if item.get("title")
+        ]
+        return [item.to_dict() for item in deduplicate_news(news_items, symbol=symbol)]
+
     def _fetch_fallback(self, symbol: str, **kwargs) -> tuple[Any, str]:
         # Graceful fallback handler
         try:
             from market.news import _rss_fallback
             fallback_items = _rss_fallback(symbol, n=5)
             if fallback_items:
-                return [i.to_dict() for i in fallback_items], "RSS Fallback"
+                return [i.to_dict() for i in fallback_items], "RSS Fallback", "FALLBACK"
         except Exception:
             pass
-        return [], "Empty Fallback"
+        return [], "Empty Fallback", "FALLBACK"
 
     def _build_evidence(self, symbol: str, research_id: str, result: AdapterResult) -> List[Dict[str, Any]]:
         if not result.list_data:

@@ -37,14 +37,13 @@ class EvidenceStore:
 
         # The DDL is idempotent but costs several Neon round-trips; run it once per process.
         if not EvidenceStore._table_ready:
-            self._ensure_table_exists()
-            EvidenceStore._table_ready = True
+            EvidenceStore._table_ready = self._ensure_table_exists()
 
     def _get_conn(self):
         if not self.db_url:
             return None
         try:
-            return psycopg2.connect(self.db_url, cursor_factory=RealDictCursor)
+            return psycopg2.connect(self.db_url, cursor_factory=RealDictCursor, connect_timeout=5)
         except Exception as e:
             logger.error(f"[EvidenceStore] DB Connection Error: {e}")
             return None
@@ -53,7 +52,7 @@ class EvidenceStore:
         """Creates the cyro_evidence_items table if it doesn't exist."""
         conn = self._get_conn()
         if not conn:
-            return
+            return False
             
         try:
             with conn:
@@ -86,8 +85,10 @@ class EvidenceStore:
                         ON cyro_evidence_items (ticker);
                     """)
             logger.info("[EvidenceStore] cyro_evidence_items table is ready.")
+            return True
         except Exception as e:
             logger.error(f"[EvidenceStore] Table creation failed: {e}")
+            return False
         finally:
             conn.close()
 
@@ -97,7 +98,7 @@ class EvidenceStore:
         """
         conn = self._get_conn()
         if not conn:
-            return
+            return False
             
         try:
             with conn:
@@ -146,8 +147,10 @@ class EvidenceStore:
                         "freshness": item_dict.get("freshness", "current"),
                         "content_hash": item_dict.get("content_hash"),
                     })
+            return True
         except Exception as e:
             logger.error(f"[EvidenceStore] Store evidence failed for {item_dict.get('id')}: {e}")
+            return False
         finally:
             conn.close()
 
@@ -168,10 +171,10 @@ class EvidenceStore:
     def store_evidence_batch(self, items: List[Dict[str, Any]]):
         """Upsert all evidence items over ONE connection in ONE round-trip (was one connection per item)."""
         if not items:
-            return
+            return True
         conn = self._get_conn()
         if not conn:
-            return
+            return False
         try:
             from psycopg2.extras import execute_values
 
@@ -189,8 +192,10 @@ class EvidenceStore:
                         f"ON CONFLICT (id) DO UPDATE SET {updates}",
                         rows,
                     )
+            return True
         except Exception as e:
             logger.error(f"[EvidenceStore] Batch store failed ({len(items)} items): {e}")
+            return False
         finally:
             conn.close()
 

@@ -98,9 +98,20 @@ class ContextBuilder:
                     data_quality_flags.append(DataQualityFlag(
                         module=adapter_name,
                         status="unavailable",
-                        message=result.error
+                        message=result.error,
+                        code="SOURCE_UNAVAILABLE",
+                        severity="WARNING",
                     ))
                     continue
+
+                if result.freshness == "empty":
+                    data_quality_flags.append(DataQualityFlag(
+                        module=adapter_name,
+                        status="empty",
+                        message=f"{result.source_name} returned no usable data after fallback.",
+                        code="EMPTY_SOURCE_RESULT",
+                        severity="WARNING",
+                    ))
                     
                 adapter = self.adapters[adapter_name]
                 items = adapter.to_evidence_items(symbol, self.research_id, result)
@@ -110,9 +121,19 @@ class ContextBuilder:
                     item["security_id"] = route.entity.security_id
                 new_evidence_dicts.extend(items)
                 
-            # Store structured evidence to Neon DB (Idempotent)
+            # Persist immutable, run-scoped keys. In-memory evidence IDs used by
+            # analyst citations stay unchanged, while another run cannot overwrite
+            # this run's stored provenance.
             if new_evidence_dicts:
-                self.store.store_evidence_batch_async(new_evidence_dicts)
+                persisted = [
+                    {**item, "id": f"{self.research_id}:{item['id']}"}
+                    for item in new_evidence_dicts
+                ]
+                if not self.store.store_evidence_batch(persisted):
+                    logger.warning(
+                        "[ContextBuilder] Evidence persistence failed for %s; continuing with in-memory evidence",
+                        self.research_id,
+                    )
                 
             # Populate the Context dictionary with Pydantic Models for Agent 3
             for item_dict in new_evidence_dicts:

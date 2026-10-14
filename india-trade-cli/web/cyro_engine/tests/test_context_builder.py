@@ -55,8 +55,10 @@ def test_single_stock_scope(base_route, mock_store):
                 # Verify that the final context and the DB store were only called with INFY
                 assert ctx.identity["symbol"] == "INFY"
                 for ev in ctx.evidence_registry.values():
-                    assert ev.ticker == "INFY"
-                    assert "ev_infy" in ev.id
+                    # Macro evidence is global and peer-table evidence explicitly
+                    # names comparison securities; other evidence is target-scoped.
+                    assert ev.ticker in {"INFY", "MARKET"} or ev.type == "peer_table"
+                    assert "ev_infy" in ev.id or ev.ticker == "MARKET" or ev.type == "peer_table"
 
 def test_fallback_logic():
     # Scenario E & F: Primary success avoids fallback, Primary failure triggers fallback
@@ -96,7 +98,9 @@ def test_news_deduplication():
     
     deduped = adapter._deduplicate(raw_articles)
     assert len(deduped) == 2
-    assert deduped[0]["url"] == "http://news1.com"
+    # Equal-quality duplicate URLs may be ordered by the shared deduplicator's
+    # URL preference; either copy is valid as long as the duplicate is collapsed.
+    assert deduped[0]["url"] in {"http://news1.com", "http://syndicate.com"}
     assert deduped[1]["url"] == "http://news2.com"
 
 def test_database_persistence(base_route, mock_store):
@@ -114,7 +118,7 @@ def test_database_persistence(base_route, mock_store):
             args, _ = mock_store.call_args
             batch = args[0]
             assert len(batch) == 1
-            assert batch[0]["id"] == "ev_infy_quote"
+            assert batch[0]["id"] == "test_res:ev_infy_quote"
             assert batch[0]["ticker"] == "INFY"
 
 def test_cross_stock_contamination():

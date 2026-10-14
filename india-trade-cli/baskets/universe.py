@@ -42,7 +42,10 @@ def fetch_universe() -> List[dict]:
         rows = None
         for attempt in range(3):
             try:
-                rows = _rows_of(nse.list_equity_stocks_by_index(index_name))
+                fn = getattr(nse, "listEquityStocksByIndex", None) or getattr(nse, "list_equity_stocks_by_index", None)
+                if not fn:
+                    raise RuntimeError("NSE client has no index listing method")
+                rows = _rows_of(fn(index_name))
                 if rows:
                     break
             except Exception as exc:
