@@ -24,6 +24,7 @@ import {
 import TradingModal from "@/components/TradingModal";
 import MentorMarkdown from "@/components/MentorMarkdown";
 import Link from "next/link";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 type SearchSuggestion = {
   marketId: string;
@@ -260,7 +261,7 @@ export default function PaperTradingPage() {
       }
 
       try {
-        const res = await fetch("/api/paper-trading/portfolio?userId=test_user");
+        const res = await authenticatedFetch("/api/paper-trading/portfolio");
         const json = await res.json();
         if (json.ok) {
           setData(json.data);
@@ -444,7 +445,7 @@ export default function PaperTradingPage() {
     setIsChartLoading(true);
 
     try {
-      const res = await fetch(`/api/paper-trading/portfolio-chart?userId=test_user&range=${range}&metric=${metric}`);
+      const res = await authenticatedFetch(`/api/paper-trading/portfolio-chart?range=${range}&metric=${metric}`);
       const json = await res.json();
       if (json.ok && json.data) {
         const parsed = {
@@ -491,7 +492,7 @@ export default function PaperTradingPage() {
       ["1D", "1W", "1M", "3M", "1Y", "ALL"].forEach((r) => {
         const cacheKey = `${r}:${metric}`;
         if (rangeDataCache.current[cacheKey]) return;
-        fetch(`/api/paper-trading/portfolio-chart?userId=test_user&range=${r}&metric=${metric}`)
+        authenticatedFetch(`/api/paper-trading/portfolio-chart?range=${r}&metric=${metric}`)
           .then((res) => res.json())
           .then((json) => {
             if (json.ok && json.data) {
@@ -765,16 +766,15 @@ export default function PaperTradingPage() {
     quantity: number = 10
   ) => {
     try {
-      const res = await fetch("/api/paper-trading/execute", {
+      const res = await authenticatedFetch("/api/paper-trading/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: "test_user",
           ticker: selectedStockForModal,
           action,
           quantity,
           userThesis: thesis,
           aiFeedback: feedback,
+          idempotencyKey: crypto.randomUUID(),
         }),
       });
       const json = await res.json();

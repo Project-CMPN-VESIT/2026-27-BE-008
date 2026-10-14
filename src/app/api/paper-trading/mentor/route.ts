@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuth } from "@/lib/server-auth";
 
 const API_BASE = "http://127.0.0.1:8001/api";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth(request);
     const body = await request.json();
     
     const res = await fetch(`${API_BASE}/mentor-audit`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: request.headers.get("authorization") ?? "" },
       body: JSON.stringify({
         action: body.action,
         quantity: body.quantity,
@@ -24,6 +26,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({ ok: true, critique: data.critique });
   } catch (err: any) {
+    if (err instanceof AuthRequiredError) return NextResponse.json({ ok: false, error: err.message }, { status: 401 });
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }

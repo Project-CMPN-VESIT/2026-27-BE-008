@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCandleHistory, TvCandle } from "@/lib/tradingview";
+import { AuthRequiredError, requireAuth } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,7 +22,14 @@ const chartCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 180_000; // 3 minutes cache for composite chart (invalidated automatically on trade)
 
 export async function GET(request: NextRequest) {
-  const userId = request.nextUrl.searchParams.get("userId") || "test_user";
+  let userId: string;
+  try {
+    userId = (await requireAuth(request)).uid;
+  } catch (error) {
+    if (error instanceof AuthRequiredError) return NextResponse.json({ ok: false, error: error.message }, { status: 401 });
+    console.error("[paper-chart] Authentication failed", error);
+    return NextResponse.json({ ok: false, error: "Could not authenticate request" }, { status: 500 });
+  }
   const range = (request.nextUrl.searchParams.get("range") || "1D").toUpperCase();
   const metricType = request.nextUrl.searchParams.get("metric") || "total"; // "total" or "holdings"
 
@@ -30,7 +38,9 @@ export async function GET(request: NextRequest) {
 
   try {
     // Fetch user portfolio first
-    const portfolioRes = await fetch(`${API_BASE}/portfolio/${userId}`, { cache: "no-store" });
+    const portfolioRes = await fetch(`${API_BASE}/portfolio`, {
+      cache: "no-store", headers: { Authorization: request.headers.get("authorization") ?? "" },
+    });
     if (!portfolioRes.ok) throw new Error("Failed to fetch user portfolio");
     const portfolioData = await portfolioRes.json();
 

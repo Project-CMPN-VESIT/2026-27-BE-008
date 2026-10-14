@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import MentorMarkdown from "@/components/MentorMarkdown";
 import { X, Brain, AlertTriangle, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 type TradingModalProps = {
   isOpen: boolean;
@@ -108,9 +109,8 @@ export default function TradingModal({
     if (!thesis.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/paper-trading/mentor", {
+      const res = await authenticatedFetch("/api/paper-trading/mentor", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
           quantity,
