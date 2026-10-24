@@ -86,6 +86,7 @@ public/videos/
 video-engine/frontend/public/videos/
 video-engine/backend/output/
 videos/
+!Finpilot Project Realted Documents/**
 
 # Ephemeral generated TTS audio & scene images (preserve static audio like background-music.mp3)
 public/audio/*/
