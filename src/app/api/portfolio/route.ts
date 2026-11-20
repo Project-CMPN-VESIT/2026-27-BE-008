@@ -20,39 +20,6 @@ export interface HoldingRecord {
   updated_at?: string;
 }
 
-const KNOWN_STOCK_PRICES: Record<string, { price: number; pChange: number; sector: string; name: string }> = {
-  RELIANCE: { price: 2876.30, pChange: 1.12, sector: "Energy", name: "Reliance Industries Ltd." },
-  HDFCBANK: { price: 1689.55, pChange: 0.31, sector: "Financials", name: "HDFC Bank Ltd." },
-  TCS: { price: 3924.75, pChange: -0.47, sector: "Technology", name: "Tata Consultancy Services Ltd." },
-  INFY: { price: 1564.90, pChange: 0.88, sector: "Technology", name: "Infosys Ltd." },
-  TATAMOTORS: { price: 963.20, pChange: -0.63, sector: "Automobile", name: "Tata Motors Ltd." },
-  ITC: { price: 432.10, pChange: 0.54, sector: "Consumer Goods", name: "ITC Ltd." },
-  BHARTIARTL: { price: 1342.10, pChange: 1.45, sector: "Telecom", name: "Bharti Airtel Ltd." },
-  ICICIBANK: { price: 1114.60, pChange: 0.72, sector: "Financials", name: "ICICI Bank Ltd." },
-  SBIN: { price: 814.25, pChange: 0.65, sector: "Financials", name: "State Bank of India" },
-  LT: { price: 3620.40, pChange: 0.42, sector: "Construction", name: "Larsen & Toubro Ltd." },
-  KOTAKBANK: { price: 1780.10, pChange: -0.32, sector: "Financials", name: "Kotak Mahindra Bank Ltd." },
-  AXISBANK: { price: 1195.30, pChange: 0.55, sector: "Financials", name: "Axis Bank Ltd." },
-  HINDUNILVR: { price: 2450.60, pChange: -0.15, sector: "Consumer Goods", name: "Hindustan Unilever Ltd." },
-  BAJFINANCE: { price: 7140.00, pChange: 1.20, sector: "Financials", name: "Bajaj Finance Ltd." },
-  MARUTI: { price: 12480.00, pChange: 0.85, sector: "Automobile", name: "Maruti Suzuki India Ltd." },
-  SUNPHARMA: { price: 1610.20, pChange: 0.75, sector: "Healthcare", name: "Sun Pharmaceutical Industries Ltd." },
-  TITAN: { price: 3410.50, pChange: 0.30, sector: "Consumer Goods", name: "Titan Company Ltd." },
-  TATASTEEL: { price: 156.40, pChange: 1.10, sector: "Metals & Mining", name: "Tata Steel Ltd." },
-  TATAPOWER: { price: 438.90, pChange: 1.40, sector: "Energy", name: "Tata Power Co. Ltd." },
-  WIPRO: { price: 482.10, pChange: -0.20, sector: "Technology", name: "Wipro Ltd." },
-  HCLTECH: { price: 1540.80, pChange: 0.90, sector: "Technology", name: "HCL Technologies Ltd." },
-  ADANIENT: { price: 3120.50, pChange: 1.35, sector: "Metals & Mining", name: "Adani Enterprises Ltd." },
-  ADANIPORTS: { price: 1340.20, pChange: 0.80, sector: "Services", name: "Adani Ports & SEZ Ltd." },
-  NTPC: { price: 365.10, pChange: 0.45, sector: "Energy", name: "NTPC Ltd." },
-  POWERGRID: { price: 312.40, pChange: 0.35, sector: "Energy", name: "Power Grid Corporation of India" },
-  COALINDIA: { price: 485.60, pChange: -0.40, sector: "Metals & Mining", name: "Coal India Ltd." },
-  ULTRACEMCO: { price: 10250.00, pChange: 0.60, sector: "Materials", name: "UltraTech Cement Ltd." },
-  NESTLEIND: { price: 2510.40, pChange: -0.10, sector: "Consumer Goods", name: "Nestle India Ltd." },
-  ZOMATO: { price: 198.50, pChange: 2.10, sector: "Services", name: "Zomato Ltd." },
-  JIOFIN: { price: 348.20, pChange: 1.15, sector: "Financials", name: "Jio Financial Services Ltd." },
-};
-
 let tableInitialized = false;
 async function ensurePortfolioTable(pool: any) {
   if (tableInitialized) return;
@@ -76,12 +43,12 @@ async function ensurePortfolioTable(pool: any) {
   tableInitialized = true;
 }
 
-function resolveStockQuote(symbol: string) {
+function resolveStockQuote(symbol: string, exchange = "NSE") {
   const cleanSym = symbol.toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
-  
-  // Try live market store if available
+  const normalizedExchange = exchange.toUpperCase() === "BSE" ? "BSE" : "NSE";
+
   try {
-    const cached = marketDataService.getLatest(`NSE:${cleanSym}`);
+    const cached = marketDataService.getLatest(`${normalizedExchange}:${cleanSym}`);
     if (cached && cached.ltp > 0) {
       const prev = cached.ltp - cached.change;
       return {
@@ -95,31 +62,11 @@ function resolveStockQuote(symbol: string) {
     // ignore
   }
 
-  // Lookup in known stock dictionary
-  const known = KNOWN_STOCK_PRICES[cleanSym];
-  if (known) {
-    const prev = known.price / (1 + known.pChange / 100);
-    return {
-      price: known.price,
-      pChange: known.pChange,
-      change: known.price - prev,
-      previousClose: prev,
-    };
-  }
-
-  // Generic fallback based on symbol hash for determinism
-  let hash = 0;
-  for (let i = 0; i < cleanSym.length; i++) {
-    hash = (hash << 5) - hash + cleanSym.charCodeAt(i);
-  }
-  const basePrice = Math.abs(hash % 3000) + 150;
-  const pChg = (((Math.abs(hash) % 500) - 250) / 100);
-  const prev = basePrice / (1 + pChg / 100);
   return {
-    price: Math.round(basePrice * 100) / 100,
-    pChange: Math.round(pChg * 100) / 100,
-    change: Math.round((basePrice - prev) * 100) / 100,
-    previousClose: Math.round(prev * 100) / 100,
+    price: 0,
+    pChange: 0,
+    change: 0,
+    previousClose: 0,
   };
 }
 
@@ -151,7 +98,7 @@ export async function GET(request: NextRequest) {
     );
 
     const enrichedHoldings = result.rows.map((row: any) => {
-      const quote = resolveStockQuote(row.symbol);
+      const quote = resolveStockQuote(row.symbol, row.exchange);
       const shares = parseFloat(row.shares);
       const buyPrice = parseFloat(row.buy_price);
       const currentPrice = quote.price;
@@ -245,8 +192,8 @@ export async function POST(request: NextRequest) {
         const cleanBuyPrice = parseFloat(h.buyPrice);
         if (isNaN(cleanShares) || cleanShares <= 0 || isNaN(cleanBuyPrice) || cleanBuyPrice < 0) continue;
 
-        const cleanName = h.companyName || KNOWN_STOCK_PRICES[cleanSymbol]?.name || cleanSymbol;
-        const cleanSector = h.sector || KNOWN_STOCK_PRICES[cleanSymbol]?.sector || "General";
+        const cleanName = h.companyName || cleanSymbol;
+        const cleanSector = h.sector || "General";
         const cleanDate = h.buyDate || new Date().toISOString().split("T")[0];
         const holdingId = h.id || `hld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -282,8 +229,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cleanName = companyName || KNOWN_STOCK_PRICES[cleanSymbol]?.name || cleanSymbol;
-    const cleanSector = sector || KNOWN_STOCK_PRICES[cleanSymbol]?.sector || "General";
+    const cleanName = companyName || cleanSymbol;
+    const cleanSector = sector || "General";
     const cleanDate = buyDate || new Date().toISOString().split("T")[0];
     const holdingId = body.id || `hld_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -427,4 +374,3 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
-

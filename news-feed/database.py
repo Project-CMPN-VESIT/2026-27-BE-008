@@ -217,15 +217,34 @@ def get_announcements(symbol=None, source=None, nse_index=None, limit=None) -> l
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
 
-    query += " ORDER BY announced_at DESC, id DESC"
-
-    if limit is not None:
-        query += " LIMIT ?"
-        params.append(int(limit))
-
     with _get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
-        return [dict(row) for row in rows]
+        results = [dict(row) for row in rows]
+
+    def _timestamp(item: dict) -> datetime:
+        value = str(item.get("announced_at") or "").strip()
+        if not value:
+            return datetime.min
+        for fmt in (
+            "%d-%b-%Y %H:%M:%S",
+            "%d-%B-%Y %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d",
+        ):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                pass
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return datetime.min
+
+    results.sort(key=lambda item: (_timestamp(item), item["id"]), reverse=True)
+    if limit is not None:
+        results = results[: int(limit)]
+    return results
 
 
 def get_stats() -> dict:

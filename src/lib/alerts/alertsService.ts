@@ -11,11 +11,8 @@ import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import {
   collection,
   doc,
-  onSnapshot,
   updateDoc,
   writeBatch,
-  query,
-  orderBy,
   getDocs,
   Unsubscribe,
 } from "firebase/firestore";
@@ -75,38 +72,10 @@ export function subscribeToUserAlerts(
   };
   window.addEventListener(ALERTS_UPDATE_EVENT, handleLocalUpdate);
 
-  // 4. Also try Firestore listener if available (gracefully catching errors)
-  let firestoreUnsub: (() => void) | null = null;
-  try {
-    const alertsRef = collection(firebaseDb, "user_alerts", userId, "alerts");
-    const q = query(alertsRef, orderBy("timestamp", "desc"));
-    firestoreUnsub = onSnapshot(
-      q,
-      (snap) => {
-        if (!active) return;
-        if (!snap.empty) {
-          const fsAlerts: StockAlert[] = snap.docs.map((d) => ({
-            id: d.id,
-            ...(d.data() as Omit<StockAlert, "id">),
-          }));
-          callback(fsAlerts);
-        }
-      },
-      () => {
-        // Suppress Firestore errors (e.g. if Firestore API is disabled in project)
-      }
-    );
-  } catch {
-    // ignore
-  }
-
   return () => {
     active = false;
     clearInterval(interval);
     window.removeEventListener(ALERTS_UPDATE_EVENT, handleLocalUpdate);
-    if (firestoreUnsub) {
-      firestoreUnsub();
-    }
   };
 }
 

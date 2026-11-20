@@ -1,11 +1,60 @@
 import hashlib
 import math
+import xml.etree.ElementTree as ET
 from datetime import datetime
 
 import requests
 
 BSE_PAGE_URL = "https://www.bseindia.com/corporates/ann.html"
 BSE_API_URL = "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w"
+BSE_RSS_URL = "https://www.bseindia.com/data/xml/announcements.aspx"
+
+
+def _fetch_bse_rss(session: requests.Session) -> list[dict]:
+    response = session.get(
+        BSE_RSS_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "application/rss+xml, application/xml, text/xml, */*",
+            "Referer": BSE_PAGE_URL,
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+
+    root = ET.fromstring(response.content)
+    fetched_at = datetime.utcnow().isoformat()
+    results = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip() or None
+        pub_date = (item.findtext("pubDate") or "").strip()
+        description = (item.findtext("description") or "").strip()
+        symbol = (item.findtext("scripcode") or "").strip()
+        company = title
+        subject = description or title
+
+        if symbol and title.endswith(f"({symbol})"):
+            company = title[: -(len(symbol) + 2)].strip()
+
+        if not symbol and not subject:
+            continue
+
+        content_hash = hashlib.sha256(
+            f"{symbol}{subject}{pub_date}".encode("utf-8")
+        ).hexdigest()
+        results.append({
+            "source": "BSE",
+            "symbol": symbol,
+            "company": company,
+            "subject": subject,
+            "category": "Corporate Announcement",
+            "announced_at": pub_date,
+            "pdf_url": link,
+            "content_hash": content_hash,
+            "fetched_at": fetched_at,
+        })
+    return results
 
 
 def _parse_int(value, default=0) -> int:
@@ -45,17 +94,34 @@ def _map_bse_item(item: dict, fetched_at: str) -> dict:
 def fetch_bse_announcements() -> list[dict]:
     try:
         session = requests.Session()
+        try:
+            rss_items = _fetch_bse_rss(session)
+            if rss_items:
+                print(f"[news-feed] BSE RSS: {len(rss_items)} announcements")
+                return rss_items
+        except Exception as exc:
+            print(f"[news-feed] BSE RSS fallback failed: {exc}")
+
         browser_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
             "Referer": "https://www.bseindia.com/",
         }
         api_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "User-Agent": browser_headers["User-Agent"],
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-IN,en-US;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
             "Referer": BSE_PAGE_URL,
             "Origin": "https://www.bseindia.com",
             "X-Requested-With": "XMLHttpRequest",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
         }
 
         # Prime session cookies from the official announcements page.

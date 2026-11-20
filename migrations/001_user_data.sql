@@ -82,3 +82,17 @@ CREATE TABLE IF NOT EXISTS paper_trades (
 );
 CREATE INDEX IF NOT EXISTS idx_paper_trades_uid_date
     ON paper_trades(firebase_uid, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_alerts (
+  id TEXT PRIMARY KEY,
+  firebase_uid TEXT NOT NULL REFERENCES app_users(firebase_uid) ON DELETE CASCADE,
+  stock TEXT NOT NULL,
+  type TEXT NOT NULL,
+  headline TEXT NOT NULL,
+  source TEXT,
+  timestamp TIMESTAMPTZ NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  url TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_user_alerts_uid_timestamp
+  ON user_alerts(firebase_uid, timestamp DESC);

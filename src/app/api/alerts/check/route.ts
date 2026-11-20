@@ -10,7 +10,24 @@ export const dynamic = "force-dynamic";
 
 function parseTimestamp(raw?: string | null): string {
   if (!raw) return new Date().toISOString();
-  const parsed = Date.parse(raw);
+  const value = raw.trim();
+  const nseMatch = value.match(/^(\d{1,2})[-/]([A-Za-z]{3,9})[-/](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (nseMatch) {
+    const [, day, monthName, year, hour = "0", minute = "0", second = "0"] = nseMatch;
+    const month = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
+      .indexOf(monthName.toLowerCase().slice(0, 3));
+    if (month >= 0) {
+      return new Date(
+        Number(year),
+        month,
+        Number(day),
+        Number(hour),
+        Number(minute),
+        Number(second)
+      ).toISOString();
+    }
+  }
+  const parsed = Date.parse(value);
   if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
   return new Date().toISOString();
 }
@@ -60,8 +77,15 @@ interface RawAlertCandidate {
 }
 
 function safeSourceUrl(raw: unknown, symbol: string): string {
-  if (typeof raw === "string" && /^https?:\/\//i.test(raw.trim())) return raw.trim();
-  return `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}`;
+  if (typeof raw === "string") {
+    const value = raw.trim();
+    if (/^https?:\/\//i.test(value)) {
+      if (/nseindia\.com\/get-quotes\/equity/i.test(value)) return "";
+      if (/bseindia\.com\/corporates\/ann/i.test(value)) return "";
+      return value;
+    }
+  }
+  return "";
 }
 
 function getAlertsFromSqlite(tickers: string[]): RawAlertCandidate[] {
@@ -80,7 +104,7 @@ function getAlertsFromSqlite(tickers: string[]): RawAlertCandidate[] {
       FROM announcements
       WHERE symbol = ? OR symbol = ? OR company LIKE ?
       ORDER BY id DESC
-      LIMIT 3
+      LIMIT 100
     `);
 
     for (const ticker of tickers) {
@@ -191,17 +215,44 @@ export async function GET(request: NextRequest) {
   ]);
 
   let allTickers = Array.from(new Set([...portfolioTickers, ...paperTickers]));
-
-  if (allTickers.length === 0) {
-    allTickers = ["AXISBANK", "BHARTIARTL", "HDFCBANK", "ICICIBANK", "TCS"];
-  }
+  allTickers = allTickers
+    .map((ticker) => ticker.split(":").pop()?.trim().toUpperCase())
+    .filter((ticker): ticker is string => Boolean(ticker));
 
   // 2. Collect alert candidates
   const sqliteCandidates = getAlertsFromSqlite(allTickers);
   const shortsCandidates = getAlertsFromShorts(allTickers);
-  const allCandidates = [...sqliteCandidates, ...shortsCandidates].slice(0, 20);
+  const deduplicated = new Map<string, RawAlertCandidate>();
+  const freshnessCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const candidate of [...sqliteCandidates, ...shortsCandidates]) {
+    const timestamp = Date.parse(candidate.timestamp);
+    if (Number.isNaN(timestamp)) continue;
+    if (timestamp < freshnessCutoff) continue;
+    const headlineKey = candidate.headline
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const key = `${candidate.stock}|${candidate.type}|${headlineKey}`;
+    const existing = deduplicated.get(key);
+    if (!existing || timestamp > Date.parse(existing.timestamp)) {
+      deduplicated.set(key, candidate);
+    }
+  }
+  const allCandidates = Array.from(deduplicated.values())
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+    .slice(0, 20);
 
   await ensureAlertUrlColumn(pool);
+  await pool.query(
+    `DELETE FROM user_alerts
+     WHERE firebase_uid = $1
+       AND (
+         id LIKE '%_ann_%'
+         OR id LIKE '%_shorts_%'
+         OR id LIKE 'test_%'
+       )`,
+    [uid]
+  );
   let newAlertCount = 0;
 
   for (const c of allCandidates) {
@@ -209,8 +260,17 @@ export async function GET(request: NextRequest) {
       const res = await pool.query(
         `INSERT INTO user_alerts (id, firebase_uid, stock, type, headline, source, timestamp, is_read, url)
          VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8)
-         ON CONFLICT (id) DO UPDATE SET url = COALESCE(user_alerts.url, EXCLUDED.url)
-         RETURNING id, (xmax = 0) AS inserted`,
+        ON CONFLICT (id) DO UPDATE SET
+          headline = EXCLUDED.headline,
+          source = EXCLUDED.source,
+          timestamp = EXCLUDED.timestamp,
+          url = CASE
+            WHEN EXCLUDED.url NOT LIKE '%/get-quotes/equity%' THEN EXCLUDED.url
+            WHEN user_alerts.url IS NULL
+              OR user_alerts.url LIKE '%/get-quotes/equity%' THEN EXCLUDED.url
+            ELSE user_alerts.url
+          END
+        RETURNING id, (xmax = 0) AS inserted`,
         [c.docId, uid, c.stock, c.type, c.headline, c.source, c.timestamp, c.url]
       );
       if (res.rows[0]?.inserted) {

@@ -57,7 +57,7 @@ def scrape_all(db, max_circulars: int = 20) -> Dict[str, Any]:
                 date_str = cols[0].text.strip()
             
             records_found += 1
-            if records_found > max_circulars:
+            if max_circulars is not None and records_found > max_circulars:
                 break
                 
             # Hash to avoid dupes

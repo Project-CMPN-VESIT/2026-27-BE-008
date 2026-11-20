@@ -156,6 +156,7 @@ export async function resolveMarket(input: string): Promise<TvStockSummary | nul
     ADANI: "ADANIENT",
     HDFC: "HDFCBANK",
     ICICI: "ICICIBANK",
+    ZOMATO: "ETERNAL",
   };
 
   const lookup = aliasMap[normalized] ?? normalized;

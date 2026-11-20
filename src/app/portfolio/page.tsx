@@ -6,7 +6,7 @@ import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import PortfolioChart from "@/components/chart/PortfolioChart";
 import { Holding } from "@/lib/portfolio/usePortfolio";
 import { firebaseDb } from "@/lib/firebase/client";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import {
   Plus,
   Trash2,
@@ -113,24 +113,9 @@ export default function PortfolioPage() {
       // ignore
     }
 
-    // 2. Background Firestore fetch with 1.8s timeout
+    // PostgreSQL is the authoritative source for authenticated portfolios.
+    // Firebase remains a write mirror and must not overwrite newer server holdings.
     if (user?.id) {
-      try {
-        const userDocRef = doc(firebaseDb, "user_portfolios", user.id);
-        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1800));
-        const snap = await Promise.race([getDoc(userDocRef), timeoutPromise]);
-        if (snap && snap.exists() && Array.isArray(snap.data()?.holdings)) {
-          const list = snap.data()?.holdings as UserHolding[];
-          setHoldings(list);
-          localStorage.setItem(storageKey, JSON.stringify(list));
-          setRefreshing(false);
-          return;
-        }
-      } catch (err) {
-        console.warn("[Firebase] Background read:", err);
-      }
-
-      // 3. Background API fetch with 2s timeout
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 2000);
@@ -361,12 +346,49 @@ export default function PortfolioPage() {
     setHoldings(updated);
     // 2. Instantly close modal (no delay, no sticking)
     closeModal();
-    // 3. Background non-blocking sync
+    // 3. Refresh the current market quote immediately, then persist the live value.
+    void (async () => {
+      try {
+        const market = exchange === "BSE" ? "BSE" : "NSE";
+        const res = await fetch(
+          `/api/live-quote?symbol=${encodeURIComponent(`${market}_${symbol}`)}&company=${encodeURIComponent(companyName)}`
+        );
+        const json = await res.json();
+        const livePrice = Number(json?.data?.ltp);
+        if (res.ok && json.ok && livePrice > 0) {
+          const liveChange = Number(json?.data?.dayChangePerc);
+          setHoldings((current) => {
+            const refreshed = current.map((holding) => {
+              if (holding.id !== newH.id) return holding;
+              const previousClose = livePrice / (1 + (liveChange || 0) / 100);
+              const dayChange = livePrice - previousClose;
+              return {
+                ...holding,
+                currentPrice: livePrice,
+                previousClose,
+                dayChange,
+                dayChangePercent: liveChange || 0,
+                currentValue: sharesNum * livePrice,
+                totalPnL: sharesNum * (livePrice - priceNum),
+                totalPnLPercent: ((livePrice - priceNum) / priceNum) * 100,
+                dayGain: sharesNum * dayChange,
+                dayGainPercent: liveChange || 0,
+              };
+            });
+            void syncHoldingsBackground(refreshed);
+            return refreshed;
+          });
+        }
+      } catch {
+        // The optimistic holding already contains the selected quote.
+      }
+    })();
+    // 4. Sync the optimistic holding immediately in the background.
     void syncHoldingsBackground(updated);
   };
 
   // Instant CSV Import: closes modal immediately
-  const handleImportCsv = () => {
+  const handleImportCsv = async () => {
     setCsvError("");
     if (!csvText.trim()) {
       setCsvError("Paste CSV data or select a valid CSV file.");
@@ -375,6 +397,23 @@ export default function PortfolioPage() {
 
     const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
     const parsed: UserHolding[] = [];
+    const resolveCsvSymbol = async (symbol: string) => {
+      try {
+        const res = await fetch(`/api/portfolio/search?q=${encodeURIComponent(symbol)}`);
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) {
+          const exact = json.data.find((item: StockSearchResult) =>
+            item.symbol.toUpperCase() === symbol ||
+            item.companyName.toUpperCase().includes(symbol)
+          );
+          if (exact) return exact;
+          return json.data[0] as StockSearchResult | undefined;
+        }
+      } catch {
+        // Keep the CSV row as an unresolved symbol.
+      }
+      return undefined;
+    };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -389,25 +428,27 @@ export default function PortfolioPage() {
         const buyDate = parts[3] || new Date().toISOString().split("T")[0];
 
         if (symbol && !isNaN(shares) && !isNaN(buyPrice) && shares > 0 && buyPrice > 0) {
+          const resolved = await resolveCsvSymbol(symbol);
+          const resolvedSymbol = resolved?.symbol || symbol;
           parsed.push({
             id: `hld_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            symbol,
-            companyName: symbol,
-            exchange: "NSE",
-            sector: "Equity",
+            symbol: resolvedSymbol,
+            companyName: resolved?.companyName || symbol,
+            exchange: resolved?.exchange || "NSE",
+            sector: resolved?.sector || "Equity",
             shares,
             buyPrice,
             buyDate,
-            currentPrice: buyPrice,
-            previousClose: buyPrice,
+            currentPrice: resolved?.price || buyPrice,
+            previousClose: resolved?.price || buyPrice,
             dayChange: 0,
-            dayChangePercent: 0,
+            dayChangePercent: resolved?.pChange || 0,
             investedValue: shares * buyPrice,
-            currentValue: shares * buyPrice,
-            totalPnL: 0,
-            totalPnLPercent: 0,
+            currentValue: shares * (resolved?.price || buyPrice),
+            totalPnL: shares * ((resolved?.price || buyPrice) - buyPrice),
+            totalPnLPercent: ((resolved?.price || buyPrice) - buyPrice) / buyPrice * 100,
             dayGain: 0,
-            dayGainPercent: 0,
+            dayGainPercent: resolved?.pChange || 0,
           });
         }
       }
@@ -1085,7 +1126,7 @@ export default function PortfolioPage() {
                           {searchResults.map((res) => (
                             <button
                               type="button"
-                              key={res.symbol}
+                              key={`${res.exchange}:${res.symbol}`}
                               onClick={() => {
                                 setSelectedStock(res);
                                 setFormPrice(res.price.toString());

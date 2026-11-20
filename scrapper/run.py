@@ -214,7 +214,10 @@ Examples:
 
     # scrape command
     scrape_parser = subparsers.add_parser("scrape", help="Run scrapers")
-    scrape_parser.add_argument("--source", choices=["rbi", "un", "all"], default="all",
+    scrape_parser.add_argument(
+        "--source",
+        choices=["sebi", "nse", "bse", "rbi", "un", "all"],
+        default="all",
                                 help="Which source to scrape")
     scrape_parser.add_argument("--max", type=int, default=None,
                                 help="Max number of circulars to scrape (RBI only)")
@@ -239,7 +242,11 @@ Examples:
 
     # pipeline command (scrape + extract + stats)
     pipeline_parser = subparsers.add_parser("pipeline", help="Full pipeline: scrape + extract + stats")
-    pipeline_parser.add_argument("--source", choices=["rbi", "un", "all"], default="all")
+    pipeline_parser.add_argument(
+        "--source",
+        choices=["sebi", "nse", "bse", "rbi", "un", "all"],
+        default="all",
+    )
     pipeline_parser.add_argument("--max", type=int, default=None)
 
     args = parser.parse_args()

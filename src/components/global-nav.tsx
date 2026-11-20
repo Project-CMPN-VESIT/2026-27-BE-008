@@ -360,13 +360,41 @@ export function GlobalNav() {
                       </div>
 
                       {/* Footer */}
-                      {alerts.length > 0 && (
-                        <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-center">
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                            Monitoring stocks in your portfolio &amp; paper trading
-                          </p>
+                      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                          Portfolio &amp; paper trading
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void authenticatedFetch("/api/alerts/trigger-test", {
+                                method: "POST",
+                                body: JSON.stringify({ action: "trigger" }),
+                              }).finally(() => {
+                                window.dispatchEvent(new CustomEvent("finpilot:alerts_updated"));
+                              });
+                            }}
+                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700"
+                          >
+                            Test alert
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void authenticatedFetch("/api/alerts/trigger-test", {
+                                method: "POST",
+                                body: JSON.stringify({ action: "remove" }),
+                              }).finally(() => {
+                                window.dispatchEvent(new CustomEvent("finpilot:alerts_updated"));
+                              });
+                            }}
+                            className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                          >
+                            Clear tests
+                          </button>
                         </div>
-                      )}
+                      </div>
                     </div>
                   </>
                 )}
