@@ -145,8 +145,8 @@ class VideoBrief(BaseModel):
 
 class ShortScript(BaseModel):
     event_type:             str = "normal_session"
-    estimated_read_seconds: int = 75
-    word_count:             Optional[int] = 180
+    estimated_read_seconds: int = 35
+    word_count:             Optional[int] = 85
     verdict:                Literal["Bullish", "Bearish", "Neutral", "Watchlist"] = "Neutral"
     hook:                   str = ""
     price_action:           str = ""
@@ -189,14 +189,14 @@ class StockRenderRequest(BaseModel):
     stock_data: NiftyStockItem
     script:     Optional[ShortScript] = None
     date:       Optional[str] = None
-    voice:      Optional[str] = "en-IN-W"
+    voice:      Optional[str] = "kokoro"
     force:      Optional[bool] = False
 
 class BatchRenderRequest(BaseModel):
     stocks: List[NiftyStockItem]
     date:   str
     force:  Optional[bool] = False
-    voice:  Optional[str] = "en-IN-W"
+    voice:  Optional[str] = "kokoro"
 
 class BatchStockStatus(BaseModel):
     symbol:    str

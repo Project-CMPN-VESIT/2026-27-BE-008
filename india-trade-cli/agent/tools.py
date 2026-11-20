@@ -508,6 +508,22 @@ def build_registry() -> ToolRegistry:
         fn=lambda symbol, n=8: get_stock_news(symbol, n),
     )
 
+    from market.sebi_shield import screen_sebi_shield
+
+    reg.register(
+        name="screen_sebi_shield",
+        description="Screen a company ticker or name against SEBI, NSE, and RBI sanctions, debarments, and regulatory orders.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE equity ticker symbol e.g. RELIANCE, INFY"},
+                "company_name": {"type": "string", "description": "Optional full company name"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, company_name=None: screen_sebi_shield(symbol, company_name),
+    )
+
     reg.register(
         name="get_upcoming_events",
         description=(

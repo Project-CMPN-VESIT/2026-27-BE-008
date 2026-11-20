@@ -10,8 +10,25 @@ const noStoreHeaders = {
   Expires: "0",
 };
 
+// When S3 is unreachable or the credentials are rejected, remember it briefly so every page view does not wait ~3s
+// for the same failure, and never echo the cloud provider's error text to the browser.
+let storageDownUntil = 0;
+const STORAGE_BACKOFF_MS = 60_000;
+
+const unavailable = (symbol: string) =>
+  NextResponse.json(
+    {
+      ok: true,
+      data: { symbol, available: false, message: "Company document data is temporarily unavailable." },
+    },
+    { status: 200, headers: noStoreHeaders }
+  );
+
 export async function GET(request: NextRequest) {
   const symbol = request.nextUrl.searchParams.get("symbol")?.trim() ?? "";
+  if (symbol && !/^[A-Za-z0-9&:_.-]{1,30}$/.test(symbol)) {
+    return NextResponse.json({ ok: false, error: "symbol contains unsupported characters" }, { status: 400, headers: noStoreHeaders });
+  }
   const includeRaw = (request.nextUrl.searchParams.get("includeRaw") ?? "").toLowerCase() === "true";
 
   if (!symbol) {
@@ -26,6 +43,8 @@ export async function GET(request: NextRequest) {
       }
     );
   }
+
+  if (Date.now() < storageDownUntil) return unavailable(symbol);
 
   try {
     const docsData = await getDocScrapperStockData(symbol, { includeRaw });
@@ -58,15 +77,8 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unable to fetch stock doc data from S3",
-      },
-      {
-        status: 500,
-        headers: noStoreHeaders,
-      }
-    );
+    storageDownUntil = Date.now() + STORAGE_BACKOFF_MS;
+    console.error("[api/stock-docs] storage lookup failed:", error instanceof Error ? error.message : error);
+    return unavailable(symbol);
   }
 }

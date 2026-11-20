@@ -92,8 +92,8 @@ export function ContextPanel({
                 Sources for CYRO&apos;s answers appear here: the data behind each number, so you can check it.
               </div>
             )}
-            {reportSources.map((s) => (
-              <div key={`${s.source_type}:${s.label}`} className="cy-card">
+            {reportSources.map((s, i) => (
+              <div key={`${s.source_type}:${s.label}:${i}`} className="cy-card">
                 <div className="cy-card-kicker">{s.source_type}</div>
                 <div className="cy-card-title">{s.label}</div>
                 {s.excerpt && <div className="cy-card-text">{s.excerpt.slice(0, 180)}</div>}
@@ -121,8 +121,8 @@ export function ContextPanel({
                 )}
                 {m.kind === "list" && (
                   <div className="cy-tags">
-                    {(m.value as string[]).map((v) => (
-                      <span key={v} className="cy-tag">
+                    {(m.value as string[]).map((v, vi) => (
+                      <span key={`${v}-${vi}`} className="cy-tag">
                         {v}
                         <button
                           aria-label={`Remove ${v}`}

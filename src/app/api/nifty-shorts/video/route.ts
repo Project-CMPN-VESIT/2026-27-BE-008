@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { adminOnly } from "@/lib/admin-session";
 import { Agent } from "undici";
 import { getSessionShorts } from "@/lib/niftyShortsService";
 
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 900; // 15 minutes max route execution
 
 export async function GET(req: NextRequest) {
+  const denied = adminOnly(req);
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const symbol = searchParams.get("symbol");
@@ -48,6 +51,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminOnly(req);
+  if (denied) return denied;
   try {
     const body = await req.json();
     const symbol = (body.symbol || "").trim().toUpperCase();

@@ -298,3 +298,42 @@ def get_earnings_calendar(symbol: str) -> str:
         }, default=str)
     except Exception as e:
         return json.dumps({"error": str(e), "symbol": symbol.upper()})
+
+
+@tool(parse_docstring=True)
+def screen_sebi_shield(symbol: str, company_name: str = "") -> str:
+    """
+    Screen an equity ticker and registered company against the SEBI Shield regulatory database.
+
+    Checks SEBI, NSE, and RBI debarment registers and enforcement orders (1,600+ orders)
+    via microservice (port 8000) with automatic zero-failure fallback to local SQLite.
+
+    Args:
+        symbol: NSE ticker (e.g. "RELIANCE", "INFY")
+        company_name: Optional registered entity name (e.g. "Reliance Industries Limited")
+
+    Returns:
+        JSON string with screening verdict (clean: bool, sanction_status, matches, evidence_type).
+    """
+    try:
+        from market.sebi_shield import screen_sebi_shield as _screen
+
+        res = _screen(symbol, company_name=company_name or None)
+        return json.dumps({
+            "symbol": res.get("symbol", symbol.upper()),
+            "company_name": res.get("company_name", ""),
+            "clean": res.get("clean", True),
+            "sanction_status": res.get("sanction_status", "CLEAN"),
+            "matches_count": res.get("matches_count", 0),
+            "matches": res.get("matches", []),
+            "summary": res.get("summary", ""),
+            "source": res.get("source", "SEBI Shield"),
+            "evidence_type": "regulatory_sanction",
+        }, default=str)
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "symbol": symbol.upper(),
+            "clean": True,
+            "evidence_type": "regulatory_sanction",
+        })

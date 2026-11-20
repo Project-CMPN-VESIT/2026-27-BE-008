@@ -18,20 +18,6 @@ let cachedResults: any[] | null = null;
 let lastFetchedTime = 0;
 const CACHE_TTL_MS = 180_000; // 3 minutes fresh TTL
 
-// Curated seed data so users NEVER get a blank or broken screen if BSE connection times out
-const FALLBACK_SEED = [
-  { securityCode: "500180", shortName: "HDFCBANK", companyName: "HDFC Bank Ltd", resultDate: "18 Oct 2026", url: "https://www.bseindia.com/stock-share-price/hdfc-bank-ltd/hdfcbank/500180/" },
-  { securityCode: "500325", shortName: "RELIANCE", companyName: "Reliance Industries Ltd", resultDate: "20 Oct 2026", url: "https://www.bseindia.com/stock-share-price/reliance-industries-ltd/reliance/500325/" },
-  { securityCode: "532540", shortName: "TCS", companyName: "Tata Consultancy Services Ltd", resultDate: "10 Oct 2026", url: "https://www.bseindia.com/stock-share-price/tata-consultancy-services-ltd/tcs/532540/" },
-  { securityCode: "500209", shortName: "INFY", companyName: "Infosys Ltd", resultDate: "16 Oct 2026", url: "https://www.bseindia.com/stock-share-price/infosys-ltd/infy/500209/" },
-  { securityCode: "532215", shortName: "AXISBANK", companyName: "Axis Bank Ltd", resultDate: "22 Oct 2026", url: "https://www.bseindia.com/stock-share-price/axis-bank-ltd/axisbank/532215/" },
-  { securityCode: "500696", shortName: "HINDUNILVR", companyName: "Hindustan Unilever Ltd", resultDate: "24 Oct 2026", url: "https://www.bseindia.com/stock-share-price/hindustan-unilever-ltd/hindunilvr/500696/" },
-  { securityCode: "532174", shortName: "ICICIBANK", companyName: "ICICI Bank Ltd", resultDate: "25 Oct 2026", url: "https://www.bseindia.com/stock-share-price/icici-bank-ltd/icicibank/532174/" },
-  { securityCode: "500510", shortName: "LT", companyName: "Larsen & Toubro Ltd", resultDate: "28 Oct 2026", url: "https://www.bseindia.com/stock-share-price/larsen--toubro-ltd/lt/500510/" },
-  { securityCode: "500875", shortName: "ITC", companyName: "ITC Ltd", resultDate: "30 Oct 2026", url: "https://www.bseindia.com/stock-share-price/itc-ltd/itc/500875/" },
-  { securityCode: "500247", shortName: "KOTAKBANK", companyName: "Kotak Mahindra Bank Ltd", resultDate: "26 Oct 2026", url: "https://www.bseindia.com/stock-share-price/kotak-mahindra-bank-ltd/kotakbank/500247/" },
-];
-
 const normalizeDate = (value?: string) => {
   if (!value) return 0;
   const parsed = Date.parse(value);
@@ -68,6 +54,14 @@ export async function GET(request: NextRequest) {
   const fromDate = (request.nextUrl.searchParams.get("fromdate") || "").trim();
   const toDate = (request.nextUrl.searchParams.get("todate") || "").trim();
   const forceRefresh = request.nextUrl.searchParams.get("refresh") === "true";
+
+  // BSE expects a numeric scrip code and YYYYMMDD dates: reject anything else before it reaches the upstream URL
+  if (symbol && !/^[A-Za-z0-9&._-]{1,30}$/.test(symbol)) {
+    return NextResponse.json({ detail: "symbol contains unsupported characters" }, { status: 400 });
+  }
+  if ((fromDate && !/^\d{8}$/.test(fromDate)) || (toDate && !/^\d{8}$/.test(toDate))) {
+    return NextResponse.json({ detail: "fromdate and todate must be YYYYMMDD" }, { status: 400 });
+  }
 
   const now = Date.now();
 
@@ -112,15 +106,17 @@ export async function GET(request: NextRequest) {
       fetchedAt: new Date().toISOString(),
       results,
     });
-  } catch (error: unknown) {
-    // If upstream fetch times out or fails, gracefully return cached results or seed data with 200 OK
-    const fallbackResults = (cachedResults && cachedResults.length > 0) ? cachedResults : FALLBACK_SEED;
-    return NextResponse.json({
-      count: fallbackResults.length,
-      source: (cachedResults && cachedResults.length > 0) ? "BSE (Resilient Cache)" : "BSE (Seed)",
-      fetchedAt: new Date().toISOString(),
-      results: fallbackResults,
-      notice: "Serving resilient results cache while BSE connects.",
-    });
+  } catch {
+    // Prefer the last real data we hold. Never invent result dates: an honest "unavailable" beats a made-up calendar.
+    if (cachedResults && cachedResults.length > 0 && !symbol) {
+      return NextResponse.json({
+        count: cachedResults.length,
+        source: "BSE (Resilient Cache)",
+        fetchedAt: new Date(lastFetchedTime).toISOString(),
+        results: cachedResults,
+        notice: "BSE is not responding; showing the last data received.",
+      });
+    }
+    return NextResponse.json({ detail: "BSE results data is not reachable right now. Please retry shortly." }, { status: 503 });
   }
 }

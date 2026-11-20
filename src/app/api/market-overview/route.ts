@@ -1,178 +1,118 @@
 import { NextResponse } from "next/server";
-import { getLiveQuote, marketDataService } from "@/lib/tradingview";
+import { getCandleHistory, marketDataService } from "@/lib/tradingview";
+import indexConstituentsJson from "@/data/heatmap/indexConstituents.json";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-const noStoreHeaders = {
-  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-  Pragma: "no-cache",
-  Expires: "0",
-};
-
-const indexConfig = [
-  { label: "NIFTY", marketId: "NSE:NIFTY" },
-  { label: "SENSEX", marketId: "BSE:SENSEX" },
-  { label: "BANKNIFTY", marketId: "NSE:BANKNIFTY" },
-  { label: "MIDCPNIFTY", marketId: "NSE:NIFTY_MID_SELECT" },
+/**
+ * Real market numbers for the ticker bar and the home page: benchmark indices, sector indices,
+ * a few large caps and Nifty 50 breadth, all from the TradingView feed (never hard-coded).
+ */
+const INDICES = [
+  { name: "Nifty 50", id: "NSE:NIFTY" },
+  { name: "BSE Sensex", id: "BSE:SENSEX" },
+  { name: "Nifty Bank", id: "NSE:BANKNIFTY" },
+  { name: "India VIX", id: "NSE:INDIAVIX" },
+  { name: "Nifty Midcap 100", id: "NSE:CNXMIDCAP" },
+  { name: "Nifty Smallcap 100", id: "NSE:CNXSMALLCAP" },
+  { name: "Nifty 500", id: "NSE:CNX500" },
 ];
-
-const DEFAULT_MOST_TRADED_STOCKS = [
-  { symbol: "RELIANCE", companyName: "Reliance Industries Ltd", marketId: "NSE:RELIANCE" },
-  { symbol: "HDFCBANK", companyName: "HDFC Bank Ltd", marketId: "NSE:HDFCBANK" },
-  { symbol: "ICICIBANK", companyName: "ICICI Bank Ltd", marketId: "NSE:ICICIBANK" },
-  { symbol: "INFY", companyName: "Infosys Ltd", marketId: "NSE:INFY" },
-  { symbol: "TCS", companyName: "Tata Consultancy Services Ltd", marketId: "NSE:TCS" },
-  { symbol: "TATAMOTORS", companyName: "Tata Motors Ltd", marketId: "NSE:TATAMOTORS" },
-  { symbol: "SBIN", companyName: "State Bank of India", marketId: "NSE:SBIN" },
-  { symbol: "BHARTIARTL", companyName: "Bharti Airtel Ltd", marketId: "NSE:BHARTIARTL" },
+const SECTORS = [
+  { name: "NIFTY IT", id: "NSE:CNXIT" },
+  { name: "NIFTY BANK", id: "NSE:BANKNIFTY" },
+  { name: "NIFTY AUTO", id: "NSE:CNXAUTO" },
+  { name: "NIFTY PHARMA", id: "NSE:CNXPHARMA" },
+  { name: "NIFTY FMCG", id: "NSE:CNXFMCG" },
 ];
+const TRENDING = ["RELIANCE", "HDFCBANK", "TCS", "INFY"].map((s) => ({ name: s, id: `NSE:${s}` }));
+const NIFTY50 = (indexConstituentsJson as Array<{ index_id: string; stock_symbol: string }>)
+  .filter((c) => c.index_id === "IDX_1")
+  .map((c) => `NSE:${c.stock_symbol.replace(/[-&]/g, "_")}`);
 
-const ALL_SYMBOLS = [
-  ...indexConfig.map((i) => i.marketId),
-  ...DEFAULT_MOST_TRADED_STOCKS.map((s) => s.marketId),
-];
+const SPARK_IDS = INDICES.slice(0, 4).map((i) => i.id);
+const CACHE_MS = 5_000;
 
-// Pre-subscribe all dashboard symbols immediately so the WebSocket connection is primed
-try {
-  marketDataService.subscribe(ALL_SYMBOLS);
-} catch {
-  // Ignore subscription error on init
-}
+type Row = { name: string; id: string; value: number; change: number; pct: number; high?: number; low?: number; spark?: number[] };
+let cache: { at: number; payload: unknown } | null = null;
+let inflight: Promise<unknown> | null = null;
 
-let cachedOverview: { data: any; timestamp: number } | null = null;
-const CACHE_TTL_MS = 2000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function GET() {
-  try {
-    const now = Date.now();
-    if (cachedOverview && now - cachedOverview.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(
-        {
-          ok: true,
-          data: cachedOverview.data,
-        },
-        { headers: noStoreHeaders }
-      );
-    }
-
-    // Ensure active subscriptions
-    marketDataService.subscribe(ALL_SYMBOLS);
-
-    // Fetch index quotes in parallel
-    const indexPromises = indexConfig.map(async (item) => {
-      const cached = marketDataService.getLatest(item.marketId);
-      if (cached && cached.ltp > 0) {
-        return {
-          label: item.label,
-          marketId: item.marketId,
-          ltp: cached.ltp,
-          change: cached.change,
-          pChange: cached.pChange,
-        };
-      }
-
-      try {
-        const quote = await getLiveQuote(item.marketId);
-        return {
-          label: item.label,
-          marketId: item.marketId,
-          ltp: quote.ltp,
-          change: quote.change,
-          pChange: quote.pChange,
-        };
-      } catch {
-        return {
-          label: item.label,
-          marketId: item.marketId,
-          ltp: 0,
-          change: 0,
-          pChange: 0,
-        };
-      }
-    });
-
-    // Fetch stock quotes in parallel
-    const stockPromises = DEFAULT_MOST_TRADED_STOCKS.map(async (stock) => {
-      const cached = marketDataService.getLatest(stock.marketId);
-      if (cached && cached.ltp > 0) {
-        return {
-          symbol: stock.symbol,
-          companyName: stock.companyName,
-          ltp: cached.ltp,
-          change: cached.change,
-          pChange: cached.pChange,
-          volume: cached.volume ?? 0,
-          tradedValue: (cached.volume ?? 0) * cached.ltp,
-          marketId: stock.marketId,
-        };
-      }
-
-      try {
-        const quote = await getLiveQuote(stock.marketId);
-        return {
-          symbol: stock.symbol,
-          companyName: stock.companyName,
-          ltp: quote.ltp,
-          change: quote.change,
-          pChange: quote.pChange,
-          volume: quote.volume ?? 0,
-          tradedValue: (quote.volume ?? 0) * (quote.ltp || 1),
-          marketId: stock.marketId,
-        };
-      } catch {
-        return null;
-      }
-    });
-
-    const [indices, stockResults] = await Promise.all([
-      Promise.all(indexPromises),
-      Promise.all(stockPromises),
-    ]);
-
-    const mostTraded = stockResults.filter(
-      (s): s is NonNullable<typeof s> => s !== null && s.ltp > 0
-    );
-
-    const resultData = {
-      indices,
-      mostTraded,
-      updatedAt: new Date().toISOString(),
-    };
-
-    cachedOverview = {
-      data: resultData,
-      timestamp: now,
-    };
-
-    return NextResponse.json(
-      {
-        ok: true,
-        data: resultData,
-      },
-      { headers: noStoreHeaders }
-    );
-  } catch {
-    if (cachedOverview) {
-      return NextResponse.json(
-        {
-          ok: true,
-          data: cachedOverview.data,
-        },
-        { headers: noStoreHeaders }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Failed to load market overview",
-      },
-      {
-        status: 500,
-        headers: noStoreHeaders,
-      }
-    );
+async function waitForQuotes(ids: string[], maxMs: number) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    if (ids.every((id) => (marketDataService.getLatest(id)?.ltp ?? 0) > 0)) return;
+    await sleep(40);
   }
 }
 
+function rowFor(def: { name: string; id: string }): Row | null {
+  const q = marketDataService.getLatest(def.id);
+  if (!q || !(q.ltp > 0)) return null;
+  return { ...def, value: q.ltp, change: q.change ?? 0, pct: q.pChange ?? 0, high: q.dayHigh, low: q.dayLow };
+}
+
+async function build() {
+  const all = [...INDICES, ...SECTORS, ...TRENDING];
+  marketDataService.subscribe([...all.map((d) => d.id), ...NIFTY50]);
+  await waitForQuotes(all.map((d) => d.id), 1800);
+
+  const sparks = await Promise.allSettled(
+    SPARK_IDS.map((id) =>
+      Promise.race([
+        getCandleHistory(id, "D", 30),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 1200)),
+      ])
+    )
+  );
+  const sparkById = new Map<string, number[]>();
+  sparks.forEach((result, i) => {
+    if (result.status === "fulfilled" && result.value.length > 1) {
+      sparkById.set(SPARK_IDS[i], result.value.map((c) => c.close));
+    }
+  });
+
+  const indices = INDICES.map(rowFor).filter((r): r is Row => r !== null).map((r) => ({ ...r, spark: sparkById.get(r.id) }));
+  const sectors = SECTORS.map(rowFor).filter((r): r is Row => r !== null);
+  const trending = TRENDING.map(rowFor).filter((r): r is Row => r !== null);
+
+  let advances = 0;
+  let declines = 0;
+  let unchanged = 0;
+  for (const id of NIFTY50) {
+    const q = marketDataService.getLatest(id);
+    if (!q || !(q.ltp > 0)) continue;
+    if (q.pChange > 0) advances += 1;
+    else if (q.pChange < 0) declines += 1;
+    else unchanged += 1;
+  }
+
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    indices,
+    sectors,
+    trending,
+    breadth: { advances, declines, unchanged, universe: "Nifty 50" },
+  };
+}
+
+export async function GET() {
+  const now = Date.now();
+  if (cache && now - cache.at < CACHE_MS) {
+    return NextResponse.json(cache.payload, { headers: { "Cache-Control": "no-store" } });
+  }
+  try {
+    // concurrent requests share one build instead of each waiting on the feed
+    inflight = inflight ?? build().finally(() => { inflight = null; });
+    const payload = await inflight;
+    cache = { at: Date.now(), payload };
+    return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (cache) return NextResponse.json(cache.payload, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Market data unavailable" },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+}

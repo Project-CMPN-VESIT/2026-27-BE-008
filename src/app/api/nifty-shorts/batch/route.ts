@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminOnly } from "@/lib/admin-session";
 import {
   runBatchGeneration,
   getBatchProgress,
@@ -7,7 +8,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = adminOnly(request);
+  if (denied) return denied;
   const progress = getBatchProgress();
   return NextResponse.json({
     success: true,
@@ -16,6 +19,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminOnly(req);
+  if (denied) return denied;
   const progress = getBatchProgress();
   if (progress.isRunning) {
     return NextResponse.json({
@@ -45,7 +50,9 @@ export async function POST(req: NextRequest) {
   });
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  const denied = adminOnly(request);
+  if (denied) return denied;
   cancelBatch();
   return NextResponse.json({
     success: true,

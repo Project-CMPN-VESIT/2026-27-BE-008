@@ -51,7 +51,7 @@ async def render_single_stock_video(
     stock: NiftyStockItem,
     script: Optional[ShortScript] = None,
     date: Optional[str] = None,
-    voice: str = "en-IN-W",
+    voice: str = "kokoro",
     force: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -157,12 +157,33 @@ async def render_single_stock_video(
                 audio_url, duration = audio_results[i]
                 scene.audio_url = audio_url
                 if duration > 0:
-                    # Match scene length with audio duration + 1.0s breath buffer
-                    scene.duration_seconds = max(int(duration + 1.0), 3)
+                    # Match scene length with audio duration + 0.3s breath buffer
+                    scene.duration_seconds = max(int(round(duration + 0.3)), 3)
                 logger.info(f"[{symbol}] Scene {scene.id}: audio_url='{audio_url[:50] if audio_url else 'none'}', duration={duration:.2f}s")
 
+            # Strictly enforce 30-40s short video length constraint
+            total_sec = sum(s.duration_seconds for s in brief.scenes)
+            if total_sec > 40:
+                excess = total_sec - 40
+                # Scale down scenes exceeding 5s down to minimum 4s
+                for sc in sorted(brief.scenes, key=lambda s: s.duration_seconds, reverse=True):
+                    if excess <= 0:
+                        break
+                    can_reduce = max(sc.duration_seconds - 4, 0)
+                    reduction = min(excess, can_reduce)
+                    sc.duration_seconds -= reduction
+                    excess -= reduction
+            elif total_sec < 30:
+                deficit = 30 - total_sec
+                # Pad slightly across scenes to ensure minimum 30s
+                for sc in brief.scenes:
+                    if deficit <= 0:
+                        break
+                    sc.duration_seconds += 1
+                    deficit -= 1
+
             brief.total_seconds = sum(s.duration_seconds for s in brief.scenes)
-            logger.info(f"[{symbol}] Audio complete. Total video duration: {brief.total_seconds}s")
+            logger.info(f"[{symbol}] Audio complete. Total video duration: {brief.total_seconds}s (target 30-40s)")
         except Exception as e:
             logger.error(f"[{symbol}] Step 2 FAILED: {traceback.format_exc()}")
             raise RuntimeError(f"Audio generation failed for {symbol}: {type(e).__name__}: {e}")
@@ -269,7 +290,7 @@ async def start_batch_render(
     stocks: List[NiftyStockItem],
     date: str,
     force: bool = False,
-    voice: str = "en-IN-W",
+    voice: str = "kokoro",
 ) -> Dict[str, Any]:
     """Initiates a batch render for stocks if one is not currently running."""
     global _batch_state

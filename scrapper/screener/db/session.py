@@ -1,6 +1,19 @@
 import os
 import logging
 from sqlalchemy import create_engine
+
+# Public-DNS fallback for the PostgreSQL host (see pg_dns_fallback.py at the repository root).
+try:
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
+    import pg_dns_fallback as _pg_dns_fallback
+
+    _pg_dns_fallback.install()
+except Exception:  # never let the safety net stop a service from starting
+    pass
+
 from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)

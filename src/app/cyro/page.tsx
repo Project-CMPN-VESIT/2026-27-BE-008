@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Briefcase, Compass, FileText, PanelLeft, PanelRight, Sparkles, X } from "lucide-react";
+import { BarChart3, Briefcase, Compass, FileText, Sparkles, X } from "lucide-react";
 import { ChatMessage } from "@/components/cyro/ChatMessage";
 import { Composer } from "@/components/cyro/Composer";
 import { ContextPanel } from "@/components/cyro/ContextPanel";
@@ -9,27 +9,30 @@ import { SessionSidebar } from "@/components/cyro/SessionSidebar";
 import type { SourceCitation } from "@/components/cyro/report";
 import { useCyroChat } from "@/components/cyro/useCyroChat";
 import "@/components/cyro/cyro.css";
+import { CyroBotIcon } from "@/components/cyro-bot-icon";
+import { PanelLeftToggle, PanelRightToggle } from "@/components/cyro/PanelIcons";
 
 const STARTERS = [
-  { icon: BarChart3, title: "Ask about a stock", text: "Is TCS expensive right now?" },
-  { icon: Compass, title: "Find stocks", text: "Find me high-quality small cap stocks" },
-  { icon: FileText, title: "Full research report", text: "Run a full research report on Infosys for the long term" },
-  { icon: Briefcase, title: "Review my portfolio", text: "Where is my portfolio concentrated?" },
+  { icon: BarChart3, title: "Ask about a stock", text: "Is TCS or Reliance expensive right now?" },
+  { icon: Compass, title: "Find stocks", text: "Find high-quality mid & small cap stocks" },
+  { icon: FileText, title: "Deep research report", text: "Run forensic research on Infosys" },
+  { icon: Briefcase, title: "Review portfolio", text: "Analyze concentration & risk exposure" },
 ];
 
 export default function CyroPage() {
   const chat = useCyroChat();
   const [source, setSource] = useState<SourceCitation | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
-  // null = automatic (shown on wide screens only); true/false once the user picks
-  const [ctxOpen, setCtxOpen] = useState<boolean | null>(null);
+  const [ctxOpen, setCtxOpen] = useState(true);
   const threadRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches) {
-      setSideOpen(false);
-      setCtxOpen(false);
+    if (typeof window !== "undefined") {
+      if (window.matchMedia("(max-width: 820px)").matches) {
+        setSideOpen(false);
+        setCtxOpen(false);
+      }
     }
   }, []);
 
@@ -41,7 +44,7 @@ export default function CyroPage() {
   useEffect(() => {
     const el = threadRef.current;
     if (!el) return;
-    if (chat.messages.length === 0) el.scrollTop = 0;          // welcome screen starts at the top
+    if (chat.messages.length === 0) el.scrollTop = 0; // welcome screen starts at the top
     else if (stickRef.current) el.scrollTop = el.scrollHeight;
   }, [chat.messages]);
   useEffect(() => {
@@ -53,8 +56,8 @@ export default function CyroPage() {
   const lastAssistant = [...chat.messages].reverse().find((m) => m.role === "assistant");
 
   return (
-    <div className={`cyro-root ${sideOpen ? "" : "side-off"} ${ctxOpen === true ? "ctx-on" : ctxOpen === false ? "ctx-off" : ""}`}>
-      {(sideOpen || ctxOpen === true) && (
+    <div className={`cyro-root ${sideOpen ? "" : "side-off"} ${ctxOpen ? "ctx-on" : "ctx-off"}`}>
+      {(sideOpen || ctxOpen) && (
         <div
           className="cy-drawer-backdrop"
           onClick={() => {
@@ -87,10 +90,17 @@ export default function CyroPage() {
 
       <main className="cy-main">
         <header className="cy-head">
-          <button className="cy-icon-btn" onClick={() => setSideOpen((v) => !v)} aria-label={sideOpen ? "Hide chats" : "Show chats"} title={sideOpen ? "Hide chats" : "Show chats"}>
-            <PanelLeft size={17} />
+          <button
+            className="cy-icon-btn"
+            onClick={() => setSideOpen((v) => !v)}
+            aria-label={sideOpen ? "Hide chats" : "Show chats"}
+            title={sideOpen ? "Hide chats" : "Show chats"}
+          >
+            <PanelLeftToggle isOpen={sideOpen} size={17} />
           </button>
-          <div className="cy-head-title">{empty ? "CYRO" : title}</div>
+          <div className="cy-head-title">
+            <span>{empty ? "CYRO" : title}</span>
+          </div>
           {chat.focus.length > 0 && (
             <div className="cy-focus" aria-label="Companies in this chat">
               {chat.focus.map((f) => (
@@ -98,10 +108,14 @@ export default function CyroPage() {
               ))}
             </div>
           )}
-          <button className="cy-icon-btn" style={chat.focus.length ? undefined : { marginLeft: "auto" }}
-                  onClick={() => setCtxOpen((v) => (v === null ? !window.matchMedia("(min-width: 1500px)").matches : !v))}
-                  aria-label="Toggle sources panel" title="Sources, memory and market">
-            <PanelRight size={17} />
+          <button
+            className="cy-icon-btn"
+            style={chat.focus.length ? undefined : { marginLeft: "auto" }}
+            onClick={() => setCtxOpen((v) => !v)}
+            aria-label={ctxOpen ? "Hide sources panel" : "Show sources panel"}
+            title={ctxOpen ? "Hide sources panel" : "Show sources panel"}
+          >
+            <PanelRightToggle isOpen={ctxOpen} size={17} />
           </button>
         </header>
 
@@ -112,12 +126,17 @@ export default function CyroPage() {
           </div>
         )}
 
-        <div className="cy-thread" ref={threadRef} onScroll={onScroll}>
+        <div className={`cy-thread ${empty ? "is-empty" : ""}`} ref={threadRef} onScroll={onScroll}>
           {empty ? (
             <div className="cy-welcome">
-              <div className="cy-avatar" style={{ margin: "0 auto", width: 40, height: 40, borderRadius: 12 }}><Sparkles size={20} /></div>
-              <h1>What would you like to research?</h1>
-              <p>Ask about a company, a sector, an investing idea, or your portfolio.</p>
+              <div className="cy-avatar" style={{ margin: "0 auto 10px", width: 68, height: 68, borderRadius: 20, padding: 8, boxShadow: "0 8px 24px rgba(36, 89, 214, 0.14)" }}>
+                <CyroBotIcon size={52} className="w-full h-full object-contain" />
+              </div>
+              <h1 className="cy-welcome-hero">
+                Hello, I&apos;m <span className="cyro-text-gradient">CYRO</span>
+              </h1>
+              <h2 className="cy-welcome-title">What would you like to research?</h2>
+              <p className="cy-welcome-sub">Analyze company fundamentals, forensic audits, and market catalysts.</p>
               <div className="cy-starters">
                 {STARTERS.map((s) => (
                   <button key={s.title} className="cy-starter" onClick={() => chat.send(s.text)} disabled={chat.busy}>

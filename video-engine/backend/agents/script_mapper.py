@@ -32,33 +32,73 @@ def clean_text(text: Optional[str]) -> str:
     s = re.sub(r'\s+', ' ', str(text)).strip()
     return s
 
+def condense_to_reels_length(text: Optional[str], max_words: int = 16) -> str:
+    """
+    Extracts high-impact, punchy spoken narration fitted for a 30-40s short.
+    Keeps the most informative complete sentence(s) within max_words.
+    """
+    if not text:
+        return ""
+    clean = clean_text(text)
+    words = clean.split()
+    if len(words) <= max_words:
+        return clean
+
+    # Split by sentence boundaries (. ! ?)
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', clean) if s.strip()]
+    if sentences:
+        first_s = sentences[0]
+        first_words = first_s.split()
+        if len(first_words) <= max_words:
+            # Check if second sentence also fits
+            if len(sentences) > 1:
+                combined = f"{first_s} {sentences[1]}"
+                if len(combined.split()) <= max_words:
+                    return combined
+            return first_s
+        else:
+            # First sentence itself is long; split at clause boundary (, ; :)
+            clauses = [c.strip() for c in re.split(r'[,;:]\s+', first_s) if c.strip()]
+            res = ""
+            for cl in clauses:
+                candidate = f"{res}, {cl}" if res else cl
+                if len(candidate.split()) <= max_words:
+                    res = candidate
+                else:
+                    break
+            if res:
+                return res.rstrip(',;.') + '.'
+
+    # Fallback truncate cleanly
+    return " ".join(words[:max_words]).rstrip(',;.') + '.'
+
 def build_default_script(stock: NiftyStockItem) -> ShortScript:
-    """Fallback generator if stock.script was not populated."""
+    """Fallback generator if stock.script was not populated (optimized for 30-40s short)."""
     price = stock.price or 0.0
     chg = stock.change_pct or 0.0
     verdict = "Bullish" if chg > 0.5 else "Bearish" if chg < -0.5 else "Neutral"
     
     return ShortScript(
         event_type="normal_session",
-        estimated_read_seconds=75,
-        word_count=180,
+        estimated_read_seconds=35,
+        word_count=85,
         verdict=verdict,
-        hook=f"{stock.symbol} is making waves on Dalal Street today with a {chg:+.2f}% move at ₹{price:,.2f}.",
-        price_action=f"Trading at ₹{price:,.2f}, {stock.symbol} shows {'strong momentum' if chg >= 0 else 'selling pressure'} against NIFTY 50's {stock.nifty_change_pct:+.2f}%.",
-        why_moving=f"Market participants are actively watching {stock.sector} sector developments and corporate flows in {stock.company_name}.",
-        technicals=f"Technicals show RSI at {stock.rsi_14:.1f}, with key support at ₹{stock.support:,.1f} and resistance at ₹{stock.resistance:,.1f}.",
-        fundamentals=f"{stock.company_name} maintains strong sector leadership in {stock.sector} with healthy institutional interest.",
-        valuation=f"Valuations reflect current market sentiment across peer stocks in {stock.sector}.",
-        what_to_watch=f"Watch key price pivots around ₹{stock.resistance:,.1f} for directional confirmation.",
-        investor_view=f"Long term investors should track earnings consistency and sector tailwinds.",
-        trader_view=f"Traders should keep stop loss near ₹{stock.support:,.1f} and track volume expansion.",
+        hook=f"{stock.symbol} is on the move today with a {chg:+.2f}% swing at ₹{price:,.2f}.",
+        price_action=f"At ₹{price:,.2f}, {stock.symbol} shows {'strong momentum' if chg >= 0 else 'selling pressure'} versus Nifty's {stock.nifty_change_pct:+.2f}%.",
+        why_moving=f"Active institutional interest in {stock.sector} is driving order flow today.",
+        technicals=f"RSI is at {stock.rsi_14:.0f}, with key support at ₹{stock.support:,.0f} and resistance at ₹{stock.resistance:,.0f}.",
+        fundamentals=f"Healthy sector leadership and volumes in {stock.sector}.",
+        valuation=f"Trading in line with peer valuations.",
+        what_to_watch=f"Watch ₹{stock.resistance:,.0f} for breakout continuation.",
+        investor_view=f"Track core earnings consistency.",
+        trader_view=f"Watch ₹{stock.resistance:,.0f} for continuation with strict risk below ₹{stock.support:,.0f}.",
         disclaimer="Educational commentary for Indian markets, not financial advice.",
     )
 
 def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript] = None) -> VideoBrief:
     """
-    Transforms a NiftyStockItem and its ShortScript into a complete VideoBrief
-    ready for TTS generation and Remotion headless rendering.
+    Transforms a NiftyStockItem and its ShortScript into a dynamic 30-40s VideoBrief
+    ready for Kokoro TTS generation and Remotion headless rendering.
     """
     if not script:
         script = stock.script or build_default_script(stock)
@@ -78,12 +118,12 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
 
     scenes: List[Scene] = []
     
-    # ── Scene 1: INTRO (Text Reveal / Hook) ──────────────────────────────────
-    hook_narration = clean_text(script.hook) or f"{symbol} in action today!"
+    # ── Scene 1: INTRO (Text Reveal / Hook) (~5s) ─────────────────────────────
+    hook_narration = condense_to_reels_length(script.hook, max_words=14) or f"{symbol} in high-momentum action on Dalal Street today!"
     scenes.append(Scene(
         id=1,
         type=SceneType.intro,
-        duration_seconds=9,
+        duration_seconds=5,
         headline=f"{symbol} ALERT",
         subline=f"{company} · {sector}",
         narration=hook_narration,
@@ -93,12 +133,12 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
         logo="FINPILOT",
     ))
 
-    # ── Scene 2: STOCK PRICE TICKER ─────────────────────────────────────────
-    price_narration = clean_text(script.price_action) or f"{symbol} trades at ₹{price:,.2f}, moving {change_pct:+.2f}% today."
+    # ── Scene 2: STOCK PRICE TICKER (~6s) ────────────────────────────────────
+    price_narration = condense_to_reels_length(script.price_action, max_words=16) or f"Trading at ₹{price:,.2f}, {symbol} is {'up' if change_pct >= 0 else 'down'} {abs(change_pct):.2f}% with {vol_ratio:.1f} times volume."
     scenes.append(Scene(
         id=2,
         type=SceneType.stock,
-        duration_seconds=12,
+        duration_seconds=6,
         headline=f"{symbol} PRICE ACTION",
         subline=f"LTP ₹{price:,.2f} · NIFTY {nifty_pct:+.2f}%",
         narration=price_narration,
@@ -114,20 +154,18 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
         logo="FINPILOT",
     ))
 
-    # ── Scene 3: DRIVERS & COMPARISON / BAR CHART ───────────────────────────
-    # If earnings, use comparison table; otherwise dynamic bar chart comparing metrics
-    why_narration = clean_text(script.why_moving)
-    fund_narration = clean_text(script.fundamentals)
-    scene_3_narration = f"{why_narration} {fund_narration}".strip()
+    # ── Scene 3: DRIVERS & METRICS BAR CHART (~6s) ───────────────────────────
+    # Focus on the primary moving catalyst for crisp, punchy narration
+    scene_3_narration = condense_to_reels_length(script.why_moving or script.fundamentals, max_words=16)
     if not scene_3_narration:
-        scene_3_narration = f"Key performance metrics and market drivers for {symbol}."
+        scene_3_narration = f"Institutional buying in {sector} is powering {symbol}'s momentum today."
 
     if script.event_type == "earnings":
         scenes.append(Scene(
             id=3,
             type=SceneType.chart,
-            duration_seconds=14,
-            headline=f"{symbol} EARNINGS & FUNDAMENTALS",
+            duration_seconds=6,
+            headline=f"{symbol} EARNINGS & METRICS",
             subline=f"{sector} Benchmark Comparison",
             narration=scene_3_narration,
             visual_type=VisualType.comparison_table,
@@ -146,7 +184,7 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
             logo="FINPILOT",
         ))
     else:
-        # Bar chart comparing relative performance
+        # Dynamic Bar Chart
         stock_bar_val = min(max(abs(change_pct) * 12 + 25, 15), 100)
         nifty_bar_val = min(max(abs(nifty_pct) * 12 + 20, 10), 90)
         vol_bar_val   = min(max(vol_ratio * 30, 20), 100)
@@ -155,7 +193,7 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
         scenes.append(Scene(
             id=3,
             type=SceneType.chart,
-            duration_seconds=14,
+            duration_seconds=6,
             headline=f"{symbol} KEY METRICS",
             subline=f"Volume & Market Comparison",
             narration=scene_3_narration,
@@ -191,14 +229,14 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
             logo="FINPILOT",
         ))
 
-    # ── Scene 4: TECHNICAL GAUGE ────────────────────────────────────────────
-    tech_narration = clean_text(script.technicals) or f"RSI stands at {rsi:.1f}. Immediate support is at ₹{support:,.1f}, resistance at ₹{resistance:,.1f}."
+    # ── Scene 4: TECHNICAL GAUGE (~6s) ──────────────────────────────────────
+    tech_narration = condense_to_reels_length(script.technicals, max_words=16) or f"RSI is at {rsi:.0f}. Immediate support is at ₹{support:,.1f}, resistance at ₹{resistance:,.1f}."
     gauge_color = "green" if (rsi >= 50 and change_pct >= 0) else "red" if rsi < 45 else "amber"
     
     scenes.append(Scene(
         id=4,
         type=SceneType.chart,
-        duration_seconds=12,
+        duration_seconds=6,
         headline=f"{symbol} TECHNICALS",
         subline=f"Support: ₹{support:,.1f} | Resist: ₹{resistance:,.1f}",
         narration=tech_narration,
@@ -215,18 +253,16 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
         logo="FINPILOT",
     ))
 
-    # ── Scene 5: OUTLOOK & CATALYSTS ────────────────────────────────────────
-    watch_narration = clean_text(script.what_to_watch)
-    inv_narration = clean_text(script.investor_view)
-    trader_narration = clean_text(script.trader_view)
-    scene_5_narration = f"{watch_narration} For investors: {inv_narration} For traders: {trader_narration}".strip()
+    # ── Scene 5: OUTLOOK & STRATEGY (~6s) ───────────────────────────────────
+    outlook_source = script.trader_view or script.what_to_watch or script.investor_view
+    scene_5_narration = condense_to_reels_length(outlook_source, max_words=16)
     if not scene_5_narration:
-        scene_5_narration = f"Key levels to watch for {symbol}: Keep tight risk management around support and resistance."
+        scene_5_narration = f"Watch resistance at ₹{resistance:,.1f} for continuation with strict risk control."
 
     scenes.append(Scene(
         id=5,
         type=SceneType.sector,
-        duration_seconds=14,
+        duration_seconds=6,
         headline="OUTLOOK & STRATEGY",
         subline=f"Catalysts & Trade Plan for {symbol}",
         narration=scene_5_narration,
@@ -236,12 +272,13 @@ def map_short_to_video_brief(stock: NiftyStockItem, script: Optional[ShortScript
         logo="FINPILOT",
     ))
 
-    # ── Scene 6: OUTRO & VERDICT ────────────────────────────────────────────
-    outro_narration = f"FinPilot verdict for {symbol} is {script.verdict}. {clean_text(script.disclaimer)}"
+    # ── Scene 6: OUTRO & VERDICT (~5s) ──────────────────────────────────────
+    # Punchy call to action without reading full legal boilerplate aloud
+    outro_narration = f"FinPilot verdict on {symbol} is {script.verdict}. Follow FinPilot for daily Dalal Street setups."
     scenes.append(Scene(
         id=6,
         type=SceneType.outro,
-        duration_seconds=10,
+        duration_seconds=5,
         headline=f"VERDICT: {script.verdict.upper()}",
         subline=clean_text(script.disclaimer) or "Educational commentary, not financial advice.",
         narration=outro_narration,

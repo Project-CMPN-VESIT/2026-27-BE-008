@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminOnly } from "@/lib/admin-session";
 import { generateAndSaveSingle } from "@/lib/niftyShortsService";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const denied = adminOnly(req);
+  if (denied) return denied;
   try {
     const body = await req.json();
     const symbol = (body.symbol || "").trim().toUpperCase();

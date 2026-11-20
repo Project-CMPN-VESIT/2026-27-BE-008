@@ -175,8 +175,46 @@ def stock_alerts(symbol: str) -> Dict[str, Any]:
     alerts = [{"severity": a["type"], "title": a["title"], "detail": a["message"], "category": a["category"]}
               for a in res.get("alerts", [])[:8]]
     return _result("stock_alerts", True, alerts, [{"label": f"{symbol} alerts", "type": "Risk & momentum checks",
-                                                    "detail": "Price action, derivatives, flows, events, news"}],
+                                                    "detail": "Price action, derivatives, flows, events, news, regulatory"}],
                    title=f"{symbol} alerts")
+
+
+def sebi_shield_check(symbol: str, entity_name: Optional[str] = None) -> Dict[str, Any]:
+    """Screen an equity ticker or company name against SEBI Shield regulatory actions (SEBI, NSE, RBI)."""
+    try:
+        from market.sebi_shield import screen_sebi_shield
+
+        res = screen_sebi_shield(symbol, company_name=entity_name)
+        data = {
+            "symbol": res.get("symbol", symbol),
+            "company_name": res.get("company_name", ""),
+            "clean": res.get("clean", True),
+            "sanction_status": res.get("sanction_status", "CLEAN"),
+            "matches_count": res.get("matches_count", 0),
+            "matches": res.get("matches", []),
+            "summary": res.get("summary", ""),
+            "source": res.get("source", "SEBI Shield"),
+        }
+        srcs = [
+            {
+                "label": f"SEBI Shield: {m.get('regulator')} {m.get('action_type')}",
+                "type": "Regulatory Sanctions",
+                "detail": m.get("description") or m.get("status") or "Enforcement action",
+                "url": m.get("source_url") or "",
+            }
+            for m in res.get("matches", [])[:3]
+        ]
+        if not srcs:
+            srcs = [
+                {
+                    "label": f"SEBI Shield Regulatory Screen ({res.get('source', 'Local DB')})",
+                    "type": "Enforcement DB",
+                    "detail": "SEBI, NSE, and RBI debarment registers",
+                }
+            ]
+        return _result("sebi_shield_check", True, data, srcs, "", title=f"{symbol} SEBI Shield check")
+    except Exception as exc:
+        return _result("sebi_shield_check", False, error=str(exc), title=f"{symbol} SEBI Shield check")
 
 
 def discover(model: Optional[str] = None, cap: Optional[str] = None, sector: Optional[str] = None,

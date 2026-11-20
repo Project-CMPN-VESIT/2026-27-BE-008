@@ -42,10 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => onIdTokenChanged(firebaseAuth, (firebaseUser) => {
-    setUser(firebaseUser ? toUser(firebaseUser) : null);
-    setIsLoading(false);
-  }), []);
+  useEffect(() => {
+    const unsubscribe = onIdTokenChanged(firebaseAuth, (firebaseUser) => {
+      setUser(firebaseUser ? toUser(firebaseUser) : null);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => { await signInWithEmailAndPassword(firebaseAuth, email, password); }, []);
   const signUp = useCallback(async (email: string, password: string) => { await createUserWithEmailAndPassword(firebaseAuth, email, password); }, []);

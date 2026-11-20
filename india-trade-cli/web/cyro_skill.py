@@ -129,7 +129,11 @@ async def _refresh_symbol_universe():
                 indices = ["NIFTY 50", "NIFTY NEXT 50", "NIFTY MIDCAP 150"]
                 for idx in indices:
                     # Execute in a thread to not block event loop
-                    data = await asyncio.to_thread(nse_client._nse.listEquityStocksByIndex, idx)
+                    # the installed `nse` package spells it list_equity_stocks_by_index; older ones used camelCase
+                    lister = getattr(nse_client._nse, "list_equity_stocks_by_index", None) or getattr(
+                        nse_client._nse, "listEquityStocksByIndex"
+                    )
+                    data = await asyncio.to_thread(lister, idx)
                     if data and isinstance(data, dict) and "data" in data:
                         for row in data["data"]:
                             sym = row.get("symbol")
@@ -755,7 +759,14 @@ async def cyro_stream(
                 if "broker" in exc_str or "connection" in exc_str and "refused" in exc_str:
                     error_type = "BROKER_CONNECTION_ERROR"
                     user_message = "Could not connect to broker data service. Please try again."
-                elif "timeout" in exc_str or "deadlock" in exc_str:
+                elif (
+                    isinstance(exc, TimeoutError)
+                    or exc_type_name in {"TimeoutError", "ReadTimeout", "ConnectTimeout", "TimeoutException", "APITimeoutError", "SocketTimeoutError"}
+                    or "deadlock" in exc_str
+                ):
+                    # Only a genuine timeout is reported as one. The old check matched the word "timeout" anywhere in the
+                    # message, so an unrelated failure (for example "module aiohttp has no attribute SocketTimeoutError")
+                    # was shown to the user as "Research took too long".
                     error_type = "TIMEOUT_ERROR"
                     user_message = "Research took too long. Please try again."
                 elif "mistral" in exc_str.lower() or "llm" in exc_str.lower():

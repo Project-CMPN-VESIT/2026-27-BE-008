@@ -31,15 +31,15 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
     
     if custom_rel_path:
         # e.g. "videos/nifty-shorts/2026-10-06/RELIANCE.mp4"
-        rel_clean = custom_rel_path.lstrip("/\\")
-        out_filepath = os.path.join(frontend_dir, "public", rel_clean)
+        rel_clean = custom_rel_path.lstrip("/\\").replace("/", os.sep).replace("\\", os.sep)
+        out_filepath = os.path.normpath(os.path.join(frontend_dir, "public", rel_clean))
         os.makedirs(os.path.dirname(out_filepath), exist_ok=True)
-        ret_url = f"/{rel_clean.replace(os.sep, '/')}"
+        ret_url = f"/{custom_rel_path.lstrip('/\\').replace(os.sep, '/')}"
     else:
-        public_dir = os.path.join(frontend_dir, "public", "video", job_id)
+        public_dir = os.path.normpath(os.path.join(frontend_dir, "public", "video", job_id))
         os.makedirs(public_dir, exist_ok=True)
         out_filename = f"{job_id}.mp4"
-        out_filepath = os.path.join(public_dir, out_filename)
+        out_filepath = os.path.normpath(os.path.join(public_dir, out_filename))
         ret_url = f"/video/{job_id}/{out_filename}"
     
     # Check for npx availability
@@ -52,6 +52,13 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
     if not npx_path:
         raise RuntimeError("npx/npx.cmd not found on PATH. Ensure Node.js is installed and on the system PATH.")
     
+    # `npx remotion` prints the cryptic "could not determine executable to run" when the dependencies were never
+    # installed; say what is actually wrong and how to fix it.
+    if not os.path.isfile(os.path.join(frontend_dir, "node_modules", "@remotion", "cli", "package.json")):
+        raise RuntimeError(
+            "Remotion is not installed. Run `npm install` in video-engine/frontend (once), then retry the render."
+        )
+
     logger.info(f"Using npx at: {npx_path}")
     logger.info(f"Frontend dir: {frontend_dir}")
     logger.info(f"Output: {out_filepath}")
@@ -63,6 +70,7 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
         
         logger.info(f"Props written to: {props_fp.name} ({os.path.getsize(props_fp.name)} bytes)")
         
+        # Concurrency=1 avoids CPU 100% starvation and UI lag during rendering
         cmd = [
             npx_cmd,
             "remotion",
@@ -72,6 +80,8 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
             out_filepath,
             "--props",
             props_fp.name,
+            "--concurrency=1",
+            "--gl=angle",
         ]
         
         logger.info(f"Remotion command: {' '.join(cmd)}")
@@ -99,7 +109,6 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
                     clean_line = line.strip()
                     if clean_line:
                         output_lines.append(clean_line)
-                        # Log meaningful Remotion milestones or frame progress
                         line_lower = clean_line.lower()
                         if any(k in line_lower for k in ["render", "frame", "bundle", "complete", "error", "progress", "%", "ready", "memory"]):
                             logger.info(f"[Remotion] {clean_line}")
@@ -115,7 +124,6 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
 
         # Run via thread pool to remain fully non-blocking
         returncode, all_lines = await asyncio.to_thread(_execute_remotion_cli)
-        combined_output = "\n".join(all_lines)
 
         if returncode != 0:
             tail = "\n".join(all_lines[-30:])
@@ -125,7 +133,8 @@ async def render_video(brief: VideoBrief, job_id: str, custom_rel_path: Optional
         
         # Verify output file
         if not os.path.exists(out_filepath):
-            raise RuntimeError(f"Remotion completed but output file not found: {out_filepath}")
+            tail = "\n".join(all_lines[-40:])
+            raise RuntimeError(f"Remotion completed but output file not found: {out_filepath}\nOutput:\n{tail}")
         
         file_size = os.path.getsize(out_filepath)
         if file_size < 1000:

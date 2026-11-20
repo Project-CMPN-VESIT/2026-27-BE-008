@@ -6,6 +6,8 @@ import remarkGfm from "remark-gfm";
 import { AlertTriangle, Brain, Check, ChevronDown, Copy, Loader2, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import { ResearchActivityPanel } from "@/components/research/ResearchActivityPanel";
 import { CyroResearchReport, SourceCitation } from "./report";
+import { CyroBotIcon } from "@/components/cyro-bot-icon";
+import { ChatVisuals } from "./ChatVisuals";
 import type { UiMessage } from "./useCyroChat";
 
 function Markdown({ text }: { text: string }) {
@@ -71,7 +73,7 @@ function ChatMessageView({
 
   return (
     <div className="cy-msg">
-      <div className="cy-avatar" aria-hidden><Sparkles size={15} /></div>
+      <div className="cy-avatar" aria-hidden><CyroBotIcon size={32} className="w-full h-full object-contain" /></div>
       <div className="cy-assistant">
         <Steps message={message} />
 
@@ -86,6 +88,7 @@ function ChatMessageView({
             <Markdown text={message.text} />
           </div>
         )}
+        {!isReport && !message.streaming && message.visuals && message.visuals.length > 0 && <ChatVisuals items={message.visuals} />}
         {isReport && message.report && (
           <>
             {message.text && (
@@ -93,6 +96,7 @@ function ChatMessageView({
                 <Markdown text={message.text.split("\n\n")[0]} />
               </div>
             )}
+            {message.visuals && message.visuals.length > 0 && <ChatVisuals items={message.visuals} />}
             <CyroResearchReport
               report={message.report}
               sources={message.reportSources ?? []}
@@ -130,7 +134,7 @@ function ChatMessageView({
         {isLast && !busy && message.suggestions.length > 0 && (
           <div className="cy-chips">
             {message.suggestions.map((s, i) => (
-              <button key={s} className={`cy-chip ${i === 0 && /full research report/i.test(s) ? "primary" : ""}`} onClick={() => onSuggest(s)}>
+              <button key={`${s}-${i}`} className={`cy-chip ${i === 0 && /full research report/i.test(s) ? "primary" : ""}`} onClick={() => onSuggest(s)}>
                 {s}
               </button>
             ))}

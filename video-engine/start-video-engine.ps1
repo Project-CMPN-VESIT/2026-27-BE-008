@@ -9,7 +9,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $finpilotRoot = Split-Path -Parent $scriptDir
 $backendDir = Join-Path $scriptDir "backend"
 
-$venvPython = Join-Path $finpilotRoot "venve\Scripts\python.exe"
+$venvPython = Join-Path $finpilotRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPython)) {
+    $venvPython = Join-Path $finpilotRoot "venve\Scripts\python.exe"
+}
 if (-not (Test-Path $venvPython)) {
     $venvPython = "python"
 }

@@ -44,7 +44,7 @@ async def render_stock(req: StockRenderRequest):
             stock=req.stock_data,
             script=req.script,
             date=req.date,
-            voice=req.voice or "en-IN-W",
+            voice=req.voice or "kokoro",
             force=req.force or False,
         )
         return result
@@ -81,7 +81,7 @@ async def batch_render(req: BatchRenderRequest):
             stocks=req.stocks,
             date=req.date,
             force=req.force or False,
-            voice=req.voice or "en-IN-W",
+            voice=req.voice or "kokoro",
         )
         return result
     except Exception as e:

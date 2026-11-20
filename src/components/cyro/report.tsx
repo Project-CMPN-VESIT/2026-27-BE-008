@@ -266,8 +266,8 @@ function KeyMetrics({ metrics }: { metrics: ReportMetric[] }) {
     <section className="report-section" aria-labelledby="metrics-heading">
       <h3 id="metrics-heading" className="report-kicker">Key metrics</h3>
       <div className="metric-grid">
-        {metrics.map((metric) => (
-          <article className="metric-card" key={metric.label}>
+        {metrics.map((metric, mi) => (
+          <article className="metric-card" key={`${metric.label}-${mi}`}>
             <span className="metric-label">{metric.label}</span>
             <strong className="metric-value">{metric.value}</strong>
             <small className="metric-note">{metric.note}</small>
@@ -291,9 +291,9 @@ function ResearchOutlook({ report, horizon, rationale, domains, onSourceClick }:
 function InsightList({ title, claims, kind }: { title: string; claims: ReportClaim[]; kind: "positive" | "concern" }) {
   if (claims.length === 0) return null;
   const mark = kind === "positive" ? "✓" : "!";
-  return <section className="report-section" aria-labelledby={`${kind}-heading`}><h3 id={`${kind}-heading`} className="report-kicker">{title}</h3><div className="finding-grid">{sortClaims(claims).map((claim) => {
+  return <section className="report-section" aria-labelledby={`${kind}-heading`}><h3 id={`${kind}-heading`} className="report-kicker">{title}</h3><div className="finding-grid">{sortClaims(claims).map((claim, ci) => {
     const facts = insightFacts(claim);
-    return <article className={`finding ${kind}`} key={claim.id}><span className="finding-mark" aria-hidden="true">{mark}</span><div><strong>{claimHeading(claim)}</strong>{facts.length > 0 && <span className="finding-facts">{facts.join(" · ")}</span>}<p>{reportClaimText(claim)}</p></div></article>;
+    return <article className={`finding ${kind}`} key={`${claim.id}-${ci}`}><span className="finding-mark" aria-hidden="true">{mark}</span><div><strong>{claimHeading(claim)}</strong>{facts.length > 0 && <span className="finding-facts">{facts.join(" · ")}</span>}<p>{reportClaimText(claim)}</p></div></article>;
   })}</div></section>;
 }
 

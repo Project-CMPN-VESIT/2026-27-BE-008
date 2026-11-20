@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { CyroBotIcon } from "@/components/cyro-bot-icon";
 import { ResearchActivityState } from "./researchActivityReducer";
 import { ResearchTimelineNode } from "./ResearchTimelineNode";
 import { SpecialistChip } from "./SpecialistChip";
@@ -66,7 +67,7 @@ export function ResearchActivityPanel({ state, onToggleExpand }: PanelProps) {
       >
         <div className="flex items-start gap-2.5 text-left">
           <div className="mt-0.5">
-            <Sparkles className="w-4 h-4 text-indigo-500" />
+            <CyroBotIcon className="w-5 h-5" />
           </div>
           <div>
             <div className={`text-[10px] font-bold tracking-widest uppercase mb-0.5 ${status === "RUNNING" ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"}`}>

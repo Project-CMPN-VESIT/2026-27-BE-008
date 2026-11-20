@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark, .dark *));
@@ -22,6 +21,12 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;            /* a stray wide element must never create sideways scrolling on phones */
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 html {
@@ -29,12 +34,12 @@ html {
 }
 
 .app-shell {
-  margin-left: 15rem;
-  transition: margin-left 0.3s ease;
+  margin-left: 0;
+  width: 100%;
 }
 
 body.sidebar-collapsed .app-shell {
-  margin-left: 68px;
+  margin-left: 0;
 }
 
 @media (max-width: 1024px) {
@@ -110,7 +115,7 @@ body.sidebar-collapsed .app-shell {
   background-size: 32px 32px;
 }
 
-/* â”€â”€ Markdown Rendering Styles â”€â”€ */
+/* ── Markdown Rendering Styles ── */
 .markdown-content {
   line-height: 1.6;
 }
@@ -166,8 +171,7 @@ body.sidebar-collapsed .app-shell {
 
 /* ── Video Engine Custom Styling & Fidelity to et-video-engine ── */
 .font-display {
-
-  font-family: 'Bebas Neue', sans-serif !important;
+  font-family: var(--font-bebas), 'Bebas Neue', sans-serif !important;
 }
 
 /* Color classes used by video engine visual components */
@@ -214,7 +218,7 @@ body.sidebar-collapsed .app-shell {
 
 .scene-subtitle {
   width: 100%;
-  font-family: 'IBM Plex Sans', sans-serif;
+  font-family: var(--font-ibm-sans), 'IBM Plex Sans', sans-serif;
   font-size: 11px;
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.96);
@@ -280,3 +284,88 @@ body.sidebar-collapsed .app-shell {
   animation: logoShimmer 3s linear infinite;
 }
 
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 49s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* ── Ask CYRO Glowing Blue Border Button (Search Bar Aura) ── */
+@keyframes cyroPulseGlow {
+  0%, 100% {
+    border-color: #1e40af;
+    box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.35), 0 0 14px rgba(37, 99, 235, 0.28);
+  }
+  50% {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3.5px rgba(30, 64, 175, 0.5), 0 0 28px rgba(37, 99, 235, 0.45);
+  }
+}
+
+.cyro-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #eef2f6; /* soft professional light grey */
+  color: #000000; /* bold black text */
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 7px 16px;
+  border-radius: 12px;
+  border: 2px solid #1e40af;
+  animation: cyroPulseGlow 2.4s ease-in-out infinite;
+  transition: all 0.2s ease;
+  text-decoration: none !important;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cyro-nav-btn:hover {
+  background-color: #e2e8f0;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(30, 64, 175, 0.6), 0 0 32px rgba(37, 99, 235, 0.55);
+  transform: translateY(-1px);
+}
+
+.dark .cyro-nav-btn {
+  background-color: #1e2638; /* dark grey in dark mode */
+  color: #f8fafc;
+}
+
+.dark .cyro-nav-btn:hover {
+  background-color: #263147;
+}
+
+/* Completely remove TradingView attribution logo and watermark from all charts */
+#tv-attr-logo,
+[id*="tv-attr-logo"],
+a[href*="tradingview.com"],
+a[title*="TradingView"],
+[class*="tv-logo"],
+[class*="tradingview-logo"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
+
+/* ── Touch devices: comfortable tap targets and no accidental double-tap zoom delay ── */
+@media (pointer: coarse) {
+  button, [role="button"], a { touch-action: manipulation; }
+}
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }   /* stops iOS Safari zooming the page when a field is focused */
+}

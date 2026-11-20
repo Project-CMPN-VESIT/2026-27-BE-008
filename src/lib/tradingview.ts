@@ -204,6 +204,9 @@ class MarketDataService {
   private markets = new Map<string, any>();
   private store = new Map<string, NormalizedQuote>();
   private activeSubscriptions = new Set<string>();
+  // who asked for each symbol: a symbol is only closed once every owner has released it
+  private owners = new Map<string, Set<string>>();
+  private readonly MAX_SUBSCRIPTIONS = 800;
   private listeners = new Set<(quote: NormalizedQuote) => void>();
   
   public isConnected = false;
@@ -293,17 +296,27 @@ class MarketDataService {
     }, delay);
   }
 
-  public subscribe(symbols: string[]) {
+  /**
+   * Subscribe to live quotes. `owner` identifies the caller (for example one SSE connection); symbols requested
+   * without an owner belong to "shared" and stay for the life of the server. A connection that leaves must not
+   * drop symbols other pages are still reading.
+   */
+  public subscribe(symbols: string[], owner = "shared") {
     if (!this.client || !this.isConnected) {
       this.connect();
     }
 
     symbols.forEach(symbol => {
+      // re-insert so recently used symbols sit at the end of the Set (oldest first when we need to evict)
+      this.activeSubscriptions.delete(symbol);
       this.activeSubscriptions.add(symbol);
-      
+      const set = this.owners.get(symbol) ?? new Set<string>();
+      set.add(owner);
+      this.owners.set(symbol, set);
+
       if (!this.markets.has(symbol) && this.quoteSession) {
         const market = new this.quoteSession.Market(symbol);
-        
+
         market.onData((packet: QuotePacket) => {
           this.handleData(symbol, packet);
         });
@@ -315,10 +328,18 @@ class MarketDataService {
         this.markets.set(symbol, market);
       }
     });
+
+    this.evictIfNeeded();
   }
 
-  public unsubscribe(symbols: string[]) {
+  public unsubscribe(symbols: string[], owner = "shared") {
     symbols.forEach(symbol => {
+      const set = this.owners.get(symbol);
+      if (set) {
+        set.delete(owner);
+        if (set.size > 0) return; // someone else still needs this symbol
+        this.owners.delete(symbol);
+      }
       this.activeSubscriptions.delete(symbol);
       const market = this.markets.get(symbol);
       if (market) {
@@ -327,9 +348,25 @@ class MarketDataService {
         this.markets.delete(symbol);
       }
     });
-    
+
     if (this.activeSubscriptions.size === 0) {
       this.cleanup();
+    }
+  }
+
+  /** Drop the oldest symbols once the cap is passed so unbounded lookups cannot exhaust the feed or memory. */
+  private evictIfNeeded() {
+    if (this.activeSubscriptions.size <= this.MAX_SUBSCRIPTIONS) return;
+    for (const symbol of Array.from(this.activeSubscriptions)) {
+      if (this.activeSubscriptions.size <= this.MAX_SUBSCRIPTIONS) break;
+      this.owners.delete(symbol);
+      this.activeSubscriptions.delete(symbol);
+      this.store.delete(symbol);
+      const market = this.markets.get(symbol);
+      if (market) {
+        try { market.close(); } catch { /* already closed */ }
+        this.markets.delete(symbol);
+      }
     }
   }
 
@@ -483,7 +520,7 @@ const formatPointTime = (unix: number) => {
   });
 };
 
-export async function getCandleHistory(marketId: string, timeframe = "D", range = 120): Promise<TvCandle[]> {
+async function fetchCandleHistory(marketId: string, timeframe = "D", range = 120): Promise<TvCandle[]> {
   const cacheKey = `${marketId}|${timeframe}|${range}`;
   const cached = candleCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CANDLE_CACHE_TTL_MS) {
@@ -495,6 +532,10 @@ export async function getCandleHistory(marketId: string, timeframe = "D", range 
   try {
     const periods = await withTimeout<ChartPeriod[]>(
       new Promise((resolve, reject) => {
+        client.onError((...error: unknown[]) => {
+          reject(new Error(`TradingView client error: ${error.join(" ")}`));
+        });
+
         const chart = new client.Session.Chart();
 
         chart.setMarket(marketId, {
@@ -514,7 +555,7 @@ export async function getCandleHistory(marketId: string, timeframe = "D", range 
           reject(new Error(`TradingView chart error: ${error.join(" ")}`));
         });
       }),
-      5500,
+      9000,
       "TradingView chart timeout"
     );
 
@@ -546,6 +587,15 @@ export async function getCandleHistory(marketId: string, timeframe = "D", range 
     throw error;
   } finally {
     await client.end();
+  }
+}
+
+/** The feed occasionally misses its first answer (a cold socket); one retry with a fresh connection fixes almost all of those. */
+export async function getCandleHistory(marketId: string, timeframe = "D", range = 120): Promise<TvCandle[]> {
+  try {
+    return await fetchCandleHistory(marketId, timeframe, range);
+  } catch {
+    return fetchCandleHistory(marketId, timeframe, range);
   }
 }
 

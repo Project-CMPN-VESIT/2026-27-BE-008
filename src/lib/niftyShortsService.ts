@@ -51,7 +51,9 @@ export interface NiftyStockItem {
   error?: string;
 }
 
-const CACHE_FILE = path.join(process.cwd(), "src", "data", "nifty_shorts_cache.json");
+// Runtime data must not live under src/: in development every write there makes Next.js rebuild and reload the page.
+const CACHE_FILE = path.join(process.cwd(), ".runtime", "nifty_shorts_cache.json");
+const LEGACY_CACHE_FILE = path.join(process.cwd(), "src", "data", "nifty_shorts_cache.json");
 
 // Ensure PostgreSQL table is initialized on module load
 let dbInitialized = false;
@@ -109,8 +111,10 @@ export function normalizeShortScript(raw: any): ShortScript | undefined {
 // Local cache fallback helpers
 export function loadLocalCache(): Record<string, NiftyStockItem> {
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      const raw = fs.readFileSync(CACHE_FILE, "utf-8");
+    // an older install may still hold its cache at the previous location: read it once, new saves go to CACHE_FILE
+    const source = fs.existsSync(CACHE_FILE) ? CACHE_FILE : fs.existsSync(LEGACY_CACHE_FILE) ? LEGACY_CACHE_FILE : null;
+    if (source) {
+      const raw = fs.readFileSync(source, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
         for (const k of Object.keys(parsed)) {
@@ -552,30 +556,32 @@ ${item.headlines.map((h, i) => `${i + 1}. ${h}`).join("\n")}
 Detected Driver: ${detectedEvent}`;
 
   const systemPrompt = `You are an elite Indian stock market video analyst and scriptwriter for YouTube Shorts / Instagram Reels.
-Your task is to write a dynamic, spoken 60-90 second video script for an equity trading Short.
-The script must sound natural, professional, fast-paced, and engaging.
+Your task is to write a dynamic, punchy, spoken 30-40 second video script for an equity trading Short.
+The script must sound natural, professional, fast-paced, high-signal, and engaging.
 
-CRITICAL RULES FOR JSON VALIDITY:
+CRITICAL RULES FOR JSON VALIDITY & PACING:
+- Total speaking time must be between 30 and 40 seconds (approximately 80-90 words total).
+- Keep each field strictly to 1 punchy, high-impact sentence (12-16 words max per field).
 - Output a single, strictly valid JSON object without markdown fences.
-- All string values must be on single continuous lines (do NOT include raw unescaped line breaks or carriage returns inside values).
+- All string values must be on single continuous lines (do NOT include raw unescaped line breaks inside values).
 - If quotes appear in text, escape them with \\". Do NOT include trailing commas.
 
 Schema:
 {
   "event_type": "${detectedEvent}",
-  "estimated_read_seconds": 75,
-  "word_count": 180,
+  "estimated_read_seconds": 35,
+  "word_count": 85,
   "verdict": "Bullish" | "Bearish" | "Neutral" | "Watchlist",
-  "hook": "Strong 1-2 sentence hook highlighting the day's most important event or price move. Make it captivating.",
-  "price_action": "Quote current price, daily % change, volume vs 20-day average, and compare directly against NIFTY 50.",
-  "why_moving": "Explain clearly why the stock is moving using company announcements, news headlines, and sector/market factors.",
-  "technicals": "Quick technical snapshot covering trend, RSI, 20 EMA, 50 SMA, support/resistance levels, and volume dynamics.",
-  "fundamentals": "Fundamental snapshot with revenue/profit trajectory, margins, ROE/ROCE, and debt sustainability.",
-  "valuation": "Comment on current P/E versus historical range and peer/sector benchmarks.",
-  "what_to_watch": "Mention 2-3 key upcoming catalysts (quarterly results, policy changes, sector triggers).",
-  "investor_view": "Clear takeaway for long-term investors: what matters fundamentally and key risks.",
-  "trader_view": "Direct advice for traders: key support/resistance levels to watch, trade setup, and invalidation points.",
-  "disclaimer": "This is market information and educational commentary, not financial advice or a recommendation to buy or sell."
+  "hook": "Punchy 1-sentence hook (under 14 words) highlighting the day's event or move to instantly stop the scroll.",
+  "price_action": "1 crisp sentence stating price, % move, volume multiple, and contrast against Nifty.",
+  "why_moving": "1 sharp sentence explaining the core catalyst (corporate news, earnings, or sector tailwinds).",
+  "technicals": "1 concise sentence with RSI momentum and immediate support / resistance levels.",
+  "fundamentals": "1 brief sentence on company leadership or margin strength.",
+  "valuation": "1 brief sentence on valuation versus peers.",
+  "what_to_watch": "1 sentence on the key level or upcoming catalyst.",
+  "investor_view": "1 brief sentence for long-term investors.",
+  "trader_view": "1 actionable sentence for traders highlighting breakout level and invalidation risk.",
+  "disclaimer": "Educational commentary for Indian markets, not financial advice."
 }`;
 
   const models = ["open-mistral-7b", "mistral-small-latest"];
@@ -643,19 +649,19 @@ function createFallbackScript(
 
   return {
     event_type: detectedEvent,
-    estimated_read_seconds: 75,
-    word_count: 175,
+    estimated_read_seconds: 35,
+    word_count: 85,
     verdict,
-    hook: `${item.company_name} is ${isUp ? "surging" : "sliding"} ${Math.abs(item.change_pct)}% today — is this an institutional momentum shift or broader market noise?`,
-    price_action: `${item.symbol} is currently changing hands at ₹${item.price.toLocaleString("en-IN")}, ${isUp ? "up" : "down"} ${Math.abs(item.change_pct)}% with trading volumes pacing at ${item.volume_ratio}× its 20-day average. Against NIFTY 50's ${item.nifty_change_pct >= 0 ? "+" : ""}${item.nifty_change_pct}% session, the stock is ${relText}.`,
-    why_moving: `Today's price action is influenced by developments across ${item.sector.toLowerCase()} stocks: ${item.headlines[0] || "steady institutional sector rotation"}.`,
-    technicals: `Technically, ${item.symbol} is trading ${item.price >= item.ema_20 ? "above" : "below"} its 20-day EMA of ₹${item.ema_20} with RSI at ${item.rsi_14}. Immediate floor support is positioned at ₹${item.support}, while overhead resistance stands near ₹${item.resistance}.`,
-    fundamentals: `Fundamentally, ${item.company_name} continues to maintain strong industry leadership in ${item.sector}, with investors closely monitoring margin expansion, return ratios (ROE/ROCE), and balance sheet leverage.`,
-    valuation: `From a valuation lens, the stock trades in line with its sector median, making quarterly earnings execution the critical catalyst for further multiple expansion.`,
-    what_to_watch: `Key upcoming triggers include quarterly corporate disclosures, institutional FII/DII flow trends, and broader ${item.sector} sector demand signals.`,
-    investor_view: `For long-term investors, the core thesis rests on business resilience and capital discipline. Focus on steady compounding rather than intraday noise.`,
-    trader_view: `For active traders, ₹${item.support} represents a crucial stop level. Look for confirmation above ₹${item.resistance} before initiating fresh momentum positions.`,
-    disclaimer: `This analysis is for educational purposes only and does not constitute financial advice or an endorsement to buy or sell securities.`,
+    hook: `${item.symbol} is on the move today with a ${isUp ? "surge" : "slide"} of ${Math.abs(item.change_pct)}% at ₹${item.price.toLocaleString("en-IN")}.`,
+    price_action: `Trading at ₹${item.price.toLocaleString("en-IN")}, ${item.symbol} is ${relText} with ${item.volume_ratio} times average volume.`,
+    why_moving: `Today's move is driven by ${item.headlines[0] || "steady institutional flows across " + item.sector.toLowerCase() + " stocks"}.`,
+    technicals: `Technicals show RSI at ${item.rsi_14}, holding immediate support at ₹${item.support} and resistance at ₹${item.resistance}.`,
+    fundamentals: `${item.company_name} maintains healthy sector leadership and financial metrics in ${item.sector}.`,
+    valuation: `Valuations trade in line with sector historical averages.`,
+    what_to_watch: `Watch ₹${item.resistance} closely for breakout confirmation.`,
+    investor_view: `Long-term investors should track revenue compounding and return ratios.`,
+    trader_view: `For traders, watch ₹${item.resistance} for continuation with risk strictly defined below ₹${item.support}.`,
+    disclaimer: `Educational commentary for Indian markets, not financial advice.`,
   };
 }
 

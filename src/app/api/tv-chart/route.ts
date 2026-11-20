@@ -91,8 +91,15 @@ export async function GET(request: NextRequest) {
       screenerPromise,
     ]);
 
+    if (candlesResult.status === "rejected") {
+      console.error("[tv-chart] Candle fetch error:", candlesResult.reason);
+    }
+    if (quoteResult.status === "rejected") {
+      console.warn("[tv-chart] Live quote fetch error:", quoteResult.reason);
+    }
+
     const quote = quoteResult.status === "fulfilled"
-      ? quoteResult.value
+      ? { ...quoteResult.value }
       : {
           ltp: 0,
           change: 0,
@@ -100,6 +107,32 @@ export async function GET(request: NextRequest) {
         };
 
     const candles = candlesResult.status === "fulfilled" ? candlesResult.value : [];
+
+    // Fallback: If quote LTP is missing or 0 but candles are available, derive quote from latest candles
+    if (candles.length > 0) {
+      const isMarketOpen = (() => {
+        const now = new Date();
+        const istTime = new Date(now.getTime() + (5.5 * 60 + now.getTimezoneOffset()) * 60000);
+        const day = istTime.getDay();
+        const totalMins = istTime.getHours() * 60 + istTime.getMinutes();
+        return day >= 1 && day <= 5 && totalMins >= 555 && totalMins <= 930;
+      })();
+      const last = candles[candles.length - 1];
+      const prev = candles.length > 1 ? candles[candles.length - 2] : last;
+      const diff = last.close - prev.close;
+      const pDiff = prev.close > 0 ? (diff / prev.close) * 100 : 0;
+      if (!isMarketOpen || !quote.ltp || quote.ltp === 0) {
+        quote.ltp = last.close;
+        quote.change = Number(diff.toFixed(2));
+        quote.pChange = Number(pDiff.toFixed(2));
+      }
+
+
+      if (!quote.dayHigh) quote.dayHigh = last.high;
+      if (!quote.dayLow) quote.dayLow = last.low;
+      if (!quote.volume) quote.volume = last.volume;
+    }
+
     const screener = screenerResult.status === "fulfilled" ? screenerResult.value : null;
     const patternIntelligence = analyzePatternIntelligence(candles, timeframe);
 

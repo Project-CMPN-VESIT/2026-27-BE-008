@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Info, Layers, Loader2, RefreshCw } from "lucide-react";
 
 /* ───────────────────────────── types ───────────────────────────── */
@@ -201,6 +202,9 @@ export default function BasketsPage() {
     const ac = new AbortController();
     detailAbort.current = ac;
     setDetailLoading(true);
+    setDetailError("");
+    // never keep showing another basket's numbers while this one loads (a range change keeps the same basket)
+    setDetail((d) => (d && d.id === selectedId ? d : null));
     fetch(`/api/baskets/${selectedId}?range=${range}`, { cache: "no-store", signal: ac.signal })
       .then(async (res) => {
         const data = (await res.json()) as BasketDetail;
@@ -210,6 +214,7 @@ export default function BasketsPage() {
       })
       .catch((e) => {
         if (e instanceof DOMException && e.name === "AbortError") return;
+        setDetail(null);
         setDetailError(e instanceof Error ? e.message : "Could not load basket");
       })
       .finally(() => {
@@ -221,7 +226,7 @@ export default function BasketsPage() {
   const refreshData = async () => {
     setRefreshing(true);
     try {
-      await fetch("/api/baskets/refresh", { method: "POST" });
+      await authenticatedFetch("/api/baskets/refresh", { method: "POST" });
       await loadList();
     } finally {
       setRefreshing(false);
@@ -244,7 +249,7 @@ export default function BasketsPage() {
   const pctDone = pipeline?.progress && pipeline.progress.total ? Math.round((pipeline.progress.done / pipeline.progress.total) * 100) : 0;
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-slate-50 p-4 font-sans dark:bg-slate-950 lg:p-6">
+    <div className="min-h-[calc(100vh-107px)] bg-slate-50 pt-6 sm:pt-8 px-4 pb-6 font-sans dark:bg-slate-950 lg:px-6 lg:pb-8">
       <div className="mx-auto flex max-w-[1680px] flex-col gap-4">
         {/* header */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -419,7 +424,7 @@ export default function BasketsPage() {
             {!detail && !detailError && selectedId && (
               <div className="h-96 animate-pulse rounded-2xl bg-slate-200/70 dark:bg-slate-800/50" />
             )}
-            {detail && (
+            {detail && detail.id === selectedId && (
               <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-opacity dark:border-slate-800 dark:bg-slate-900 ${detailLoading ? "opacity-60" : ""}`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>

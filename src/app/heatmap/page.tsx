@@ -146,10 +146,10 @@ export default function HeatmapPage() {
   const categories = ["Broad Market", "Sectoral", "Thematic", "Strategy"];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white p-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 m-4 shadow-sm">
+    <div className="flex flex-col h-[calc(100vh-123px)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white p-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 m-2 shadow-sm">
       {/* HEADER */}
       <header className="mb-4">
-        <h1 className="text-2xl font-bold mb-2">NSE-Style Market Heatmap</h1>
+        <h1 className="text-2xl font-bold mb-2">Market Heatmap</h1>
         
         <div className="flex flex-wrap gap-4 items-center bg-white dark:bg-slate-900 p-3 rounded shadow-sm border border-slate-200 dark:border-slate-800">
           <div className="flex gap-2">

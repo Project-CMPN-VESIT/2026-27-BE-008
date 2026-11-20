@@ -16,6 +16,19 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text, create_engine, func, text
+
+# Public-DNS fallback for the PostgreSQL host (see pg_dns_fallback.py at the repository root).
+try:
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+    import pg_dns_fallback as _pg_dns_fallback
+
+    _pg_dns_fallback.install()
+except Exception:  # never let the safety net stop a service from starting
+    pass
+
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -44,7 +57,7 @@ if DATABASE_URL.startswith("postgres://"):
 
 Base = declarative_base()
 _args = {"check_same_thread": False, "timeout": 30} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_args, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, connect_args=_args, pool_pre_ping=True, pool_recycle=240, pool_size=5, max_overflow=10)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 DEFAULT_TITLE = "New chat"
@@ -161,12 +174,20 @@ def get_session(session_id: str, user_id: Optional[str] = None) -> Optional[Dict
 def list_sessions(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
     with scope() as s:
         rows = s.query(ChatSession).filter(ChatSession.user_id == user_id).order_by(ChatSession.updated_at.desc()).limit(limit).all()
-        out = []
-        for r in rows:
-            n = s.query(func.count(ChatMessage.id)).filter(ChatMessage.session_id == r.id).scalar() or 0
-            last = s.query(ChatMessage).filter(ChatMessage.session_id == r.id, ChatMessage.role == "user") \
-                .order_by(ChatMessage.id.desc()).first()
-            out.append(_session_dict(r, n, (last.content[:80] if last else "")))
+        ids = [r.id for r in rows]
+        counts: Dict[str, int] = {}
+        last_user: Dict[str, str] = {}
+        if ids:
+            # two grouped queries for every chat at once (was two queries per chat)
+            counts = dict(s.query(ChatMessage.session_id, func.count(ChatMessage.id))
+                          .filter(ChatMessage.session_id.in_(ids)).group_by(ChatMessage.session_id).all())
+            latest = (s.query(ChatMessage.session_id, func.max(ChatMessage.id).label("mid"))
+                      .filter(ChatMessage.session_id.in_(ids), ChatMessage.role == "user")
+                      .group_by(ChatMessage.session_id).subquery())
+            for sid, content in (s.query(ChatMessage.session_id, ChatMessage.content)
+                                 .join(latest, ChatMessage.id == latest.c.mid).all()):
+                last_user[sid] = content or ""
+        out = [_session_dict(r, counts.get(r.id, 0), last_user.get(r.id, "")[:80]) for r in rows]
         return out
 
 

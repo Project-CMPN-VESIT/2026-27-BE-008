@@ -1,3 +1,4 @@
+import "@/lib/dns-fallback";
 import { Pool } from "pg";
 import type { NiftyStockItem } from "@/lib/niftyShortsService";
 

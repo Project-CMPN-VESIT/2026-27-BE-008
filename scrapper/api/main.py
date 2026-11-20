@@ -3,13 +3,15 @@ FastAPI-based screening API.
 Accepts batched input records and returns match results with breakdown.
 """
 
+import asyncio
 import os
+import subprocess
 import sys
 import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -304,8 +306,8 @@ async def get_stats():
 
 
 @app.get("/v1/entities")
-async def get_entities(page_size: int = 500):
-    """Get all extracted entities for the UI."""
+async def get_entities(page_size: int = Query(default=500, ge=1, le=20000)):
+    """Get all extracted entities for the UI (page_size is bounded: 1 to 20,000)."""
     all_entities = db.get_all_actions_with_entities()
     
     formatted = []
@@ -328,76 +330,31 @@ async def get_entities(page_size: int = 500):
     return {"entities": formatted}
 
 
+_pipeline_lock = asyncio.Lock()
+PIPELINE_TIMEOUT_S = int(os.getenv("SCRAPER_PIPELINE_TIMEOUT_S", "1800"))
+
+
 @app.post("/v1/pipeline/run")
 async def run_pipeline():
-    """Run the scraping and extraction pipeline."""
-    import subprocess
+    """Run the scraping and extraction pipeline (one run at a time, off the event loop, with a time limit)."""
+    if _pipeline_lock.locked():
+        raise HTTPException(409, "A pipeline run is already in progress.")
     run_py_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "run.py")
-    process = subprocess.run([sys.executable, run_py_path, "pipeline"], capture_output=True, text=True)
+    async with _pipeline_lock:
+        try:
+            process = await asyncio.to_thread(
+                subprocess.run,
+                [sys.executable, run_py_path, "pipeline"],
+                capture_output=True, text=True, timeout=PIPELINE_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(504, f"Pipeline exceeded the {PIPELINE_TIMEOUT_S}s limit and was stopped.")
     if process.returncode == 0:
         return {"status": "success", "message": "Pipeline completed successfully."}
-    else:
-        raise HTTPException(500, f"Pipeline failed: {process.stderr}")
+    logger.error("Pipeline failed: %s", (process.stderr or "")[-2000:])
+    raise HTTPException(500, "Pipeline failed. See the scraper service log for details.")
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
-
-# --- Paper Trading Endpoints ---
-
-class ExecuteTradeRequest(BaseModel):
-    user_id: str
-    ticker: str
-    action: str
-    quantity: int
-    execution_price: float
-    user_thesis: str
-    ai_feedback: str
-
-class MentorAuditRequest(BaseModel):
-    action: str
-    quantity: int
-    ticker: str
-    user_thesis: str
-    rk_score: float = 50.0
-    pl_score: float = 50.0
-
-@app.post("/api/trade/execute")
-async def execute_trade(req: ExecuteTradeRequest):
-    result = db.execute_trade(
-        req.user_id, req.ticker, req.action, req.quantity, 
-        req.execution_price, req.user_thesis, req.ai_feedback
-    )
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    return result
-
-@app.get("/api/portfolio/{user_id}")
-async def get_portfolio(user_id: str):
-    user = db.get_or_create_user(user_id)
-    positions = db.get_user_positions(user_id)
-    journal = db.get_trade_journal(user_id)
-    return {
-        "balance": user["virtual_balance"],
-        "positions": positions,
-        "journal": journal
-    }
-
-@app.post("/api/mentor-audit")
-async def mentor_audit(req: MentorAuditRequest):
-    try:
-        from extraction.mentor_agent import MentorAgent
-        agent = MentorAgent()
-        critique = agent.evaluate_trade(
-            action=req.action,
-            quantity=req.quantity,
-            ticker=req.ticker,
-            rk_score=req.rk_score,
-            pl_score=req.pl_score,
-            user_thesis=req.user_thesis
-        )
-        return {"critique": critique}
-    except Exception as e:
-        logger.error(f"Error in mentor audit endpoint: {e}")
-        return {"critique": "Mentor evaluation failed. Do you still want to execute this trade?"}

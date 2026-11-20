@@ -25,6 +25,21 @@ export type Step = { id: string; label: string; status: "running" | "done" | "fa
 export type ChatSource = { label: string; type: string; detail?: string; url?: string };
 export type LearnedItem = { key: string; label: string; value: unknown };
 
+/** Cards and charts built by the server from the data the tools fetched (never from the model's wording). */
+export type MetricUnit = "crore" | "x" | "pct" | "signed_pct";
+export type StockVisual = {
+  kind: "stock"; symbol: string; name?: string; sector?: string; size?: string; price?: number;
+  metrics: { label: string; value: number; unit: MetricUnit }[];
+  returns: { label: string; value: number }[];
+  scores: { investor: string; score: number; band: string }[];
+};
+export type CompareVisual = {
+  kind: "compare";
+  rows: { symbol: string; name?: string; size?: string; scores: Record<string, number | null>; metrics: Record<string, number> }[];
+};
+export type RankingVisual = { kind: "ranking"; items: { symbol: string; name?: string; score?: number; size?: string }[] };
+export type Visual = StockVisual | CompareVisual | RankingVisual;
+
 export type UiMessage = {
   key: string;
   serverId?: number;
@@ -33,6 +48,7 @@ export type UiMessage = {
   text: string;
   steps: Step[];
   sources: ChatSource[];
+  visuals?: Visual[];
   suggestions: string[];
   learned: LearnedItem[];
   streaming: boolean;
@@ -70,6 +86,7 @@ type ServerMessage = {
   content: string;
   payload?: {
     sources?: ChatSource[];
+    visuals?: Visual[];
     suggestions?: string[];
     memory_changed?: LearnedItem[];
     events?: Record<string, unknown>[];
@@ -109,7 +126,7 @@ function applyReportEvent(m: UiMessage, ev: Record<string, unknown>): UiMessage 
 function fromServer(m: ServerMessage): UiMessage {
   const base: UiMessage = {
     ...blank(m.role, m.content), serverId: m.id, kind: m.kind,
-    sources: m.payload?.sources ?? [], suggestions: m.payload?.suggestions ?? [],
+    sources: m.payload?.sources ?? [], visuals: m.payload?.visuals ?? [], suggestions: m.payload?.suggestions ?? [],
     learned: m.payload?.memory_changed ?? [], error: !!m.payload?.error,
   };
   if (m.kind === "report" && m.payload?.events) {
@@ -118,6 +135,31 @@ function fromServer(m: ServerMessage): UiMessage {
     return { ...msg, activity: msg.activity ? { ...msg.activity, expanded: false } : msg.activity };
   }
   return base;
+}
+
+/* ───────────────────── instant-open cache (stale while revalidate) ─────────────────────
+ * Past chats are shown from memory (and sessionStorage across reloads) the moment they are clicked, while the
+ * server copy is fetched in the background and replaces them. Nothing is hidden or invented: it is the same
+ * data the server returned last time. */
+
+const messageCache = new Map<string, ServerMessage[]>();
+const SESSIONS_KEY = "cyro.sessions.v1";
+
+function readCachedSessions(uid: string): SessionSummary[] | null {
+  try {
+    const raw = sessionStorage.getItem(`${SESSIONS_KEY}:${uid}`);
+    return raw ? (JSON.parse(raw) as SessionSummary[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSessions(uid: string, list: SessionSummary[]) {
+  try {
+    sessionStorage.setItem(`${SESSIONS_KEY}:${uid}`, JSON.stringify(list));
+  } catch {
+    /* storage is optional */
+  }
 }
 
 /* ───────────────────────────── hook ───────────────────────────── */
@@ -137,15 +179,32 @@ export function useCyroChat() {
 
   const api = useCallback(
     async (path: string, init: RequestInit = {}) => {
-      const token = await getIdToken();
-      const res = await fetch(`/api/cyro-agent${path}`, {
-        ...init,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
-      return data;
+      const isRead = !init.method || init.method === "GET";
+      const attempts = isRead ? 3 : 1;
+      let lastError: Error = new Error("Request failed");
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 400 * attempt));
+        try {
+          const token = await getIdToken();
+          const res = await fetch(`/api/cyro-agent${path}`, {
+            ...init,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+            cache: "no-store",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const err = new Error((data as { detail?: string }).detail ?? `HTTP ${res.status}`);
+            // client errors will not fix themselves; server/network errors are worth another try
+            if (res.status < 500 && res.status !== 429) throw Object.assign(err, { final: true });
+            throw err;
+          }
+          return data;
+        } catch (e) {
+          lastError = e instanceof Error ? e : new Error(String(e));
+          if ((lastError as { final?: boolean }).final || init.signal?.aborted) break;
+        }
+      }
+      throw lastError;
     },
     [getIdToken],
   );
@@ -154,10 +213,11 @@ export function useCyroChat() {
     try {
       const d = await api("/sessions");
       setSessions(d.sessions ?? []);
+      if (user?.id) writeCachedSessions(user.id, d.sessions ?? []);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Could not load chats");
     }
-  }, [api]);
+  }, [api, user?.id]);
 
   const refreshMemory = useCallback(async () => {
     try {
@@ -178,8 +238,10 @@ export function useCyroChat() {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setSessions([]);
+    messageCache.clear();
+    const cached = readCachedSessions(user.id);
+    setLoading(!cached);
+    setSessions(cached ?? []);
     setActiveId(null);
     setMessages([]);
     (async () => {
@@ -193,13 +255,18 @@ export function useCyroChat() {
       abortRef.current?.abort();
       setBusy(false);
       setActiveId(id);
+      const cachedMsgs = messageCache.get(id);
+      if (cachedMsgs) setMessages(cachedMsgs.map(fromServer));
+      else setMessages([]);
       try {
         const d = await api(`/sessions/${id}/messages`);
+        messageCache.set(id, d.messages as ServerMessage[]);
         if (activeRef.current !== id) return;
         setMessages((d.messages as ServerMessage[]).map(fromServer));
         setNotice("");
       } catch (e) {
-        setMessages([]);
+        if (activeRef.current !== id) return;
+        if (!cachedMsgs) setMessages([]);
         setNotice(e instanceof Error ? e.message : "Could not open this chat");
       }
     },
@@ -298,6 +365,8 @@ export function useCyroChat() {
               const finalText = String(ev.text ?? "");
               if (finalText) receivedAnswer = true;
               patch((m) => ({ ...m, text: finalText || m.text }));
+            } else if (type === "visuals") {
+              patch((m) => ({ ...m, visuals: (ev.items as Visual[]) ?? [] }));
             } else if (type === "sources") {
               patch((m) => ({ ...m, sources: (ev.items as ChatSource[]) ?? [] }));
             } else if (type === "suggestions") {
@@ -364,6 +433,7 @@ export function useCyroChat() {
       if (activeRef.current === id) newChat();
       try {
         await api(`/sessions/${id}`, { method: "DELETE" });
+        messageCache.delete(id);
       } catch {
         refreshSessions();
       }

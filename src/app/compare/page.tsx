@@ -4,28 +4,36 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, AlertTriangle, Crown, TrendingDown } from "lucide-react";
-import { screenerApiUrl } from "@/lib/screener-api";
+import { runScreen } from "@/lib/stock-screener";
 
 type CompanyMetrics = {
   symbol: string;
-  metrics: Record<string, number | null>;
+  name?: string;
+  metrics: Record<string, number | boolean | null>;
 };
 
 // Direction: 1 = higher is better, -1 = lower is better, 0 = neutral
 const METRIC_DIRECTION: Record<string, number> = {
-  current_price: 0,
-  market_cap: 0,
-  pe_ttm: -1,
+  price: 0,
+  mcap_cr: 0,
+  pe: -1,
   pb: -1,
-  dividend_yield: 1,
+  peg: -1,
+  div_yield: 1,
   roe: 1,
   roce: 1,
-  sales_growth_5y: 1,
-  profit_growth_5y: 1,
+  op_margin: 1,
+  revenue_cagr: 1,
+  profit_cagr: 1,
+  q_eps_yoy: 1,
   debt_equity: -1,
-  current_ratio: 1,
-  interest_coverage: 1,
+  promoter_pct: 1,
+  ret_3m: 1,
+  ret_12m: 1,
+  dist_high_pct: -1,
 };
+
+const PERCENT_KEYS = ["roe", "roce", "op_margin", "div_yield", "revenue_cagr", "profit_cagr", "q_eps_yoy", "promoter_pct", "ret_3m", "ret_12m", "dist_high_pct"];
 
 function CompareContent() {
   const searchParams = useSearchParams();
@@ -43,19 +51,11 @@ function CompareContent() {
 
     const fetchCompareData = async () => {
       try {
-        const res = await fetch(screenerApiUrl("/api/v1/screener/run"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query_ast: { field: "symbol", op: "IN", value: symbols },
-            limit: 10
-          })
-        });
-        const result = await res.json();
-        if (result.success) {
-          const orderedData = symbols.map(s => result.results.find((r: any) => r.symbol === s)).filter(Boolean);
-          setData(orderedData);
-        }
+        const result = await runScreen({ conditions: [], symbols, limit: 10 });
+        const orderedData = symbols
+          .map((sym) => result.results.find((r) => r.symbol.toUpperCase() === sym.toUpperCase()))
+          .filter((r): r is NonNullable<typeof r> => !!r);
+        setData(orderedData);
       } catch (err) {
         console.error("Failed to fetch compare data", err);
       } finally {
@@ -66,11 +66,11 @@ function CompareContent() {
     fetchCompareData();
   }, [symbolsParam]);
 
-  const formatValue = (key: string, value: number | null) => {
-    if (value === null || value === undefined) return <span className="text-slate-400" title="Awaiting XBRL data">—</span>;
-    if (key === "market_cap") return `₹${(value / 10000000).toFixed(1)} Cr`;
-    if (["roe", "roce", "dividend_yield", "sales_growth_5y", "profit_growth_5y"].includes(key)) return `${value.toFixed(1)}%`;
-    if (key === "current_price") return `₹${value.toFixed(2)}`;
+  const formatValue = (key: string, value: number | boolean | null) => {
+    if (value === null || value === undefined || typeof value === "boolean") return <span className="text-slate-400" title="No data available">{"—"}</span>;
+    if (key === "mcap_cr") return value >= 100000 ? `₹${(value / 100000).toFixed(2)} L Cr` : `₹${Math.round(value).toLocaleString("en-IN")} Cr`;
+    if (PERCENT_KEYS.includes(key)) return `${value.toFixed(1)}%`;
+    if (key === "price") return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
     return value.toFixed(2);
   };
 
@@ -80,7 +80,7 @@ function CompareContent() {
 
     const validEntries = data
       .map((c, idx) => ({ idx, val: c.metrics[metricId] }))
-      .filter(e => e.val !== null && e.val !== undefined) as { idx: number; val: number }[];
+      .filter(e => typeof e.val === "number") as { idx: number; val: number }[];
 
     if (validEntries.length < 2) return { bestIdx: null, worstIdx: null };
 
@@ -92,11 +92,12 @@ function CompareContent() {
     {
       group: "Valuation",
       metrics: [
-        { id: "current_price", label: "Current Price" },
-        { id: "market_cap", label: "Market Cap" },
-        { id: "pe_ttm", label: "P/E Ratio (TTM)" },
+        { id: "price", label: "Current Price" },
+        { id: "mcap_cr", label: "Market Cap" },
+        { id: "pe", label: "P/E Ratio" },
         { id: "pb", label: "P/B Ratio" },
-        { id: "dividend_yield", label: "Dividend Yield" },
+        { id: "peg", label: "PEG Ratio" },
+        { id: "div_yield", label: "Dividend Yield" },
       ]
     },
     {
@@ -104,16 +105,25 @@ function CompareContent() {
       metrics: [
         { id: "roe", label: "Return on Equity (ROE)" },
         { id: "roce", label: "Return on Cap Emp (ROCE)" },
-        { id: "sales_growth_5y", label: "5Y Sales Growth" },
-        { id: "profit_growth_5y", label: "5Y Profit Growth" },
+        { id: "op_margin", label: "Operating Margin" },
+        { id: "revenue_cagr", label: "Revenue Growth (CAGR)" },
+        { id: "profit_cagr", label: "Profit Growth (CAGR)" },
+        { id: "q_eps_yoy", label: "Latest Quarter EPS Growth" },
       ]
     },
     {
-      group: "Financial Health",
+      group: "Financial Health & Ownership",
       metrics: [
         { id: "debt_equity", label: "Debt to Equity" },
-        { id: "current_ratio", label: "Current Ratio" },
-        { id: "interest_coverage", label: "Interest Coverage" },
+        { id: "promoter_pct", label: "Promoter Holding" },
+      ]
+    },
+    {
+      group: "Price Trend",
+      metrics: [
+        { id: "ret_3m", label: "3-Month Return" },
+        { id: "ret_12m", label: "12-Month Return" },
+        { id: "dist_high_pct", label: "Below 52-Week High" },
       ]
     }
   ];

@@ -25,8 +25,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing symbols" }, { status: 400 });
   }
 
-  const symbols = symbolsParam.split(",").map((s) => s.trim()).filter(Boolean);
-  const result: Record<string, any> = {};
+  const symbols = Array.from(new Set(symbolsParam.split(",").map((s) => s.trim()).filter(Boolean)));
+  if (symbols.length > 150) {
+    return NextResponse.json({ error: "Too many symbols (max 150)" }, { status: 400 });
+  }
+  if (symbols.some((s) => !/^[A-Za-z0-9_]{1,15}:[A-Za-z0-9!_.&-]{1,30}$/.test(s))) {
+    return NextResponse.json({ error: "Symbols must look like EXCHANGE:TICKER" }, { status: 400 });
+  }
+  const result: Record<string, unknown> = {};
 
   if (symbols.length > 0) {
     marketDataService.subscribe(symbols);

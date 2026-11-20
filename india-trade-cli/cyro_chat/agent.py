@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 INTENTS = ("smalltalk", "stock_qa", "report", "discovery", "compare", "sector", "framework", "portfolio",
            "basket", "market", "memory", "general")
-TOOL_NAMES = ("stock_snapshot", "stock_news", "stock_alerts", "discover", "sector_overview", "compare", "frameworks",
+TOOL_NAMES = ("stock_snapshot", "stock_news", "stock_alerts", "sebi_shield_check", "discover", "sector_overview", "compare", "frameworks",
               "basket_info", "portfolio_review", "market_pulse")
 LENSES = ("buffett", "lynch", "jhunjhunwala", "hundred_baggers", "canslim")
 
@@ -69,8 +69,8 @@ KNOWN_SYMBOLS when they match; never invent symbols.
 topics: sector/theme words (e.g. "banks", "defence", "EV", "renewable energy").
 investor_lens: buffett | lynch | jhunjhunwala | hundred_baggers | canslim when the user names an investor/style.
 size: large | mid | small if the user restricts by company size.
-tools: choose only what is needed, from: stock_snapshot, stock_news, stock_alerts, discover, sector_overview, compare,
-frameworks, basket_info, portfolio_review, market_pulse. Prefer few tools. smalltalk needs none.
+tools: choose only what is needed, from: stock_snapshot, stock_news, stock_alerts, sebi_shield_check, discover, sector_overview, compare,
+frameworks, basket_info, portfolio_review, market_pulse. Prefer few tools. smalltalk needs none. Use sebi_shield_check for SEBI/RBI/NSE sanctions, orders, debarments, or regulatory compliance questions.
 
 wants_report = true ONLY if the user clearly wants a comprehensive, formal research report/deep analysis of ONE company
 (e.g. "full report on X", "analyse X for long term", "deep dive into X", "should I invest in X? do a full analysis").
@@ -120,7 +120,8 @@ def _heuristic_plan(message: str, tickers: List[str], mem: Dict[str, Any]) -> Pl
         p.intent, p.tools = "framework", ["frameworks"]
     elif tickers:
         p.intent, p.tools = "stock_qa", ["stock_snapshot"] + (["stock_news"] if re.search(r"\b(news|latest|recent|announce)\b", m) else []) \
-            + (["stock_alerts"] if re.search(r"\b(risk|alert|warning|concern)\b", m) else [])
+            + (["stock_alerts"] if re.search(r"\b(risk|alert|warning|concern)\b", m) else []) \
+            + (["sebi_shield_check"] if re.search(r"\b(sebi|shield|sanction|debar|order|penalty|fraud|illegal|regulatory)\b", m) else [])
     elif re.match(r"^\s*(hi|hello|hey|thanks|thank you|good (morning|evening))\b", m):
         p.intent = "smalltalk"
     return p
@@ -381,6 +382,38 @@ def suggestions_for(plan: Plan, results: List[Dict[str, Any]], mem: Dict[str, An
     return out[:4]
 
 
+def visuals_from(results: List[Dict[str, Any]]) -> List[dict]:
+    """
+    Structured data for the cards and charts shown beside an answer. Built only from what the tools returned (never from
+    the model's wording), so every figure on a card is a real fetched number.
+    """
+    out: List[dict] = []
+    for r in results:
+        if not r.get("ok"):
+            continue
+        d, name = r["data"], r["name"]
+        if name == "stock_snapshot" and isinstance(d, dict):
+            m = d.get("metrics") or {}
+            tiles = [("Market cap", "mcap_cr", "crore"), ("P/E", "pe", "x"), ("P/B", "pb", "x"), ("ROE", "roe", "pct"),
+                     ("ROCE", "roce", "pct"), ("Debt / equity", "debt_equity", "x"), ("Dividend yield", "div_yield", "pct"),
+                     ("12-month return", "ret_12m", "signed_pct")]
+            out.append({
+                "kind": "stock", "symbol": d["symbol"], "name": d.get("name"), "sector": d.get("sector"),
+                "size": d.get("size"), "price": d.get("price"),
+                "metrics": [{"label": lab, "value": m[key], "unit": unit} for lab, key, unit in tiles if m.get(key) is not None],
+                "returns": [{"label": lab, "value": m[key]} for lab, key in (("1M", "ret_1m"), ("3M", "ret_3m"), ("6M", "ret_6m"), ("12M", "ret_12m")) if m.get(key) is not None],
+                "scores": [{"investor": x["investor"], "score": x["score"], "band": x["band"]} for x in d.get("investor_scores", []) if x.get("score") is not None],
+            })
+        elif name == "compare" and isinstance(d, list) and len(d) >= 2:
+            out.append({"kind": "compare", "rows": [
+                {"symbol": x["symbol"], "name": x.get("name"), "size": x.get("size"), "scores": x.get("scores", {}),
+                 "metrics": x.get("metrics", {})} for x in d]})
+        elif name == "discover" and isinstance(d, list) and d:
+            out.append({"kind": "ranking", "items": [
+                {"symbol": x["symbol"], "name": x.get("name"), "score": x.get("score"), "size": x.get("size")} for x in d[:10]]})
+    return out
+
+
 def _sources_from(results: List[Dict[str, Any]]) -> List[dict]:
     seen, out = set(), []
     for r in results:
@@ -590,9 +623,18 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
         if ce.is_set():
             return
         if final_report:
+            report_visuals: List[dict] = []
+            try:
+                snap = await loop.run_in_executor(None, tools.stock_snapshot, sym)
+                report_visuals = visuals_from([snap])
+            except Exception:  # noqa: BLE001  (the report itself is already complete)
+                report_visuals = []
+            if report_visuals:
+                yield _sse({"type": "visuals", "items": report_visuals})
             content = f"{lead}\n\n{final_report.get('summary', '')}".strip()
             msg = store.add_message(sid, "assistant", content, kind="report",
-                                    payload={"events": events, "symbol": sym, "plan": plan.model_dump()}, user_id=user_id)
+                                    payload={"events": events, "symbol": sym, "plan": plan.model_dump(),
+                                             "visuals": report_visuals}, user_id=user_id)
         else:
             fail = f"The research report for {sym} couldn't be completed" + (f" ({err})" if err else "") + \
                    ". I can still answer questions about it in chat."
@@ -681,12 +723,15 @@ async def chat_turn(session_id: Optional[str], user_id: str, message: str, ticke
     answer = (answer or "").strip() or fallback_answer(plan, results)
 
     srcs = _sources_from(results)
+    visuals = visuals_from(results)
     sugg = suggestions_for(plan, results, mem)
+    if visuals:
+        yield _sse({"type": "visuals", "items": visuals})
     if srcs:
         yield _sse({"type": "sources", "items": srcs})
     if sugg:
         yield _sse({"type": "suggestions", "items": sugg})
-    msg = store.add_message(sid, "assistant", answer, payload={"sources": srcs, "suggestions": sugg,
+    msg = store.add_message(sid, "assistant", answer, payload={"sources": srcs, "suggestions": sugg, "visuals": visuals,
                                                                "plan": plan.model_dump(), "memory_changed": changed}, user_id=user_id)
     yield _sse({"type": "message", "message": msg})
     yield _sse({"type": "done"})
@@ -744,6 +789,8 @@ def _tool_calls(plan: Plan, mem: Dict[str, Any], user_id: str, authorization: Op
         calls.append((f"Checking latest {sym} news", tools.stock_news, {"symbol": sym}))
     if "stock_alerts" in t and sym:
         calls.append((f"Scanning {sym} risk signals", tools.stock_alerts, {"symbol": sym}))
+    if "sebi_shield_check" in t and sym:
+        calls.append((f"Screening {sym} in SEBI Shield", tools.sebi_shield_check, {"symbol": sym}))
     if "compare" in t and len(plan.tickers) >= 2:
         calls.append(("Comparing " + " vs ".join(plan.tickers[:3]), tools.compare, {"symbols": plan.tickers}))
     if "discover" in t:

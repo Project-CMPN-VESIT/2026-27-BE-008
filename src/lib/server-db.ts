@@ -1,4 +1,5 @@
 import "server-only";
+import "@/lib/dns-fallback";
 
 import { Pool } from "pg";
 
@@ -10,9 +11,9 @@ export function getServerPool(): Pool {
   if (!connectionString) throw new Error("DATABASE_URL is not configured");
   const ssl =
     connectionString.includes("sslmode=require") ||
-    connectionString.includes("neon.tech") ||
-    connectionString.includes("supabase.co") ||
-    connectionString.includes("rds.amazonaws.com")
+      connectionString.includes("neon.tech") ||
+      connectionString.includes("supabase.co") ||
+      connectionString.includes("rds.amazonaws.com")
       ? { rejectUnauthorized: false }
       : undefined;
   const pool = new Pool({ connectionString, ssl, max: 10, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 10_000 });

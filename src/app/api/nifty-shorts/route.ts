@@ -1,11 +1,14 @@
 import fs from "fs";
 import path from "path";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { adminOnly } from "@/lib/admin-session";
 import { getSessionShorts, NiftyStockItem } from "@/lib/niftyShortsService";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = adminOnly(request);
+  if (denied) return denied;
   try {
     const { stocks, session } = await getSessionShorts();
     const date = session.effectiveTradingDate;

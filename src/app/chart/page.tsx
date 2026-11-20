@@ -1,19 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import {
-  CandlestickSeries,
-  LineSeries,
-  type MouseEventParams,
-  createChart,
-  type CandlestickData,
-  type IChartApi,
-  type LineData,
-  type UTCTimestamp,
-} from "lightweight-charts";
-import { ArrowLeft, CandlestickChart, ChartLine, Clock3, RefreshCcw, Search, TrendingUp } from "lucide-react";
+import SymbolChart from "@/components/chart/SymbolChart";
+import { ArrowLeft, Clock3, RefreshCcw, Search, TrendingUp } from "lucide-react";
 
 type Candle = {
   time: number;
@@ -32,15 +23,6 @@ type Quote = {
   dayHigh?: number;
   dayLow?: number;
   volume?: number;
-};
-
-type CandleHover = {
-  timeLabel: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  xPosition: number | null;
 };
 
 type TvChartResponse = {
@@ -157,8 +139,6 @@ type StockDocData = {
   raw: Record<string, unknown> | null;
 };
 
-type ChartMode = "candles" | "line";
-
 type ExchangeOption = {
   exchange: string;
   marketId: string;
@@ -201,32 +181,6 @@ const dedupeSuggestions = (items: SearchMatch[]) => {
 
 const chartDataCache = new Map<string, TvChartResponse>();
 
-const stockRangeOptions = [
-  { value: "1D", label: "1D", timeframe: "5", days: 1 },
-  { value: "1W", label: "1W", timeframe: "30", days: 7 },
-  { value: "1M", label: "1M", timeframe: "D", days: 30 },
-  { value: "3M", label: "3M", timeframe: "D", days: 90 },
-  { value: "6M", label: "6M", timeframe: "D", days: 180 },
-  { value: "1Y", label: "1Y", timeframe: "D", days: 365 },
-  { value: "3Y", label: "3Y", timeframe: "W", days: 1095 },
-  { value: "5Y", label: "5Y", timeframe: "W", days: 1825 },
-];
-
-const candleTimeframeOptions = [
-  { value: "AUTO", label: "Auto" },
-  { value: "1", label: "1m" },
-  { value: "3", label: "3m" },
-  { value: "5", label: "5m" },
-  { value: "15", label: "15m" },
-  { value: "30", label: "30m" },
-  { value: "60", label: "1H" },
-  { value: "120", label: "2H" },
-  { value: "240", label: "4H" },
-  { value: "D", label: "1D" },
-  { value: "W", label: "1W" },
-  { value: "M", label: "1M" },
-];
-
 const formatNumber = (value: number | undefined | null) => {
   if (typeof value !== "number") return "--";
   return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -240,87 +194,58 @@ const formatCompact = (value: number | undefined | null) => {
   }).format(value);
 };
 
-const formatHoverTimeLabel = (unix: number, timeframe: string) => {
-  const start = new Date(unix * 1000);
-  const dateTimeZone = "Asia/Kolkata";
-
-  const intradayMinutes = Number(timeframe);
-  if (Number.isFinite(intradayMinutes) && intradayMinutes > 0) {
-    const end = new Date(start.getTime() + intradayMinutes * 60 * 1000);
-    const dateFmt = new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", timeZone: dateTimeZone });
-    const timeFmt = new Intl.DateTimeFormat("en-IN", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: dateTimeZone,
-    });
-    return `${dateFmt.format(start)} ${timeFmt.format(start)} - ${timeFmt.format(end)}`;
-  }
-
-  if (timeframe === "W") {
-    const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
-    const rangeFmt = new Intl.DateTimeFormat("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      timeZone: dateTimeZone,
-    });
-    return `${rangeFmt.format(start)} - ${rangeFmt.format(end)}`;
-  }
-
-  if (timeframe === "M") {
-    return new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: dateTimeZone }).format(start);
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: dateTimeZone,
-  }).format(start);
-};
-
-const toIstDateKey = (unix: number) => {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(unix * 1000));
-};
-
-export function AdvancedChartContent() {
+function AdvancedChartContent() {
   const searchParams = useSearchParams();
-  const initialSymbol = searchParams.get("symbol") ?? "RELIANCE";
-  const initialMarketId = searchParams.get("marketId") ?? "NSE:RELIANCE";
+  const rawSymbol = searchParams.get("symbol");
+  const rawMarketId = searchParams.get("marketId");
+
+  const parsed = useMemo(() => {
+    let sym = "RELIANCE";
+    let mId = "NSE:RELIANCE";
+
+    if (rawSymbol) {
+      const clean = rawSymbol.trim().toUpperCase();
+      if (clean.includes(":")) {
+        const parts = clean.split(":");
+        const exch = parts[0] || "NSE";
+        const ticker = parts[1] || "";
+        sym = ticker;
+        mId = `${exch}:${ticker}`;
+      } else {
+        sym = clean;
+        mId = rawMarketId ? rawMarketId.trim().toUpperCase() : `NSE:${clean}`;
+      }
+    } else if (rawMarketId) {
+      mId = rawMarketId.trim().toUpperCase();
+      sym = mId.split(":")[1] || "RELIANCE";
+    }
+
+    return { symbol: sym, marketId: mId };
+  }, [rawSymbol, rawMarketId]);
 
   const [symbolInput, setSymbolInput] = useState("");
   const [suggestions, setSuggestions] = useState<SearchMatch[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [symbol, setSymbol] = useState(initialSymbol.toUpperCase());
-  const [marketId, setMarketId] = useState(initialMarketId.toUpperCase());
-  const [selectedRange, setSelectedRange] = useState("1M");
-  const [chartMode, setChartMode] = useState<ChartMode>("line");
-  const [selectedCandleTimeframe, setSelectedCandleTimeframe] = useState("AUTO");
+  const [symbol, setSymbol] = useState(parsed.symbol);
+  const [marketId, setMarketId] = useState(parsed.marketId);
+
+  // Sync state whenever URL searchParams change
+  useEffect(() => {
+    setSymbol(parsed.symbol);
+    setMarketId(parsed.marketId);
+  }, [parsed.symbol, parsed.marketId]);
+
   const activeInstrumentSymbol = useMemo(() => {
     const fromMarket = marketId.split(":")[1]?.trim().toUpperCase();
     return fromMarket || symbol;
   }, [marketId, symbol]);
-  const activeRange = useMemo(
-    () => stockRangeOptions.find((option) => option.value === selectedRange) ?? stockRangeOptions[2],
-    [selectedRange]
-  );
-  const chartRequestTimeframe = chartMode === "candles" && selectedCandleTimeframe !== "AUTO"
-    ? selectedCandleTimeframe
-    : activeRange.timeframe;
 
   const [refreshTick, setRefreshTick] = useState(0);
   const [chartData, setChartData] = useState<TvChartResponse | null>(() => {
-    const key = `${initialMarketId.toUpperCase()}|${initialSymbol.toUpperCase()}|D`;
+    const key = `${parsed.marketId}|${parsed.symbol}`;
     return chartDataCache.get(key) ?? null;
   });
   const [exchangeOptions, setExchangeOptions] = useState<ExchangeOption[]>([]);
-  const [hoveredCandle, setHoveredCandle] = useState<CandleHover | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
@@ -328,33 +253,6 @@ export function AdvancedChartContent() {
   const [stockDocData, setStockDocData] = useState<StockDocData | null>(null);
   const [stockDocLoading, setStockDocLoading] = useState(false);
   const [stockDocError, setStockDocError] = useState("");
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const userAdjustedZoomRef = useRef(false);
-  const preservedLogicalRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const lastRenderContextRef = useRef("");
-  const suppressVisibleRangeEventRef = useRef(false);
-  const userZoomIntentUntilRef = useRef(0);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const markZoomIntent = () => {
-      userZoomIntentUntilRef.current = Date.now() + 1500;
-    };
-
-    container.addEventListener("wheel", markZoomIntent, { passive: true });
-    container.addEventListener("pointerdown", markZoomIntent, { passive: true });
-
-    return () => {
-      container.removeEventListener("wheel", markZoomIntent);
-      container.removeEventListener("pointerdown", markZoomIntent);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -444,7 +342,7 @@ export function AdvancedChartContent() {
 
   useEffect(() => {
     let cancelled = false;
-    const cacheKey = `${marketId}|${symbol}|${chartRequestTimeframe}`;
+    const cacheKey = `${marketId}|${symbol}`;
     const cached = chartDataCache.get(cacheKey);
 
     if (cached) {
@@ -458,7 +356,7 @@ export function AdvancedChartContent() {
     const fetchChart = async () => {
       try {
         const response = await fetch(
-          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${chartRequestTimeframe}&range=10000`,
+          `/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=D&range=120`,
           { cache: "no-store" }
         );
         const json = await response.json();
@@ -476,22 +374,6 @@ export function AdvancedChartContent() {
         chartDataCache.set(cacheKey, data);
         setChartData(data);
         setError("");
-
-        // Preload other common timeframes in background for instant 0ms switching
-        const preloadTimeframes = ["5", "30", "D", "W"].filter((tf) => tf !== chartRequestTimeframe);
-        for (const tf of preloadTimeframes) {
-          const preKey = `${marketId}|${symbol}|${tf}`;
-          if (!chartDataCache.has(preKey)) {
-            fetch(`/api/tv-chart?marketId=${encodeURIComponent(marketId)}&symbol=${encodeURIComponent(symbol)}&timeframe=${tf}&range=10000`, { cache: "no-store" })
-              .then((r) => r.json())
-              .then((j) => {
-                if (j?.ok && j.data) {
-                  chartDataCache.set(preKey, j.data as TvChartResponse);
-                }
-              })
-              .catch(() => {});
-          }
-        }
       } catch {
         if (!cancelled && !cached) {
           setError("Unable to connect to chart service");
@@ -508,7 +390,7 @@ export function AdvancedChartContent() {
     return () => {
       cancelled = true;
     };
-  }, [marketId, symbol, chartRequestTimeframe, refreshTick]);
+  }, [marketId, symbol, refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -567,7 +449,8 @@ export function AdvancedChartContent() {
     let inFlight = false;
 
     const fetchQuote = async () => {
-      if (inFlight) {
+      // a background tab does not need a quote every 1.5s
+      if (inFlight || (typeof document !== "undefined" && document.visibilityState === "hidden")) {
         return;
       }
 
@@ -666,317 +549,6 @@ export function AdvancedChartContent() {
       controller.abort();
     };
   }, [activeInstrumentSymbol, refreshTick]);
-
-  const candleSeries = useMemo(() => {
-    if (!chartData?.candles?.length) {
-      return [];
-    }
-    // Prevent timeframe mismatch (e.g. rendering daily candles when 1D 5m timeframe is requested)
-    if (chartData.timeframe && chartData.timeframe !== chartRequestTimeframe) {
-      return [];
-    }
-
-    return [...chartData.candles]
-      .sort((a, b) => a.time - b.time)
-      .filter((candle, index, arr) => index === 0 || candle.time !== arr[index - 1].time);
-  }, [chartData?.candles, chartData?.timeframe, chartRequestTimeframe]);
-
-  const displayTimeframe = chartData?.timeframe ?? activeRange.timeframe;
-  const renderContextKey = `${marketId}|${symbol}|${chartMode}|${chartRequestTimeframe}|${selectedRange}`;
-
-  useEffect(() => {
-    if (!containerRef.current || !candleSeries.length) {
-      return;
-    }
-
-    if (chartRef.current) {
-      if (userAdjustedZoomRef.current) {
-        const existingRange = chartRef.current.timeScale().getVisibleLogicalRange();
-        if (existingRange) {
-          preservedLogicalRangeRef.current = {
-            from: existingRange.from,
-            to: existingRange.to,
-          };
-        }
-      }
-      chartRef.current.remove();
-      chartRef.current = null;
-    }
-
-    const isContextSwitch = lastRenderContextRef.current !== renderContextKey;
-    if (isContextSwitch) {
-      userAdjustedZoomRef.current = false;
-      preservedLogicalRangeRef.current = null;
-    }
-
-    const chart = createChart(containerRef.current, {
-      autoSize: true,
-      layout: {
-        background: { color: "#ffffff" },
-        textColor: "#475569",
-      },
-      grid: {
-        vertLines: { color: "transparent" },
-        horzLines: { color: "transparent" },
-      },
-      rightPriceScale: {
-        borderColor: "#cbd5e1",
-      },
-      timeScale: {
-        borderColor: "#cbd5e1",
-        visible: false,
-      },
-      crosshair: {
-        mode: 1,
-        vertLine: {
-          labelVisible: false,
-        },
-      },
-    });
-
-    const handleVisibleRangeChange = () => {
-      if (suppressVisibleRangeEventRef.current) {
-        return;
-      }
-      if (Date.now() > userZoomIntentUntilRef.current) {
-        return;
-      }
-      const range = chart.timeScale().getVisibleLogicalRange();
-      if (!range) {
-        return;
-      }
-      userAdjustedZoomRef.current = true;
-      preservedLogicalRangeRef.current = {
-        from: range.from,
-        to: range.to,
-      };
-    };
-
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
-
-    const applyDefaultVisibleWindow = () => {
-      const totalBars = candleSeries.length;
-      if (totalBars === 0) return;
-
-      const latestBar = candleSeries[totalBars - 1];
-      const latestTime = latestBar.time;
-
-      // 1D range: show only latest trading day candles
-      if (selectedRange === "1D") {
-        const latestDayKey = toIstDateKey(latestTime);
-        const fromIndex = candleSeries.findIndex((bar) => toIstDateKey(bar.time) === latestDayKey);
-        if (fromIndex >= 0) {
-          chart.timeScale().setVisibleLogicalRange({
-            from: fromIndex,
-            to: totalBars - 1,
-          });
-          return;
-        }
-      }
-
-      // Exact time window for other ranges (1W=7d, 1M=30d, 3M=90d, 6M=180d, 1Y=365d, 3Y=1095d, 5Y=1825d)
-      const rangeConfig = stockRangeOptions.find((o) => o.value === selectedRange) ?? stockRangeOptions[2];
-      const targetStartTime = latestTime - rangeConfig.days * 86400;
-
-      let fromIndex = candleSeries.findIndex((bar) => bar.time >= targetStartTime);
-      if (fromIndex === -1) {
-        fromIndex = 0;
-      }
-      fromIndex = Math.min(fromIndex, Math.max(0, totalBars - 5));
-
-      chart.timeScale().setVisibleLogicalRange({
-        from: fromIndex,
-        to: totalBars - 1,
-      });
-    };
-
-    if (chartMode === "candles") {
-      const series = chart.addSeries(CandlestickSeries, {
-        upColor: "#10b981",
-        downColor: "#ef4444",
-        wickUpColor: "#10b981",
-        wickDownColor: "#ef4444",
-        borderVisible: false,
-      });
-
-      const candlePoints: CandlestickData[] = candleSeries.map((candle) => ({
-        time: candle.time as UTCTimestamp,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      }));
-
-      series.setData(candlePoints);
-
-      const handleCrosshairMove = (param: MouseEventParams) => {
-        const pointX = typeof param.point?.x === "number"
-          ? Math.max(60, Math.min((containerRef.current?.clientWidth ?? 0) - 60, param.point.x))
-          : null;
-
-        const seriesData = param.seriesData.get(series) as
-          | { open?: number; high?: number; low?: number; close?: number }
-          | undefined;
-
-        if (
-          !seriesData
-          || typeof seriesData.open !== "number"
-          || typeof seriesData.high !== "number"
-          || typeof seriesData.low !== "number"
-          || typeof seriesData.close !== "number"
-        ) {
-          const latest = candleSeries[candleSeries.length - 1];
-          if (!latest) return;
-          setHoveredCandle({
-            timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
-            open: latest.open,
-            high: latest.high,
-            low: latest.low,
-            close: latest.close,
-            xPosition: null,
-          });
-          return;
-        }
-
-        let timeLabel = "Latest";
-        if (typeof param.time === "number") {
-          const match = candleSeries.find((candle) => candle.time === param.time);
-          if (match) {
-            timeLabel = formatHoverTimeLabel(match.time, displayTimeframe);
-          }
-        }
-
-        setHoveredCandle({
-          timeLabel,
-          open: seriesData.open,
-          high: seriesData.high,
-          low: seriesData.low,
-          close: seriesData.close,
-          xPosition: pointX,
-        });
-      };
-
-      chart.subscribeCrosshairMove(handleCrosshairMove);
-
-      const latest = candleSeries[candleSeries.length - 1];
-      if (latest) {
-        setHoveredCandle({
-          timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
-          open: latest.open,
-          high: latest.high,
-          low: latest.low,
-          close: latest.close,
-          xPosition: null,
-        });
-      }
-
-      suppressVisibleRangeEventRef.current = true;
-      if (!isContextSwitch && userAdjustedZoomRef.current && preservedLogicalRangeRef.current) {
-        chart.timeScale().setVisibleLogicalRange(preservedLogicalRangeRef.current);
-      } else {
-        applyDefaultVisibleWindow();
-      }
-      suppressVisibleRangeEventRef.current = false;
-      lastRenderContextRef.current = renderContextKey;
-      chartRef.current = chart;
-
-      return () => {
-        chart.unsubscribeCrosshairMove(handleCrosshairMove);
-        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
-        chart.remove();
-        chartRef.current = null;
-      };
-    } else {
-      const series = chart.addSeries(LineSeries, {
-        color: "#0ea5e9",
-        lineWidth: 2,
-      });
-
-      const linePoints: LineData[] = candleSeries.map((candle) => ({
-        time: candle.time as UTCTimestamp,
-        value: candle.close,
-      }));
-
-      series.setData(linePoints);
-
-      const handleCrosshairMove = (param: MouseEventParams) => {
-        const pointX = typeof param.point?.x === "number"
-          ? Math.max(60, Math.min((containerRef.current?.clientWidth ?? 0) - 60, param.point.x))
-          : null;
-
-        const seriesData = param.seriesData.get(series) as number | { value?: number } | undefined;
-        const lineValue = typeof seriesData === "number"
-          ? seriesData
-          : typeof seriesData?.value === "number"
-            ? seriesData.value
-            : undefined;
-
-        const latest = candleSeries[candleSeries.length - 1];
-        if (!latest) {
-          return;
-        }
-
-        let matchedCandle: Candle | undefined;
-        if (typeof param.time === "number") {
-          matchedCandle = candleSeries.find((candle) => candle.time === param.time);
-        }
-
-        const displayCandle = matchedCandle ?? latest;
-
-        if (typeof lineValue !== "number") {
-          setHoveredCandle({
-            timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
-            open: latest.open,
-            high: latest.high,
-            low: latest.low,
-            close: latest.close,
-            xPosition: null,
-          });
-          return;
-        }
-
-        setHoveredCandle({
-          timeLabel: formatHoverTimeLabel(displayCandle.time, displayTimeframe),
-          open: displayCandle.open,
-          high: displayCandle.high,
-          low: displayCandle.low,
-          close: lineValue,
-          xPosition: pointX,
-        });
-      };
-
-      chart.subscribeCrosshairMove(handleCrosshairMove);
-
-      const latest = candleSeries[candleSeries.length - 1];
-      if (latest) {
-        setHoveredCandle({
-          timeLabel: formatHoverTimeLabel(latest.time, displayTimeframe),
-          open: latest.open,
-          high: latest.high,
-          low: latest.low,
-          close: latest.close,
-          xPosition: null,
-        });
-      }
-
-      suppressVisibleRangeEventRef.current = true;
-      if (!isContextSwitch && userAdjustedZoomRef.current && preservedLogicalRangeRef.current) {
-        chart.timeScale().setVisibleLogicalRange(preservedLogicalRangeRef.current);
-      } else {
-        applyDefaultVisibleWindow();
-      }
-      suppressVisibleRangeEventRef.current = false;
-      lastRenderContextRef.current = renderContextKey;
-      chartRef.current = chart;
-
-      return () => {
-        chart.unsubscribeCrosshairMove(handleCrosshairMove);
-        chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
-        chart.remove();
-        chartRef.current = null;
-      };
-    }
-  }, [candleSeries, chartMode, displayTimeframe, renderContextKey, selectedRange]);
 
   const isUp = (chartData?.quote?.pChange ?? 0) >= 0;
 
@@ -1160,152 +732,27 @@ export function AdvancedChartContent() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950 md:p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 md:text-xl">{chartData?.companyName ?? symbol}</h1>
-              {exchangeOptions.length > 1 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {exchangeOptions.map((option) => {
-                    const active = marketId.toUpperCase() === option.marketId.toUpperCase();
-
-                    return (
-                      <button
-                        key={option.marketId}
-                        onClick={() => setMarketId(option.marketId)}
-                        className={`h-8 rounded-md px-3 text-xs font-semibold transition-colors ${
-                          active
-                            ? "bg-blue-600 text-white"
-                            : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        {option.exchange}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
             <div className="lg:col-span-9">
-              <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950">
-                <div className="relative h-[430px] min-w-0">
-                  {loading && (!chartData || chartData.timeframe !== chartRequestTimeframe) && (
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/80 backdrop-blur-[1px] dark:bg-slate-950/80">
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Loading chart data...</span>
-                      </div>
-                    </div>
-                  )}
-                  {hoveredCandle && (
-                    <div className="pointer-events-none absolute inset-x-0 top-2 z-10 text-xs">
-                      {typeof hoveredCandle.xPosition === "number" && (
-                        <div
-                          className="absolute top-6 -translate-x-1/2 rounded bg-slate-900 px-2 py-1 font-medium text-white dark:bg-slate-100 dark:text-slate-900"
-                          style={{ left: `${hoveredCandle.xPosition}px` }}
-                        >
-                          {hoveredCandle.timeLabel}
-                        </div>
-                      )}
-                      <div className="ml-auto mr-28 flex w-fit items-center gap-1 text-slate-500 dark:text-slate-400">
-                        <span className="font-medium">OHLC</span>
-                        <span className="inline-flex w-[74px] items-center">
-                          <span>O</span>
-                          <span className="ml-1.5 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.open)}</span>
-                        </span>
-                        <span className="inline-flex w-[74px] items-center">
-                          <span>H</span>
-                          <span className="ml-1.5 font-semibold tabular-nums text-emerald-600">{formatNumber(hoveredCandle.high)}</span>
-                        </span>
-                        <span className="inline-flex w-[74px] items-center">
-                          <span>L</span>
-                          <span className="ml-1.5 font-semibold tabular-nums text-rose-600">{formatNumber(hoveredCandle.low)}</span>
-                        </span>
-                        <span className="inline-flex w-[74px] items-center">
-                          <span>C</span>
-                          <span className="ml-1.5 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{formatNumber(hoveredCandle.close)}</span>
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={containerRef} className="h-full w-full min-w-0" />
-                </div>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-1 pt-2 dark:border-slate-800">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {stockRangeOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => {
-                          userAdjustedZoomRef.current = false;
-                          preservedLogicalRangeRef.current = null;
-                          const targetTf = chartMode === "candles" && selectedCandleTimeframe !== "AUTO"
-                            ? selectedCandleTimeframe
-                            : option.timeframe;
-                          const cacheKey = `${marketId}|${symbol}|${targetTf}`;
-                          const cached = chartDataCache.get(cacheKey);
-                          if (cached) {
-                            setChartData(cached);
-                            setLoading(false);
-                          }
-                          setSelectedRange(option.value);
-                        }}
-                        className={`h-8 rounded-md px-2.5 text-xs font-semibold transition-colors ${
-                          selectedRange === option.value
-                            ? "bg-blue-600 text-white"
-                            : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setChartMode("line")}
-                      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${
-                        chartMode === "line"
-                          ? "bg-sky-600 text-white"
-                          : "border border-slate-300 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                      }`}
-                    >
-                      <ChartLine className="h-3.5 w-3.5" />
-                      Line
-                    </button>
-                    <button
-                      onClick={() => setChartMode("candles")}
-                      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${
-                        chartMode === "candles"
-                          ? "bg-sky-600 text-white"
-                          : "border border-slate-300 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                      }`}
-                    >
-                      <CandlestickChart className="h-3.5 w-3.5" />
-                      Candles
-                    </button>
-                    {chartMode === "candles" && (
-                      <select
-                        value={selectedCandleTimeframe}
-                        onChange={(e) => {
-                          userAdjustedZoomRef.current = false;
-                          preservedLogicalRangeRef.current = null;
-                          setSelectedCandleTimeframe(e.target.value);
-                        }}
-                        className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                      >
-                        {candleTimeframeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">Stock range view: 1D, 1W, 1M and long-term trend windows</div>
+              <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+                <SymbolChart
+                  key={marketId}
+                  symbol={marketId}
+                  companyName={chartData?.companyName}
+                  exchangeOptions={exchangeOptions}
+                  onSelectMarketId={(newMarketId) => {
+                    setMarketId(newMarketId);
+                    const parsedSym = newMarketId.split(":")[1]?.trim();
+                    if (parsedSym) setSymbol(parsedSym);
+                  }}
+                  height={365}
+                  live={true}
+                  prefetchAll={true}
+                  onPrice={(price) => {
+                    setChartData((prev) => prev ? { ...prev, quote: { ...prev.quote, ltp: price } } : prev);
+                  }}
+                />
               </div>
-              {loading && <p className="mt-2 text-xs text-slate-500">Loading TradingView chart...</p>}
               {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
 
               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-900">

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Pencil, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import type { SessionSummary } from "./useCyroChat";
+import { CyroBotIcon } from "@/components/cyro-bot-icon";
 
 function normalizeDate(iso: string): Date {
   if (!iso) return new Date();
@@ -59,7 +60,7 @@ export function SessionSidebar({
   return (
     <aside className="cy-side" aria-label="Chats">
       <div className="cy-brand">
-        <div className="cy-brand-mark"><Sparkles size={16} /></div>
+        <div className="cy-brand-mark"><CyroBotIcon size={36} className="w-full h-full object-contain" /></div>
         <div>
           <div className="cy-brand-name">CYRO</div>
           <div className="cy-brand-sub">AI research analyst</div>

@@ -10,38 +10,31 @@ const noStoreHeaders = {
   Expires: "0",
 };
 
-const fallbackPrices: Record<string, number> = {
-  NSE_ADANIENT: 1928.9,
-  NSE_RELIANCE: 1414.4,
-  NSE_INFY: 1602.15,
-  NSE_HDFCBANK: 1578.1,
-};
+// A made-up "fallback" price is worse than no price in a trading product: it looked live and fed order estimates.
+const SYMBOL_PATTERN = /^[A-Za-z0-9&_.:-]{1,30}$/;
+
+const unavailable = (symbol: string, company: string) =>
+  NextResponse.json(
+    { ok: true, data: { symbol, company, ltp: 0, source: "unavailable", updatedAt: new Date().toISOString() } },
+    { status: 200, headers: noStoreHeaders }
+  );
 
 export async function GET(request: NextRequest) {
-  const symbol = request.nextUrl.searchParams.get("symbol") ?? "NSE_ADANIENT";
-  const company = request.nextUrl.searchParams.get("company") ?? symbol;
+  const symbol = request.nextUrl.searchParams.get("symbol")?.trim() ?? "";
+  if (!symbol || !SYMBOL_PATTERN.test(symbol)) {
+    return NextResponse.json(
+      { ok: false, error: "A valid symbol is required" },
+      { status: 400, headers: noStoreHeaders }
+    );
+  }
+  const company = (request.nextUrl.searchParams.get("company") ?? symbol).slice(0, 80);
   const normalizedSymbol = symbol.replace(/^NSE_/, "");
 
   try {
     const resolved = await resolveMarket(normalizedSymbol);
 
     if (!resolved) {
-      return NextResponse.json(
-        {
-          ok: true,
-          data: {
-            symbol,
-            company,
-            ltp: fallbackPrices[symbol] ?? 0,
-            source: "fallback",
-            updatedAt: new Date().toISOString(),
-          },
-        },
-        {
-          status: 200,
-          headers: noStoreHeaders,
-        }
-      );
+      return unavailable(symbol, company);
     }
 
     const quote = await getLiveQuote(resolved.marketId);
@@ -65,21 +58,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch {
-    return NextResponse.json(
-      {
-        ok: true,
-        data: {
-          symbol,
-          company,
-          ltp: fallbackPrices[symbol] ?? 0,
-          source: "fallback",
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      {
-        status: 200,
-        headers: noStoreHeaders,
-      }
-    );
+    return unavailable(symbol, company);
   }
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IChartApi, UTCTimestamp } from "lightweight-charts";
+import PortfolioChart from "@/components/chart/PortfolioChart";
+import { Holding } from "@/lib/portfolio/usePortfolio";
 import {
   Activity,
   ArrowDownRight,
@@ -25,6 +26,7 @@ import TradingModal from "@/components/TradingModal";
 import MentorMarkdown from "@/components/MentorMarkdown";
 import Link from "next/link";
 import { authenticatedFetch } from "@/lib/authenticated-fetch";
+import { useAuth } from "@/lib/auth-context";
 
 type SearchSuggestion = {
   marketId: string;
@@ -108,11 +110,19 @@ const clampPositiveInteger = (value: number, min = 1) => {
 type ChartViewMode = "area" | "candles" | "bars";
 
 export default function PaperTradingPage() {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
   const tickerInputWrapRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const chartResizeHandlerRef = useRef<(() => void) | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const ownerName = useMemo(() => {
+    const raw = (user?.name || user?.email?.split("@")[0] || "Shivam").trim();
+    const first = raw.split(" ")[0].trim();
+    const letters = first.replace(/[^a-zA-Z]/g, "");
+    const base = letters.length >= 2 ? letters : first;
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  }, [user]);
+
+  const paperChartTitle = `${ownerName}'s Paper Trading Portfolio`;
 
   const [data, setData] = useState<PortfolioData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,50 +132,16 @@ export default function PaperTradingPage() {
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<"positions" | "journal" | "history">("positions");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [chartViewMode, setChartViewMode] = useState<ChartViewMode>("area");
-  const [hoveredPoint, setHoveredPoint] = useState<{ time: string; value: number } | null>(null);
-
-  // Real-time tick history cache
-  const [liveHistoryTicks, setLiveHistoryTicks] = useState<Array<{ time: number; value: number; invested: number }>>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStockForModal, setSelectedStockForModal] = useState<string>("RELIANCE");
   const [modalAction, setModalAction] = useState<"BUY" | "SELL">("BUY");
   const [modalQuantity, setModalQuantity] = useState<number>(10);
-  const rangeDataCache = useRef<Record<string, any>>({});
 
   const [isClient, setIsClient] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [chartRange, setChartRange] = useState("1D");
   const [chartMetric, setChartMetric] = useState<"total" | "holdings">("holdings");
-  const [isChartLoading, setIsChartLoading] = useState(false);
-  const [portfolioChartData, setPortfolioChartData] = useState<{
-    areaSeriesData: Array<{ time: UTCTimestamp; value: number }>;
-    candleSeriesData: Array<{ time: UTCTimestamp; open: number; high: number; low: number; close: number }>;
-    barSeriesData: Array<{ time: UTCTimestamp; value: number; color: string }>;
-    investedBaseline: number;
-    capitalBaseline: number;
-  }>({
-    areaSeriesData: [],
-    candleSeriesData: [],
-    barSeriesData: [],
-    investedBaseline: 0,
-    capitalBaseline: INITIAL_CAPITAL,
-  });
-
-  const areaSeriesRef = useRef<any>(null);
-  const candleSeriesRef = useRef<any>(null);
-  const barSeriesRef = useRef<any>(null);
-
-  const chartMetricRef = useRef(chartMetric);
-  chartMetricRef.current = chartMetric;
-
-  const chartRangeRef = useRef(chartRange);
-  chartRangeRef.current = chartRange;
-
-  const portfolioChartDataRef = useRef(portfolioChartData);
-  portfolioChartDataRef.current = portfolioChartData;
 
   useEffect(() => {
     let isMounted = true;
@@ -183,7 +159,7 @@ export default function PaperTradingPage() {
           const deduped = Array.from(new Map(items.map((i) => [i.symbol, i])).values());
           setSuggestions(deduped);
         }
-      } catch {}
+      } catch { }
     }, 120);
 
     return () => {
@@ -265,6 +241,10 @@ export default function PaperTradingPage() {
         const json = await res.json();
         if (json.ok) {
           setData(json.data);
+          try {
+            sessionStorage.setItem("finpilot_paper_portfolio_cache", JSON.stringify(json.data));
+            localStorage.setItem("finpilot_paper_portfolio_cache", JSON.stringify(json.data));
+          } catch {}
           setLoadError(null);
           setLastSyncedAt(new Date().toISOString());
           fetchLivePrices(json.data.positions);
@@ -284,8 +264,25 @@ export default function PaperTradingPage() {
 
   useEffect(() => {
     setIsClient(true);
-    loadPortfolio(false);
-    const interval = setInterval(() => loadPortfolio(true), PORTFOLIO_POLL_MS);
+    let hasCache = false;
+    try {
+      const cached =
+        sessionStorage.getItem("finpilot_paper_portfolio_cache") ||
+        localStorage.getItem("finpilot_paper_portfolio_cache");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.positions)) {
+          setData(parsed);
+          setIsLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    loadPortfolio(hasCache);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadPortfolio(true);
+    }, PORTFOLIO_POLL_MS);
     return () => clearInterval(interval);
   }, [loadPortfolio]);
 
@@ -299,7 +296,7 @@ export default function PaperTradingPage() {
   const positionRows = useMemo<PositionView[]>(() => {
     if (!data) return [];
 
-    return data.positions.map((position) => {
+    return data.positions.map((position, idx) => {
       const ltp = livePrices[position.ticker] ?? position.average_buy_price;
       const invested = position.quantity * position.average_buy_price;
       const marketValue = position.quantity * ltp;
@@ -307,7 +304,7 @@ export default function PaperTradingPage() {
       const returnPct = invested > 0 ? (unrealizedPnl / invested) * 100 : 0;
 
       return {
-        id: position.id,
+        id: position.id ?? idx + 1,
         ticker: position.ticker,
         quantity: position.quantity,
         averageBuy: position.average_buy_price,
@@ -421,343 +418,14 @@ export default function PaperTradingPage() {
     };
   }, [data, positionRows, journalAscending]);
 
-  // Record real-time tick streaming
-  useEffect(() => {
-    if (!data || metrics.holdingsValue === 0) return;
-    const nowSec = Math.floor(Date.now() / 1000);
-    setLiveHistoryTicks((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && nowSec - last.time < 5) return prev; // throttle 5s
-      const updated = [...prev, { time: nowSec, value: metrics.holdingsValue, invested: metrics.investedValue }];
-      return updated.slice(-100);
-    });
-  }, [data, metrics.holdingsValue, metrics.investedValue]);
-
-  // Fetch real portfolio chart data from TradingView-backed portfolio API
-  const fetchPortfolioChart = useCallback(async (range: string, metric: "total" | "holdings", forceRefresh = false) => {
-    const cacheKey = `${range}:${metric}`;
-    if (!forceRefresh && rangeDataCache.current[cacheKey]) {
-      setPortfolioChartData(rangeDataCache.current[cacheKey]);
-      setIsChartLoading(false);
-      return;
-    }
-
-    setIsChartLoading(true);
-
-    try {
-      const res = await authenticatedFetch(`/api/paper-trading/portfolio-chart?range=${range}&metric=${metric}`);
-      const json = await res.json();
-      if (json.ok && json.data) {
-        const parsed = {
-          areaSeriesData: (json.data.areaSeriesData || []).map((d: any) => ({ time: d.time as UTCTimestamp, value: d.value })),
-          candleSeriesData: (json.data.candleSeriesData || []).map((d: any) => ({
-            time: d.time as UTCTimestamp,
-            open: d.open,
-            high: d.high,
-            low: d.low,
-            close: d.close,
-          })),
-          barSeriesData: (json.data.barSeriesData || []).map((d: any) => ({
-            time: d.time as UTCTimestamp,
-            value: d.value,
-            color: d.color,
-          })),
-          investedBaseline: json.data.investedBaseline ?? 0,
-          capitalBaseline: json.data.capitalBaseline ?? INITIAL_CAPITAL,
-        };
-        rangeDataCache.current[cacheKey] = parsed;
-        setPortfolioChartData(parsed);
-      }
-    } catch (err) {
-      console.error("Failed to fetch portfolio chart:", err);
-    } finally {
-      setIsChartLoading(false);
-    }
-  }, []);
-
-  const prevPositionsLenRef = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (prevPositionsLenRef.current !== undefined && prevPositionsLenRef.current !== data?.positions?.length) {
-      rangeDataCache.current = {};
-    }
-    prevPositionsLenRef.current = data?.positions?.length;
-    fetchPortfolioChart(chartRange, chartMetric);
-  }, [fetchPortfolioChart, chartRange, chartMetric, data?.positions?.length]);
-
-  // Pre-warm other chart ranges in background so timeframe clicks render in 0ms
-  useEffect(() => {
-    if (!data || data.positions.length === 0) return;
-    const idleTimer = setTimeout(() => {
-      const metric = chartMetricRef.current;
-      ["1D", "1W", "1M", "3M", "1Y", "ALL"].forEach((r) => {
-        const cacheKey = `${r}:${metric}`;
-        if (rangeDataCache.current[cacheKey]) return;
-        authenticatedFetch(`/api/paper-trading/portfolio-chart?range=${r}&metric=${metric}`)
-          .then((res) => res.json())
-          .then((json) => {
-            if (json.ok && json.data) {
-              rangeDataCache.current[cacheKey] = {
-                areaSeriesData: (json.data.areaSeriesData || []).map((d: any) => ({ time: d.time as UTCTimestamp, value: d.value })),
-                candleSeriesData: (json.data.candleSeriesData || []).map((d: any) => ({
-                  time: d.time as UTCTimestamp,
-                  open: d.open,
-                  high: d.high,
-                  low: d.low,
-                  close: d.close,
-                })),
-                barSeriesData: (json.data.barSeriesData || []).map((d: any) => ({
-                  time: d.time as UTCTimestamp,
-                  value: d.value,
-                  color: d.color,
-                })),
-                investedBaseline: json.data.investedBaseline ?? 0,
-                capitalBaseline: json.data.capitalBaseline ?? INITIAL_CAPITAL,
-              };
-            }
-          })
-          .catch(() => {});
-      });
-    }, 200);
-
-    return () => clearTimeout(idleTimer);
-  }, [data]);
-
-  // Live real-time tick injection directly to active chart series (safe update)
-  useEffect(() => {
-    if (!data || !areaSeriesRef.current) return;
-    const currentChart = portfolioChartDataRef.current;
-    if (currentChart.areaSeriesData.length === 0) return;
-
-    const currentVal = chartMetric === "total" ? metrics.totalValue : metrics.holdingsValue;
-    if (currentVal <= 0) return;
-
-    const lastPoint = currentChart.areaSeriesData[currentChart.areaSeriesData.length - 1];
-    const diffRatio = Math.abs(currentVal - lastPoint.value) / (lastPoint.value || 1);
-
-    // If difference is large (>4%, e.g. after a trade or major portfolio shift), refresh entire chart rather than creating a single point vertical cliff
-    if (diffRatio > 0.04) {
-      rangeDataCache.current = {};
-      fetchPortfolioChart(chartRangeRef.current, chartMetric);
-      return;
-    }
-
-    areaSeriesRef.current.update({ time: lastPoint.time as UTCTimestamp, value: Math.round(currentVal * 100) / 100 });
-    if (candleSeriesRef.current && currentChart.candleSeriesData.length > 0) {
-      const last = currentChart.candleSeriesData[currentChart.candleSeriesData.length - 1];
-      candleSeriesRef.current.update({
-        time: last.time as UTCTimestamp,
-        open: last.open,
-        high: Math.max(last.high, currentVal),
-        low: Math.min(last.low, currentVal),
-        close: Math.round(currentVal * 100) / 100,
-      });
-    }
-  }, [livePrices, metrics.totalValue, metrics.holdingsValue, chartMetric]);
-
-  // Chart Rendering & Data Sync
-  useEffect(() => {
-    if (!chartContainerRef.current || !isClient || !data) return;
-
-    let isCancelled = false;
-
-    const syncOrRenderChart = async () => {
-      const { createChart, AreaSeries, CandlestickSeries, HistogramSeries, ColorType } = await import("lightweight-charts");
-
-      if (isCancelled || !chartContainerRef.current) return;
-
-      const baseline = chartMetric === "total" ? portfolioChartData.capitalBaseline : portfolioChartData.investedBaseline;
-      const currentVal = chartMetric === "total" ? metrics.totalValue : metrics.holdingsValue;
-      const isProfit = currentVal >= baseline;
-
-      // If chart already exists and view mode matches, simply update series data without disposing
-      if (chartRef.current) {
-        if (chartViewMode === "area" && areaSeriesRef.current) {
-          areaSeriesRef.current.applyOptions({
-            lineColor: isProfit ? "#10b981" : "#ef4444",
-            topColor: isProfit ? "rgba(16, 185, 129, 0.28)" : "rgba(239, 68, 68, 0.28)",
-            bottomColor: isProfit ? "rgba(16, 185, 129, 0.0)" : "rgba(239, 68, 68, 0.0)",
-          });
-          if (portfolioChartData.areaSeriesData.length > 0) {
-            areaSeriesRef.current.setData(portfolioChartData.areaSeriesData);
-          }
-          chartRef.current.timeScale().fitContent();
-          return;
-        }
-        if (chartViewMode === "candles" && candleSeriesRef.current) {
-          if (portfolioChartData.candleSeriesData.length > 0) {
-            candleSeriesRef.current.setData(portfolioChartData.candleSeriesData);
-          }
-          chartRef.current.timeScale().fitContent();
-          return;
-        }
-        if (chartViewMode === "bars" && barSeriesRef.current) {
-          if (portfolioChartData.barSeriesData.length > 0) {
-            barSeriesRef.current.setData(portfolioChartData.barSeriesData);
-          }
-          chartRef.current.timeScale().fitContent();
-          return;
-        }
-
-        // Mode changed: safely clean up existing chart
-        try {
-          chartRef.current.remove();
-        } catch {}
-        chartRef.current = null;
-      }
-
-      if (chartResizeHandlerRef.current) {
-        window.removeEventListener("resize", chartResizeHandlerRef.current);
-        chartResizeHandlerRef.current = null;
-      }
-
-      chartContainerRef.current.innerHTML = "";
-
-      const chart = createChart(chartContainerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: "transparent" },
-          textColor: isDarkMode ? "#94a3b8" : "#64748b",
-          fontSize: 11,
-          fontFamily: "var(--font-sans), -apple-system, sans-serif",
-        },
-        grid: {
-          vertLines: { color: isDarkMode ? "rgba(30, 41, 59, 0.35)" : "rgba(226, 232, 240, 0.6)" },
-          horzLines: { color: isDarkMode ? "rgba(30, 41, 59, 0.35)" : "rgba(226, 232, 240, 0.6)" },
-        },
-        rightPriceScale: {
-          borderColor: isDarkMode ? "rgba(30, 41, 59, 0.8)" : "rgba(226, 232, 240, 0.8)",
-          scaleMargins: { top: 0.12, bottom: 0.12 },
-        },
-        timeScale: {
-          borderColor: isDarkMode ? "rgba(30, 41, 59, 0.8)" : "rgba(226, 232, 240, 0.8)",
-          timeVisible: true,
-          secondsVisible: false,
-        },
-        handleScroll: {
-          mouseWheel: false,
-          pressedMouseMove: true,
-          horzTouchDrag: true,
-          vertTouchDrag: false,
-        },
-        handleScale: {
-          axisPressedMouseMove: true,
-          mouseWheel: false,
-          pinch: true,
-        },
-        localization: {
-          priceFormatter: (value: number) => `₹${currency(value)}`,
-          timeFormatter: (time: number) => {
-            return new Date(time * 1000).toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-          }
-        },
-        width: chartContainerRef.current.clientWidth,
-        height: 330,
-      });
-
-      areaSeriesRef.current = null;
-      candleSeriesRef.current = null;
-      barSeriesRef.current = null;
-
-      if (chartViewMode === "area") {
-        const areaSeries = chart.addSeries(AreaSeries, {
-          lineColor: isProfit ? "#10b981" : "#ef4444",
-          topColor: isProfit ? "rgba(16, 185, 129, 0.28)" : "rgba(239, 68, 68, 0.28)",
-          bottomColor: isProfit ? "rgba(16, 185, 129, 0.0)" : "rgba(239, 68, 68, 0.0)",
-          lineWidth: 2,
-          crosshairMarkerVisible: true,
-        });
-        if (portfolioChartData.areaSeriesData.length > 0) {
-          areaSeries.setData(portfolioChartData.areaSeriesData);
-        }
-        areaSeriesRef.current = areaSeries;
-      } else if (chartViewMode === "candles") {
-        const candleSeries = chart.addSeries(CandlestickSeries, {
-          upColor: "#10b981",
-          downColor: "#ef4444",
-          borderUpColor: "#10b981",
-          borderDownColor: "#ef4444",
-          wickUpColor: "#10b981",
-          wickDownColor: "#ef4444",
-        });
-        if (portfolioChartData.candleSeriesData.length > 0) {
-          candleSeries.setData(portfolioChartData.candleSeriesData);
-        }
-        candleSeriesRef.current = candleSeries;
-      } else if (chartViewMode === "bars") {
-        const barSeries = chart.addSeries(HistogramSeries, {
-          color: "#10b981",
-          priceFormat: { type: "volume" },
-        });
-        if (portfolioChartData.barSeriesData.length > 0) {
-          barSeries.setData(portfolioChartData.barSeriesData);
-        }
-        barSeriesRef.current = barSeries;
-      }
-
-      chart.subscribeCrosshairMove((param) => {
-        if (!param.time || !param.seriesData) {
-          setHoveredPoint(null);
-          return;
-        }
-        const seriesData = Array.from(param.seriesData.values())[0] as any;
-        const val = typeof seriesData?.value === "number" ? seriesData.value : (typeof seriesData?.close === "number" ? seriesData.close : null);
-        if (val !== null) {
-          setHoveredPoint({
-            time: new Date(Number(param.time) * 1000).toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-            value: val,
-          });
-        }
-      });
-
-      chart.timeScale().fitContent();
-      chartRef.current = chart;
-
-      const handleResize = () => {
-        if (chartContainerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
-        }
-      };
-
-      chartResizeHandlerRef.current = handleResize;
-      window.addEventListener("resize", handleResize);
-    };
-
-    syncOrRenderChart();
-
-    return () => {
-      isCancelled = true;
-      if (chartResizeHandlerRef.current) {
-        window.removeEventListener("resize", chartResizeHandlerRef.current);
-        chartResizeHandlerRef.current = null;
-      }
-      if (chartRef.current) {
-        const chartToDestroy = chartRef.current;
-        chartRef.current = null;
-        areaSeriesRef.current = null;
-        candleSeriesRef.current = null;
-        barSeriesRef.current = null;
-        try {
-          chartToDestroy.remove();
-        } catch {}
-      }
-    };
-  }, [
-    data,
-    isClient,
-    isDarkMode,
-    chartViewMode,
-    chartMetric,
-    portfolioChartData,
-  ]);
+  // Dynamic holdings basket derived reactively from user positions
+  const holdings: Holding[] = useMemo(() => {
+    if (!data?.positions || data.positions.length === 0) return [];
+    return data.positions.map((p) => ({
+      symbol: p.ticker.includes(':') ? p.ticker : `NSE:${p.ticker}`,
+      qty: p.quantity,
+    }));
+  }, [data?.positions]);
 
   const handleExecuteTrade = async (
     thesis: string,
@@ -779,9 +447,7 @@ export default function PaperTradingPage() {
       });
       const json = await res.json();
       if (json.ok) {
-        rangeDataCache.current = {};
-        loadPortfolio(true);
-        fetchPortfolioChart(chartRange, chartMetric);
+        loadPortfolio(false);
       } else {
         alert("Trade Failed: " + json.error);
       }
@@ -798,32 +464,81 @@ export default function PaperTradingPage() {
     setIsModalOpen(true);
   };
 
-  if (!isClient || (isLoading && !data) || !data) {
+  if (!isClient || (isLoading && !data)) {
     return (
-      <div className="flex h-[calc(100vh-56px)] items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-2 text-slate-500">
-          <RefreshCw className="h-6 w-6 animate-spin text-blue-500" />
-          <span className="text-sm font-semibold">Loading Paper Trading Crucible...</span>
+      <div
+        className="min-h-[calc(100vh-107px)] bg-slate-50 dark:bg-slate-950 pt-6 sm:pt-8 px-4 pb-6 lg:px-6 lg:pb-8 font-sans animate-pulse"
+        style={{ fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+      >
+        <div className="mx-auto max-w-[1680px] flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-2">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="h-8 w-44 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+              <div className="h-5 w-20 bg-slate-200 dark:bg-slate-800 rounded-md" />
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="h-10 w-full md:w-80 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+              <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-lg shrink-0" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            <div className="lg:col-span-8 flex flex-col gap-4">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm h-[400px] flex flex-col gap-4">
+                <div className="h-5 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-9 w-60 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="flex-1 bg-slate-100 dark:bg-slate-800/40 rounded-xl" />
+              </div>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl h-64 p-4 flex flex-col gap-3">
+                <div className="h-6 w-36 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-10 bg-slate-100 dark:bg-slate-800/50 rounded" />
+                <div className="h-10 bg-slate-100 dark:bg-slate-800/50 rounded" />
+                <div className="h-10 bg-slate-100 dark:bg-slate-800/50 rounded" />
+              </div>
+            </div>
+            <div className="lg:col-span-4 flex flex-col gap-4">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm h-80 flex flex-col gap-3">
+                <div className="h-6 w-36 bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="h-16 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
+                  <div className="h-16 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
+                  <div className="h-16 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
+                  <div className="h-16 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
+                </div>
+              </div>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm h-72" />
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  const firstPointVal = portfolioChartData.areaSeriesData.length > 0
-    ? portfolioChartData.areaSeriesData[0].value
-    : (chartMetric === "total" ? INITIAL_CAPITAL : metrics.investedValue);
-  const currentTotalVal = metrics.totalValue;
-  const currentHoldingsVal = metrics.holdingsValue;
-  const activeVal = hoveredPoint
-    ? hoveredPoint.value
-    : chartMetric === "total"
-    ? currentTotalVal
-    : currentHoldingsVal;
-  const activePnl = activeVal - firstPointVal;
-  const activePnlPct = firstPointVal > 0 ? (activePnl / firstPointVal) * 100 : 0;
+  if (loadError && !data) {
+    return (
+      <div className="flex h-[calc(100vh-56px)] items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-3 text-center p-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-md">
+          <div className="text-rose-500 font-semibold text-base">Unable to Load Paper Trading</div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{loadError}</p>
+          <button
+            onClick={() => loadPortfolio(false)}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors mt-2"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return null;
+  }
 
   return (
-    <div className="min-h-[calc(100vh-56px)] bg-slate-50 dark:bg-slate-950 p-4 lg:p-6 font-sans">
+    <div
+      className="min-h-[calc(100vh-107px)] bg-slate-50 dark:bg-slate-950 pt-6 sm:pt-8 px-4 pb-6 lg:px-6 lg:pb-8 font-sans"
+      style={{ fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+    >
       <div className="mx-auto max-w-[1680px] flex flex-col gap-4">
         {/* Paper Trading Header */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-2">
@@ -897,7 +612,6 @@ export default function PaperTradingPage() {
               type="button"
               onClick={() => {
                 loadPortfolio(true);
-                fetchPortfolioChart(chartRange, chartMetric);
               }}
               disabled={isRefreshing}
               className="flex items-center justify-center p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-300 dark:border-slate-700 shrink-0"
@@ -914,83 +628,18 @@ export default function PaperTradingPage() {
           <div className="lg:col-span-8 flex flex-col gap-4">
             {/* Real-time Performance Card */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm relative">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                    ₹{currency(activeVal)}
-                  </span>
-                  <span
-                    className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg ${
-                      activePnl >= 0
-                        ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50"
-                        : "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50"
-                    }`}
-                  >
-                    {activePnl >= 0 ? <ArrowUpRight className="h-3.5 w-3.5 mr-0.5" /> : <ArrowDownRight className="h-3.5 w-3.5 mr-0.5" />}
-                    {activePnl >= 0 ? "+" : ""}₹{currency(activePnl)} ({percent(activePnlPct)})
-                    <span className="ml-1.5 text-[10px] font-semibold opacity-90">{hoveredPoint?.time || chartRange}</span>
-                  </span>
-                </div>
-
-                {/* Right controls: View Mode & Timeframe */}
-                <div className="flex items-center gap-2">
-                  {/* Chart Style Switcher */}
-                  <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setChartViewMode("area")}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        chartViewMode === "area" ? "bg-white dark:bg-slate-900 text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                      title="Area Curve"
-                    >
-                      <LineChart className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChartViewMode("candles")}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        chartViewMode === "candles" ? "bg-white dark:bg-slate-900 text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                      }`}
-                      title="Candlestick Chart"
-                    >
-                      <CandlestickChart className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Range Buttons */}
-                  <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/60">
-                    {["1D", "1W", "1M", "3M", "1Y", "ALL"].map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setChartRange(r)}
-                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          chartRange === r
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                        }`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart Canvas with Loading State */}
-              <div className="relative">
-                <div ref={chartContainerRef} className="relative h-[330px] w-full" />
-
-                {isChartLoading && (
-                  <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center rounded-xl z-10 transition-all">
-                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-xs font-semibold text-slate-600 dark:text-slate-300">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-500" />
-                      Updating {chartRange} Trend...
-                    </div>
-                  </div>
-                )}
-              </div>
+              <PortfolioChart
+                holdings={holdings}
+                cash={data.balance}
+                metric={chartMetric}
+                onMetricChange={setChartMetric}
+                defaultRange="1D"
+                defaultMode="line"
+                live
+                dark={isDarkMode}
+                height={330}
+                title={paperChartTitle}
+              />
             </div>
 
             {/* Tabbed Detail Section */}
@@ -999,11 +648,10 @@ export default function PaperTradingPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("positions")}
-                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-colors ${
-                    activeTab === "positions"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
+                  className={`px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === "positions"
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
                 >
                   Active Positions ({positionRows.length})
                 </button>
@@ -1011,11 +659,10 @@ export default function PaperTradingPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("journal")}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${
-                    activeTab === "journal"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === "journal"
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
                 >
                   <Brain className="h-3.5 w-3.5" />
                   <span>AI Mentor Journal ({data.journal.length})</span>
@@ -1024,11 +671,10 @@ export default function PaperTradingPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("history")}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${
-                    activeTab === "history"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === "history"
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
                 >
                   <History className="h-3.5 w-3.5" />
                   <span>Trade Ledger</span>
@@ -1060,20 +706,20 @@ export default function PaperTradingPage() {
                         </tr>
                       ) : (
                         positionRows.map((row) => (
-                          <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                          <tr key={row.ticker} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                             <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
                               <Link href={`/chart?symbol=NSE:${row.ticker}`} className="hover:text-blue-500 hover:underline">
                                 {row.ticker}
                               </Link>
                             </td>
-                            <td className="px-4 py-3 text-right font-medium text-slate-800 dark:text-slate-200">{row.quantity}</td>
-                            <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">₹{currency(row.averageBuy)}</td>
-                            <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">
+                            <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-800 dark:text-slate-200">{row.quantity}</td>
+                            <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-600 dark:text-slate-400">₹{currency(row.averageBuy)}</td>
+                            <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-900 dark:text-white">
                               ₹{currency(row.ltp)}
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">₹{currency(row.invested)}</td>
-                            <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">₹{currency(row.marketValue)}</td>
-                            <td className={`px-4 py-3 text-right font-bold ${row.unrealizedPnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                            <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-600 dark:text-slate-400">₹{currency(row.invested)}</td>
+                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-900 dark:text-white">₹{currency(row.marketValue)}</td>
+                            <td className={`px-4 py-3 text-right font-semibold tabular-nums ${row.unrealizedPnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                               {row.unrealizedPnl >= 0 ? "+" : ""}₹{currency(row.unrealizedPnl)}
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -1101,23 +747,22 @@ export default function PaperTradingPage() {
                       No trades logged yet. Every simulated trade passes through the AI Mentor Gatekeeper.
                     </div>
                   ) : (
-                    data.journal.map((entry) => (
-                      <div key={entry.id} className="p-4 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 rounded-xl transition-colors">
+                    data.journal.map((entry, idx) => (
+                      <div key={entry.id ?? `journal-${entry.ticker}-${idx}`} className="p-4 hover:bg-slate-50/50 dark:hover:bg-slate-850/40 rounded-xl transition-colors">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2">
                             <span
-                              className={`px-2 py-0.5 rounded text-[11px] font-extrabold uppercase ${
-                                entry.action === "BUY"
-                                  ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                                  : "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[11px] font-extrabold uppercase ${entry.action === "BUY"
+                                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                                : "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800"
+                                }`}
                             >
                               {entry.action}
                             </span>
-                            <span className="font-bold text-sm text-slate-900 dark:text-white">
+                            <span className="font-bold tabular-nums text-sm text-slate-900 dark:text-white">
                               {entry.quantity} {entry.ticker}
                             </span>
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs font-medium tabular-nums text-slate-500">
                               @ ₹{currency(entry.execution_price)}
                             </span>
                           </div>
@@ -1173,26 +818,25 @@ export default function PaperTradingPage() {
                           </td>
                         </tr>
                       ) : (
-                        [...data.journal].reverse().map((t) => (
-                          <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-850">
+                        [...data.journal].reverse().map((t, idx) => (
+                          <tr key={t.id ?? `trade-${t.ticker}-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-850">
                             <td className="px-4 py-2.5 text-slate-500">
                               {new Date(t.timestamp).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                             </td>
                             <td className="px-4 py-2.5">
                               <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  t.action === "BUY"
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
-                                    : "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
-                                }`}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${t.action === "BUY"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                  : "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
+                                  }`}
                               >
                                 {t.action}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">{t.ticker}</td>
-                            <td className="px-4 py-2.5 text-right">{t.quantity}</td>
-                            <td className="px-4 py-2.5 text-right">₹{currency(t.execution_price)}</td>
-                            <td className="px-4 py-2.5 text-right font-bold">₹{currency(t.quantity * t.execution_price)}</td>
+                            <td className="px-4 py-2.5 text-right font-medium tabular-nums">{t.quantity}</td>
+                            <td className="px-4 py-2.5 text-right font-medium tabular-nums">₹{currency(t.execution_price)}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">₹{currency(t.quantity * t.execution_price)}</td>
                           </tr>
                         ))
                       )}
@@ -1223,7 +867,7 @@ export default function PaperTradingPage() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     TOTAL CAPITAL
                   </span>
-                  <div className="text-base font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-base font-bold tabular-nums text-slate-900 dark:text-white mt-0.5">
                     ₹{currency(INITIAL_CAPITAL)}
                   </div>
                 </div>
@@ -1232,7 +876,7 @@ export default function PaperTradingPage() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     CURRENT VALUE
                   </span>
-                  <div className="text-base font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-base font-bold tabular-nums text-slate-900 dark:text-white mt-0.5">
                     ₹{currency(metrics.totalValue)}
                   </div>
                 </div>
@@ -1241,7 +885,7 @@ export default function PaperTradingPage() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     INVESTED VALUE
                   </span>
-                  <div className="text-base font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <div className="text-base font-bold tabular-nums text-slate-900 dark:text-white mt-0.5">
                     ₹{currency(metrics.investedValue)}
                   </div>
                 </div>
@@ -1250,7 +894,7 @@ export default function PaperTradingPage() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     CAPITAL REMAINING
                   </span>
-                  <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  <div className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
                     ₹{currency(metrics.cash)}
                   </div>
                 </div>
@@ -1258,14 +902,13 @@ export default function PaperTradingPage() {
 
               {/* Unrealized P&L Banner */}
               <div
-                className={`p-3.5 rounded-xl border flex items-center justify-between ${
-                  metrics.unrealizedPnl >= 0
-                    ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300"
-                    : "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-300"
-                }`}
+                className={`p-3.5 rounded-xl border flex items-center justify-between ${metrics.unrealizedPnl >= 0
+                  ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300"
+                  : "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60 text-rose-800 dark:text-rose-300"
+                  }`}
               >
                 <span className="text-xs font-semibold">Unrealized P&L</span>
-                <span className="text-sm font-bold flex items-center gap-1">
+                <span className="text-sm font-semibold tabular-nums flex items-center gap-1">
                   {metrics.unrealizedPnl >= 0 ? "↗" : "↘"} ₹{currency(metrics.unrealizedPnl)} ({percent(metrics.unrealizedReturnPct)})
                 </span>
               </div>
@@ -1289,30 +932,29 @@ export default function PaperTradingPage() {
                     const isProfit = pos.unrealizedPnl >= 0;
                     return (
                       <div
-                        key={pos.id}
+                        key={pos.ticker}
                         className="py-3.5 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/30 px-2 rounded-xl transition-colors"
                       >
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-sm text-slate-900 dark:text-white">
+                            <span className="font-bold tabular-nums text-sm text-slate-900 dark:text-white">
                               {pos.ticker}
                             </span>
                           </div>
-                          <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                          <div className="text-xs font-medium tabular-nums text-slate-400 dark:text-slate-500 mt-0.5">
                             {pos.quantity} shares @ ₹{pos.averageBuy.toFixed(2)}
                           </div>
                         </div>
 
                         <div className="text-right">
-                          <div className="text-sm font-bold text-slate-900 dark:text-white">
+                          <div className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
                             ₹{pos.ltp.toFixed(2)}
                           </div>
                           <div
-                            className={`text-xs font-semibold mt-0.5 ${
-                              isProfit
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-rose-600 dark:text-rose-400"
-                            }`}
+                            className={`text-xs font-medium tabular-nums mt-0.5 ${isProfit
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400"
+                              }`}
                           >
                             {isProfit ? "+" : ""}₹{currency(pos.unrealizedPnl)} ({percent(pos.returnPct)})
                           </div>
@@ -1338,9 +980,9 @@ export default function PaperTradingPage() {
           existingPosition={
             positionRows.find((p) => p.ticker === selectedStockForModal)
               ? {
-                  quantity: positionRows.find((p) => p.ticker === selectedStockForModal)!.quantity,
-                  averageBuy: positionRows.find((p) => p.ticker === selectedStockForModal)!.averageBuy,
-                }
+                quantity: positionRows.find((p) => p.ticker === selectedStockForModal)!.quantity,
+                averageBuy: positionRows.find((p) => p.ticker === selectedStockForModal)!.averageBuy,
+              }
               : null
           }
           onExecute={handleExecuteTrade}

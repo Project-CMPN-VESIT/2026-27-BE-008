@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -75,6 +76,7 @@ cyro_security_master.db
 opt-expiry.json
 pipeline_data.db
 src/data/nifty_shorts_cache.json
+.runtime/
 
 # Video files & generated video renders
 *.mp4
@@ -86,7 +88,7 @@ public/videos/
 video-engine/frontend/public/videos/
 video-engine/backend/output/
 videos/
-!Finpilot Project Realted Documents/**
+!Finpilot Project Related Documents/**
 
 # Ephemeral generated TTS audio & scene images (preserve static audio like background-music.mp3)
 public/audio/*/

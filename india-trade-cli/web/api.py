@@ -261,6 +261,11 @@ from baskets.api import router as _baskets_router
 
 app.include_router(_baskets_router)
 
+# -- Stock screener (Nifty 500 universe) --
+from stock_screener.api import router as _screener_router
+
+app.include_router(_screener_router)
+
 # ── CYRO conversational agent (chat, sessions, memory) ───────
 from cyro_chat.api import router as _cyro_chat_router
 

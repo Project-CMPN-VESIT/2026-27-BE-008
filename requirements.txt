@@ -14,6 +14,9 @@ langgraph>=1.0,<2.0         # LangGraph runtime
 langchain>=1.0,<2.0         # LangChain framework
 langchain-core>=1.0,<2.0    # LangChain core
 langchain-mistralai         # Mistral LangChain integration
+langchain-openai>=1.0,<2.0  # OpenAI-compatible client the CYRO research engine uses for Mistral
+aiohttp>=3.10               # the openai client calls aiohttp.SocketTimeoutError (absent in 3.9.x and earlier)
+chromadb>=1.0.0             # Vector store for the document RAG index
 langsmith>=0.3.0            # Observability & tracing
 
 # ── Terminal UI & RAG ─────────────────────────────────────────

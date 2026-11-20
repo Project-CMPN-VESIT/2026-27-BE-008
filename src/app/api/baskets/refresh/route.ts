@@ -5,10 +5,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { AuthRequiredError, requireAuth } from "@/lib/server-auth";
 
 const BACKEND = process.env.INDIA_TRADE_CLI_URL ?? "http://127.0.0.1:8765";
 
 export async function POST(req: NextRequest) {
+  // the backend only checks that the caller is localhost, and this proxy is localhost: sign-in is the real gate
+  try {
+    await requireAuth(req);
+  } catch (err) {
+    const message = err instanceof AuthRequiredError ? err.message : "Could not authenticate";
+    return NextResponse.json({ detail: message }, { status: 401 });
+  }
   const qs = req.nextUrl.searchParams.toString();
   try {
     const res = await fetch(`${BACKEND}/baskets/pipeline/refresh${qs ? `?${qs}` : ""}`, {

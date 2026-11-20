@@ -365,3 +365,37 @@ def test_tidy_drops_data_leaks_and_trailing_offer_questions():
     from cyro_chat import grounding
     out = grounding.tidy("Trades at 100 (from DATA). Margins look fine. Would you like to explore growth next?")
     assert "DATA" not in out and "Would you like" not in out and "Margins look fine." in out
+
+
+def test_visuals_come_only_from_tool_data():
+    snap = tools._result("stock_snapshot", True, {
+        "symbol": "TCS", "name": "TCS Ltd", "sector": "IT", "size": "large cap", "price": 2500.5,
+        "metrics": {"pe": 15.6, "roe": 45.9, "ret_12m": -24.0, "ret_1m": 1.3, "mcap_cr": 805892.0},
+        "investor_scores": [{"investor": "Warren Buffett", "score": 85.7, "band": "Excellent", "strengths": [], "weaknesses": []},
+                            {"investor": "CANSLIM", "score": None, "band": "n/a", "strengths": [], "weaknesses": []}]},
+        title="snap")
+    v = agent.visuals_from([snap, tools._result("stock_news", True, [], title="news"),
+                            tools._result("compare", False, error="x", title="c")])
+    assert len(v) == 1 and v[0]["kind"] == "stock" and v[0]["price"] == 2500.5
+    assert {m["label"] for m in v[0]["metrics"]} == {"Market cap", "P/E", "ROE", "12-month return"}   # missing data -> no tile
+    assert [s["investor"] for s in v[0]["scores"]] == ["Warren Buffett"]                              # a score of None is dropped
+    assert v[0]["returns"] == [{"label": "1M", "value": 1.3}, {"label": "12M", "value": -24.0}]
+
+
+def test_chat_turn_streams_and_saves_visuals_for_a_stock_question(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="stock_qa", tickers=["TCS"], tools=["stock_snapshot"]))
+    monkeypatch.setattr(llm, "complete_text", lambda msgs, **kw: "TCS looks fine.")
+    ev = run(collect(None, "u1", "how is TCS looking?"))
+    visual_events = [e for e in ev if e["type"] == "visuals"]
+    assert len(visual_events) == 1 and visual_events[0]["items"][0]["kind"] == "stock"
+    assert visual_events[0]["items"][0]["symbol"] == "TCS"
+    sid = next(e["session_id"] for e in ev if e["type"] == "session")
+    saved = store.get_messages(sid)[1]["payload"]["visuals"]
+    assert saved and saved[0]["scores"][0]["investor"] == "Warren Buffett"      # survives a reload of the chat
+
+
+def test_no_visuals_when_no_data_was_fetched(monkeypatch):
+    monkeypatch.setattr(llm, "structured", plan_with(intent="smalltalk"))
+    monkeypatch.setattr(llm, "complete_text", lambda msgs, **kw: "Hello!")
+    ev = run(collect(None, "u1", "hello"))
+    assert not [e for e in ev if e["type"] == "visuals"]

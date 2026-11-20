@@ -45,17 +45,28 @@ def get_kokoro_model():
 
 # Voice mappings
 KOKORO_VOICE_MAP = {
-    'en-IN-W': 'af_heart',    # Expressive, ultra-natural female voice
-    'en-IN-M': 'am_adam',     # Energetic, punchy male presenter
-    'en-US-W': 'af_heart',    # Emotive American female
-    'en-US-M': 'am_adam',     # Confident American male
-    'female':   'af_heart',
-    'male':     'am_adam',
-    'af_heart': 'af_heart',
-    'af_sarah': 'af_sarah',
-    'af_bella': 'af_bella',
-    'am_adam':  'am_adam',
+    'kokoro':    'af_heart',    # Expressive, ultra-natural female presenter (Flagship)
+    'kokora':    'af_heart',    # Typo tolerance
+    'default':   'af_heart',
+    'natural':   'af_heart',
+    'human':     'af_heart',
+    'en-IN-W':   'af_heart',    # Natural female voice
+    'en-IN-M':   'am_adam',     # Energetic, punchy male presenter
+    'en-IN':     'af_heart',
+    'en-US-W':   'af_heart',    # Emotive American female
+    'en-US-M':   'am_adam',     # Confident American male
+    'en-US':     'af_heart',
+    'female':    'af_heart',
+    'male':      'am_adam',
+    'af_heart':  'af_heart',
+    'af_sarah':  'af_sarah',
+    'af_bella':  'af_bella',
+    'af_nicole': 'af_nicole',
+    'am_adam':   'am_adam',
     'am_michael':'am_michael',
+    'am_fenrir': 'am_fenrir',
+    'bf_emma':   'bf_emma',
+    'bm_george': 'bm_george',
 }
 
 EDGE_VOICE_MAP = {
@@ -72,37 +83,43 @@ EDGE_VOICE_MAP = {
     'en-GB-M': 'en-GB-RyanNeural',
 }
 
-# Scene-specific conversational pacing
+# Scene-specific conversational pacing tailored for 30-40s dynamic shorts
 SCENE_SPEED_MAP = {
-    1: 1.05,  # Scene 1 (Hook / Intro): Energetic & brisk
-    2: 1.02,  # Scene 2 (Price Action): Dynamic momentum
-    3: 1.00,  # Scene 3 (Drivers / Metrics): Clear explanation
-    4: 0.98,  # Scene 4 (Technicals / Gauge): Measured & deliberate
-    5: 1.02,  # Scene 5 (Outlook & Strategy): Confident forward vision
-    6: 1.00,  # Scene 6 (Verdict & Outro): Authoritative conclusion
+    1: 1.08,  # Scene 1 (Hook / Intro): Energetic & captivating
+    2: 1.06,  # Scene 2 (Price Action): Dynamic momentum
+    3: 1.05,  # Scene 3 (Drivers / Metrics): Crisp & clear
+    4: 1.05,  # Scene 4 (Technicals / Gauge): Deliberate yet brisk
+    5: 1.06,  # Scene 5 (Outlook & Strategy): Confident forward vision
+    6: 1.05,  # Scene 6 (Verdict & Outro): Punchy conclusion
 }
 
 def humanize_financial_narration(text: str) -> str:
     """
     Transforms financial shorthand, ticker symbols, percentages, and currencies
-    into natural, expressive, human conversational speech.
+    into natural, expressive, human conversational speech for Kokoro TTS.
     """
     if not text:
         return ""
 
-    # Strip SSML / XML tags
+    # Strip SSML / XML tags and markdown formatting
     text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'[*_#~`]', '', text)
 
     # Convert Rupee amounts:
     # ₹4,200.00 -> 4,200 rupees
-    text = re.sub(r'₹\s*([0-9,]+)\.(?:0|00)\b', r'\1 rupees', text)
+    text = re.sub(r'[₹]\s*([0-9,]+)\.(?:0|00)\b', r'\1 rupees', text)
     # ₹4,200.50 -> 4,200 rupees and 50 paise
-    text = re.sub(r'₹\s*([0-9,]+)\.([0-9]{1,2})\b', r'\1 rupees and \2 paise', text)
+    text = re.sub(r'[₹]\s*([0-9,]+)\.([0-9]{1,2})\b', r'\1 rupees and \2 paise', text)
     # ₹4,200 -> 4,200 rupees
-    text = re.sub(r'₹\s*([0-9,]+)\b', r'\1 rupees', text)
+    text = re.sub(r'[₹]\s*([0-9,]+)\b', r'\1 rupees', text)
+    # Rs. / INR conversions
+    text = re.sub(r'\b(?:Rs\.?|INR)\s*([0-9,]+)\b', r'\1 rupees', text, flags=re.IGNORECASE)
 
     # Clean zero decimals on technical values: e.g. 62.0 -> 62
     text = re.sub(r'\b([0-9]+)\.0\b', r'\1', text)
+
+    # Convert volume / multiplier multiples: 2.1x or 2.1× -> 2.1 times
+    text = re.sub(r'\b([0-9.]+)\s*[x×]\b', r'\1 times', text, flags=re.IGNORECASE)
 
     # Convert percentages:
     text = re.sub(r'\+0(?:\.00?)?%', 'flat today', text)
@@ -111,13 +128,15 @@ def humanize_financial_narration(text: str) -> str:
 
     # Market acronyms and terminology
     text = re.sub(r'\bLTP\b', 'current price', text)
-    text = re.sub(r'\bRSI\(?14\)?\b', 'R S I momentum', text)
+    text = re.sub(r'\bRSI\(?14\)?\b', 'R S I', text, flags=re.IGNORECASE)
     text = re.sub(r'\bRSI\b', 'R S I', text)
-    text = re.sub(r'\bNIFTY 50\b', 'Nifty Fifty', text)
-    text = re.sub(r'\bNIFTY\b', 'Nifty', text)
+    text = re.sub(r'\bEMA\b', 'E M A', text)
+    text = re.sub(r'\bSMA\b', 'S M A', text)
+    text = re.sub(r'\bNIFTY 50\b', 'Nifty Fifty', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bNIFTY\b', 'Nifty', text, flags=re.IGNORECASE)
     text = re.sub(r'\b52W\b', '52-week', text)
-    text = re.sub(r'\bP/E\b', 'P E ratio', text)
-    text = re.sub(r'\bVol Ratio\b', 'Volume Ratio', text)
+    text = re.sub(r'\bP/E\b', 'P E ratio', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bVol Ratio\b', 'volume ratio', text, flags=re.IGNORECASE)
 
     # Common Indian stock tickers spoken phonetically
     text = re.sub(r'\bTCS\b', 'T-C-S', text)
@@ -128,10 +147,14 @@ def humanize_financial_narration(text: str) -> str:
     text = re.sub(r'\bTATAMOTORS\b', 'Tata Motors', text)
     text = re.sub(r'\bADANIENT\b', 'Adani Enterprises', text)
     text = re.sub(r'\bBHARTIARTL\b', 'Bharti Airtel', text)
+    text = re.sub(r'\bRELIANCE\b', 'Reliance', text)
 
-    # Punctuation rhythm: Insert natural breathing pause em-dashes
-    text = re.sub(r'\s+today\s+with\s+a\s+', ' today — with a ', text)
-    text = re.sub(r'\s+against\s+Nifty', ' — against Nifty', text)
+    # Natural conversational punctuation pauses
+    text = re.sub(r'[—–]', ', ', text)
+    text = re.sub(r'\s+--\s+', ', ', text)
+    text = re.sub(r'[()]', '', text)
+    text = re.sub(r'\s*,\s*', ', ', text)
+    text = re.sub(r'\s*\.\s*', '. ', text)
 
     # Collapse excess spaces
     text = re.sub(r'\s+', ' ', text).strip()
@@ -147,38 +170,39 @@ async def _synthesize_kokoro(clean_text: str, voice_key: str, speed: float, out_
     from mutagen.mp3 import MP3
 
     voice = KOKORO_VOICE_MAP.get(voice_key, "af_heart")
-    wav_temp = out_mp3.replace(".mp3", "_temp.wav")
+    # British voice handling if bf_/bm_ prefix is used
+    lang = "en-gb" if voice.startswith(("bf_", "bm_")) else "en-us"
 
     def _infer():
-        return kokoro.create(clean_text, voice=voice, speed=speed, lang="en-us")
+        return kokoro.create(clean_text, voice=voice, speed=speed, lang=lang)
 
     samples, sample_rate = await asyncio.to_thread(_infer)
-    await asyncio.to_thread(sf.write, wav_temp, samples, sample_rate)
 
-    # Convert to MP3 via ffmpeg for lightweight streaming & high compatibility
-    cmd = ["ffmpeg", "-y", "-i", wav_temp, "-b:a", "192k", out_mp3]
-    proc = await asyncio.to_thread(
-        lambda: subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    )
-
-    if os.path.exists(wav_temp):
+    def _write_audio():
+        os.makedirs(os.path.dirname(out_mp3), exist_ok=True)
         try:
-            os.remove(wav_temp)
+            sf.write(out_mp3, samples, sample_rate, format="MP3")
         except Exception:
-            pass
+            wav_out = out_mp3.replace(".mp3", ".wav")
+            sf.write(wav_out, samples, sample_rate)
+            if os.path.exists(out_mp3):
+                os.remove(out_mp3)
+            os.rename(wav_out, out_mp3)
 
-    if proc.returncode != 0 or not os.path.exists(out_mp3):
-        raise RuntimeError(f"FFmpeg MP3 conversion failed with exit code {proc.returncode}")
+    await asyncio.to_thread(_write_audio)
 
-    audio_info = MP3(out_mp3)
-    return float(audio_info.info.length)
+    try:
+        audio_info = MP3(out_mp3)
+        return float(audio_info.info.length)
+    except Exception:
+        return float(len(samples) / sample_rate)
 
 async def _synthesize_edge_tts(clean_text: str, voice_key: str, speed: float, out_mp3: str) -> float:
     """Fallback speech synthesis using Microsoft Edge Neural TTS."""
     import edge_tts
     from mutagen.mp3 import MP3
 
-    voice = EDGE_VOICE_MAP.get(voice_key, EDGE_VOICE_MAP['en-IN-W'])
+    voice = EDGE_VOICE_MAP.get(voice_key, EDGE_VOICE_MAP.get('en-IN-W', 'en-IN-NeerjaNeural'))
     rate_pct = int((speed - 1.0) * 100) + random.randint(-1, 2)
     rate_str = f"{rate_pct:+}%"
 
@@ -194,7 +218,7 @@ async def _synthesize_edge_tts(clean_text: str, voice_key: str, speed: float, ou
 async def generate_scene_audio(scene: Scene, voice_pref: str, output_dir: str) -> Tuple[str, float]:
     """
     Generate highly expressive, humanized voiceover for a single scene.
-    Tries Kokoro-82M first; seamlessly falls back to Edge-TTS.
+    Prioritizes Kokoro-82M (ultra-natural human voice) with seamless fallback to Edge-TTS.
     Returns (mp3_filepath, duration_seconds).
     """
     raw_narration = scene.narration or ""
@@ -208,42 +232,40 @@ async def generate_scene_audio(scene: Scene, voice_pref: str, output_dir: str) -
 
     filename = f"scene_{scene.id}.mp3"
     filepath = os.path.join(output_dir, filename)
-    speed = SCENE_SPEED_MAP.get(scene.id, 1.00)
+    speed = SCENE_SPEED_MAP.get(scene.id, 1.06)
 
     logger.info(f"Scene {scene.id}: Synthesizing speech (speed={speed:.2f}) for: '{clean_text[:60]}...'")
 
     duration = 0.0
-    is_indian = (
-        voice_pref.startswith("en-IN")
-        or voice_pref.startswith("hi-IN")
-        or voice_pref in ["en-IN", "en-IN-W", "en-IN-M", "hi-IN", "female", "male"]
-    )
+    used_engine = "None"
+    pref_lower = (voice_pref or "").lower()
+    explicit_edge = pref_lower.startswith("edge") or pref_lower.startswith("edge-tts")
 
-    if is_indian:
-        # Edge-TTS provides authentic Indian English pronunciation (Neerja / Prabhat)
-        used_engine = "Edge-TTS (Indian English)"
-        try:
-            duration = await _synthesize_edge_tts(clean_text, voice_pref, speed, filepath)
-        except Exception as edge_err:
-            logger.warning(f"Scene {scene.id}: Edge-TTS synthesis failed ({edge_err}), falling back to Kokoro...")
-            used_engine = "Kokoro-82M (Fallback)"
-            try:
-                duration = await _synthesize_kokoro(clean_text, voice_pref, speed, filepath)
-            except Exception as kokoro_err:
-                logger.error(f"Scene {scene.id}: Both TTS engines failed: {kokoro_err}")
-                return ("", 0.0)
-    else:
-        # Western / General voice preference: Kokoro-82M first, Edge-TTS fallback
-        used_engine = "Kokoro-82M"
+    # Priority 1: Kokoro-82M for humanized, natural voice (unless caller explicitly specified Edge)
+    if not explicit_edge and get_kokoro_model() is not None:
         try:
             duration = await _synthesize_kokoro(clean_text, voice_pref, speed, filepath)
+            used_engine = "Kokoro-82M (Natural Human)"
         except Exception as kokoro_err:
             logger.warning(f"Scene {scene.id}: Kokoro synthesis failed ({kokoro_err}), falling back to Edge-TTS...")
-            used_engine = "Edge-TTS"
             try:
                 duration = await _synthesize_edge_tts(clean_text, voice_pref, speed, filepath)
+                used_engine = "Edge-TTS (Fallback)"
             except Exception as edge_err:
                 logger.error(f"Scene {scene.id}: Both TTS engines failed: {edge_err}")
+                return ("", 0.0)
+    else:
+        # Edge-TTS explicitly requested or Kokoro model not found
+        try:
+            duration = await _synthesize_edge_tts(clean_text, voice_pref, speed, filepath)
+            used_engine = "Edge-TTS"
+        except Exception as edge_err:
+            logger.warning(f"Scene {scene.id}: Edge-TTS failed ({edge_err}), trying Kokoro fallback...")
+            try:
+                duration = await _synthesize_kokoro(clean_text, voice_pref, speed, filepath)
+                used_engine = "Kokoro-82M (Fallback)"
+            except Exception as kokoro_err:
+                logger.error(f"Scene {scene.id}: Both TTS engines failed: {kokoro_err}")
                 return ("", 0.0)
 
     logger.info(f"Scene {scene.id}: Generated via {used_engine}, duration={duration:.2f}s ({os.path.getsize(filepath)} bytes)")
@@ -283,5 +305,14 @@ async def process_video_audio(scenes: List[Scene], voice_pref: str, job_id: str)
         except Exception as e:
             logger.error(f"Scene {scene.id}: Unexpected error in audio processing: {e}")
             relative_results.append(("", 0.0))
+
+    # A "narrated" short with no voice is useless and used to be rendered silently (the TTS failure was only logged).
+    wanted = [sc for sc in scenes if (sc.narration or "").strip()]
+    if wanted and not any(url for url, _ in relative_results):
+        raise RuntimeError(
+            "Voice-over generation failed for every scene. Install the TTS packages "
+            "(pip install edge-tts mutagen soundfile) and make sure this machine can reach Microsoft's speech service "
+            "(speech.platform.bing.com); the engine log has the per-scene reason."
+        )
 
     return relative_results

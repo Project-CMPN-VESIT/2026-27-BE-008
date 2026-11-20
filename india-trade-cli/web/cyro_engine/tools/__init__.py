@@ -29,6 +29,7 @@ from web.cyro_engine.tools.data_tools import (
     get_shareholding_pattern,
     get_bulk_block_deals,
     get_earnings_calendar,
+    screen_sebi_shield,
 )
 from web.cyro_engine.tools.risk_tools import (
     compute_var_for_symbol,
@@ -60,6 +61,7 @@ FILINGS_GOVERNANCE_TOOLS = [
     get_shareholding_pattern,
     get_bulk_block_deals,
     get_governance_report,
+    screen_sebi_shield,
 ]
 
 TECHNICAL_TOOLS = [
@@ -86,6 +88,7 @@ RISK_BEAR_TOOLS = [
     get_stock_macro_sensitivity,
     get_bulk_block_deals,
     get_governance_report,
+    screen_sebi_shield,
 ]
 
 # Pre-assemble deduplicated ALL_TOOLS list
@@ -125,6 +128,7 @@ __all__ = [
     "get_fii_dii_flows",
     "get_option_chain_summary",
     "get_governance_report",
+    "screen_sebi_shield",
     # Bundles
     "FUNDAMENTAL_TOOLS",
     "FILINGS_GOVERNANCE_TOOLS",

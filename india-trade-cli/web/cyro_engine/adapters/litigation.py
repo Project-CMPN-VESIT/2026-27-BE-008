@@ -9,18 +9,48 @@ class LitigationAdapter(SourceAdapter):
         super().__init__(name="Litigation and Audit", default_quality="official_disclosure")
 
     def _fetch_primary(self, symbol: str, **kwargs) -> Any:
-        data = get_pipeline_data(symbol)
-        if not data:
-            raise Exception(f"No pipeline data found for {symbol}")
-            
+        data = get_pipeline_data(symbol) or {}
         litigation = data.get("litigation_and_audit", {})
-        
+
+        # Enrich with SEBI Shield regulatory orders and sanctions
+        try:
+            from market.sebi_shield import screen_sebi_shield
+            sebi_res = screen_sebi_shield(symbol)
+            litigation["sebi_shield"] = sebi_res
+        except Exception:
+            litigation["sebi_shield"] = {"clean": True, "matches": []}
+
         return litigation
 
     def _build_evidence(self, symbol: str, research_id: str, result: AdapterResult) -> List[Dict[str, Any]]:
         evidence_list = []
         litigation = result.data or {}
-        
+
+        # SEBI Shield Regulatory Sanctions
+        sebi_shield = litigation.get("sebi_shield", {})
+        if not sebi_shield.get("clean") and sebi_shield.get("matches"):
+            for idx, act in enumerate(sebi_shield["matches"][:3]):
+                reg = act.get("regulator", "SEBI")
+                act_type = act.get("action_type", "Regulatory action")
+                st = act.get("status", "ACTIVE")
+                desc = act.get("description", "")
+                fact_str = f"{reg} {act_type} ({st}): {desc}"
+                evidence_list.append({
+                    "id": f"ev_{symbol.lower()}_sebi_shield_{idx}",
+                    "research_id": research_id,
+                    "ticker": symbol.upper(),
+                    "type": "regulatory_sanction",
+                    "category": "regulatory_risk",
+                    "source_quality": "PRIMARY",
+                    "source_name": f"SEBI Shield ({reg})",
+                    "title": f"{reg} Regulatory Action: {act_type}",
+                    "published_at": act.get("order_date") or result.fetched_at,
+                    "fetched_at": result.fetched_at,
+                    "excerpt": fact_str,
+                    "facts": [{"regulatory_sanction": act_type, "regulator": reg, "status": st, "order_number": act.get("order_number")}],
+                    "freshness": result.freshness,
+                })
+
         # Auditor Opinion
         auditor_opinion = litigation.get("auditor_report_opinion")
         if auditor_opinion:

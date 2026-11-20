@@ -91,7 +91,10 @@ export function useHeatmapData(symbols: string[], isLive: boolean = true) {
     }
 
     const symbolsQuery = symbols.join(",");
-    const eventSource = new EventSource(`/api/heatmap?symbols=${encodeURIComponent(symbolsQuery)}`);
+    let eventSource: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retries = 0;
+    let cancelled = false;
 
     const flushBuffer = () => {
       if (Object.keys(bufferRef.current).length > 0) {
@@ -102,30 +105,47 @@ export function useHeatmapData(symbols: string[], isLive: boolean = true) {
       flushTimerRef.current = null;
     };
 
-    eventSource.onmessage = (event) => {
-      try {
-        const quote = JSON.parse(event.data) as HeatmapQuote;
-        bufferRef.current[quote.symbol] = quote;
+    // The stream used to stop for good after the first network blip or server restart; reconnect with backoff.
+    const connect = () => {
+      if (cancelled) return;
+      const source = new EventSource(`/api/heatmap?symbols=${encodeURIComponent(symbolsQuery)}`);
+      eventSource = source;
 
-        if (!flushTimerRef.current) {
-          flushTimerRef.current = setTimeout(flushBuffer, 100);
+      source.onopen = () => {
+        retries = 0;
+      };
+
+      source.onmessage = (event) => {
+        try {
+          const quote = JSON.parse(event.data) as HeatmapQuote;
+          bufferRef.current[quote.symbol] = quote;
+
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = setTimeout(flushBuffer, 100);
+          }
+        } catch (err) {
+          console.error("Error parsing SSE data", err);
         }
-      } catch (err) {
-        console.error("Error parsing SSE data", err);
-      }
+      };
+
+      source.onerror = () => {
+        source.close();
+        if (cancelled || retries >= 6) return;
+        retries += 1;
+        retryTimer = setTimeout(connect, Math.min(30_000, 2_000 * 2 ** (retries - 1)));
+      };
     };
 
-    eventSource.onerror = (err) => {
-      console.error("SSE Error:", err);
-      eventSource.close();
-    };
+    connect();
 
     return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      eventSource.close();
+      eventSource?.close();
     };
   }, [symbols.join(","), isLive]);
 

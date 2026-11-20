@@ -148,7 +148,10 @@ export default function TradingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-[495px] rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
+      <div
+        className="w-full max-w-[495px] rounded-3xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar font-sans"
+        style={{ fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+      >
         {/* Modal Header */}
         <div className="mb-3.5 flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -183,11 +186,11 @@ export default function TradingModal({
               </div>
             ) : (
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                <span className="text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
                   ₹{currentPrice.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span
-                  className={`text-xs font-bold ${
+                  className={`text-xs font-semibold tabular-nums ${
                     isPositiveDay ? "text-emerald-500" : "text-rose-500"
                   }`}
                 >
@@ -199,7 +202,7 @@ export default function TradingModal({
           {existingPosition ? (
             <div className="text-right bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
               <span className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Your Holding</span>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              <span className="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-200">
                 {existingPosition.quantity} sh
               </span>
             </div>
@@ -224,7 +227,7 @@ export default function TradingModal({
               min="1"
               value={quantity}
               onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-16 text-center bg-transparent text-lg font-black text-slate-900 dark:text-white outline-none"
+              className="w-16 text-center bg-transparent text-lg font-bold tabular-nums text-slate-900 dark:text-white outline-none"
             />
             <button
               type="button"
@@ -265,13 +268,13 @@ export default function TradingModal({
         <div className="flex items-center justify-between px-2 mb-4">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Order Value</span>
-            <span className="text-base font-extrabold text-slate-900 dark:text-white">
+            <span className="text-base font-bold tabular-nums text-slate-900 dark:text-white">
               ₹{estimatedTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex flex-col text-right">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available Cash</span>
-            <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+            <span className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
               ₹{availableCash.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
@@ -325,7 +328,7 @@ export default function TradingModal({
               className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="h-5 w-5" />
-              BUY {quantity}
+              <span className="tabular-nums">BUY {quantity}</span>
             </button>
             <button
               type="button"
@@ -337,7 +340,7 @@ export default function TradingModal({
               className="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold shadow-lg shadow-rose-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="h-5 w-5" />
-              SELL {quantity}
+              <span className="tabular-nums">SELL {quantity}</span>
             </button>
           </div>
         ) : (
@@ -360,7 +363,7 @@ export default function TradingModal({
               }`}
             >
               <CheckCircle2 className="h-5 w-5" />
-              Confirm {action} {quantity}
+              <span className="tabular-nums">Confirm {action} {quantity}</span>
             </button>
           </div>
         )}

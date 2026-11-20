@@ -1,23 +1,22 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Shield,
-  ShieldAlert,
   Search,
-  Filter,
+  RefreshCw,
+  Play,
+  ArrowDown,
+  ArrowUp,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Users,
   Building2,
   FileWarning,
-  RefreshCw,
-  Info,
-  Calendar,
-  XCircle,
-  Play,
-  ArrowUpDown,
-  ArrowDown,
-  ArrowUp
+  ShieldAlert,
 } from "lucide-react";
 
 interface ScrapedEntity {
@@ -39,14 +38,10 @@ const parseDateToUnix = (dateStr?: string | null): number => {
   if (!dateStr || dateStr === "N/A" || dateStr === "null" || dateStr === "undefined") {
     return 0;
   }
-  
   const trimmed = dateStr.trim();
   const parsed = Date.parse(trimmed);
-  if (!isNaN(parsed)) {
-    return parsed;
-  }
+  if (!isNaN(parsed)) return parsed;
 
-  // Handle DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
   const parts = trimmed.split(/[-/.]/);
   if (parts.length === 3) {
     if (parts[2].length === 4) {
@@ -54,62 +49,109 @@ const parseDateToUnix = (dateStr?: string | null): number => {
       const month = parseInt(parts[1], 10) - 1;
       const year = parseInt(parts[2], 10);
       const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) {
-        return d.getTime();
-      }
+      if (!isNaN(d.getTime())) return d.getTime();
     } else if (parts[0].length === 4) {
       const year = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10) - 1;
       const day = parseInt(parts[2], 10);
       const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) {
-        return d.getTime();
-      }
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+  }
+  return 0;
+};
+
+const formatDisplayDate = (dateStr?: string | null): string => {
+  if (!dateStr || dateStr === "N/A" || dateStr === "null" || dateStr === "undefined") {
+    return "—";
+  }
+  const timestamp = parseDateToUnix(dateStr);
+  if (!timestamp) return dateStr;
+  const d = new Date(timestamp);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
+const getEntityIdentifier = (item: ScrapedEntity): { type: string; val: string } => {
+  if (item.din_number && item.din_number !== "null" && item.din_number !== "undefined") {
+    return { type: "DIN", val: item.din_number };
+  }
+  if (item.pan_number && item.pan_number !== "null" && item.pan_number !== "undefined") {
+    return { type: "PAN", val: item.pan_number };
+  }
+  if (item.cin_number && item.cin_number !== "null" && item.cin_number !== "undefined") {
+    return { type: "CIN", val: item.cin_number };
+  }
+  if (item.circular_number && item.circular_number !== "null" && item.circular_number !== "undefined") {
+    return { type: "REF", val: item.circular_number };
+  }
+
+  // Extract from circular link
+  if (item.link_to_circular) {
+    // NSE circular pattern: /INVG76139.zip, /CML76137.pdf, /CMPT76138.pdf
+    const nseMatch = item.link_to_circular.match(/\/([A-Z0-9_-]{4,25})\.(pdf|zip|html)$/i);
+    if (nseMatch && nseMatch[1]) {
+      return { type: "REF", val: nseMatch[1] };
+    }
+    // RBI notification pattern: Id=12922
+    const rbiMatch = item.link_to_circular.match(/[?&]Id=(\d+)/i);
+    if (rbiMatch && rbiMatch[1]) {
+      return { type: "REF", val: `RBI-${rbiMatch[1]}` };
+    }
+    // SEBI order pattern: _104110.html
+    const sebiMatch = item.link_to_circular.match(/_(\d+)\.html$/i);
+    if (sebiMatch && sebiMatch[1]) {
+      return { type: "REF", val: `SEBI-${sebiMatch[1]}` };
     }
   }
 
-  return 0;
+  return { type: "REF", val: `ACT-${item.id}` };
 };
 
 export default function RegulatoryPage() {
   const [entities, setEntities] = useState<ScrapedEntity[]>([]);
-  const [selectedEntity, setSelectedEntity] = useState<ScrapedEntity | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSource, setFilterSource] = useState<string>("all");
-  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc"); // Default: latest to oldest
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchEntities = async () => {
+  // Pagination for fluid table performance
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const fetchEntities = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:8000/v1/entities?page_size=5000");
+      const response = await fetch("/api/regulatory/entities?page_size=5000", { cache: "no-store" });
       if (!response.ok) throw new Error("Failed to fetch entities");
       const data = await response.json();
       setEntities(data.entities || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Failed to connect to Scrapper API");
+      setError(err instanceof Error ? err.message : "Failed to connect to Scraper API");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+  }, []);
 
   const runPipeline = async () => {
     setIsRunningPipeline(true);
     setError(null);
     try {
-      const response = await fetch("http://localhost:8000/v1/pipeline/run", {
-        method: "POST"
+      const response = await fetch("/api/regulatory/pipeline", {
+        method: "POST",
       });
       if (!response.ok) throw new Error("Failed to run pipeline");
       await fetchEntities();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Failed to run pipeline");
+      setError(err instanceof Error ? err.message : "Failed to run pipeline");
     } finally {
       setIsRunningPipeline(false);
     }
@@ -117,15 +159,22 @@ export default function RegulatoryPage() {
 
   useEffect(() => {
     fetchEntities();
-  }, []);
+  }, [fetchEntities]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, filterSource]);
 
   const filteredEntities = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return entities
       .filter((e) => {
-        const searchContext = `${e.name} ${e.din_number || ""} ${e.pan_number || ""} ${e.cin_number || ""} ${e.issuing_body || ""}`.toLowerCase();
-        const matchesSearch = searchContext.includes(searchQuery.toLowerCase());
         const matchesFilter = filterSource === "all" || e.source_id === filterSource;
-        return matchesSearch && matchesFilter;
+        if (!matchesFilter) return false;
+        if (!q) return true;
+        const ident = getEntityIdentifier(e);
+        const context = `${e.name} ${ident.val} ${e.din_number || ""} ${e.pan_number || ""} ${e.cin_number || ""} ${e.issuing_body || ""} ${e.circular_number || ""}`.toLowerCase();
+        return context.includes(q);
       })
       .sort((a, b) => {
         const timeA = parseDateToUnix(a.date_of_publish);
@@ -137,222 +186,524 @@ export default function RegulatoryPage() {
       });
   }, [entities, searchQuery, filterSource, sortOrder]);
 
-  const getSourceLabel = (sourceId: string) => {
+  const totalPages = Math.max(1, Math.ceil(filteredEntities.length / pageSize));
+  const paginatedEntities = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredEntities.slice(start, start + pageSize);
+  }, [filteredEntities, page, pageSize]);
+
+  const stats = useMemo(() => {
+    return {
+      total: entities.length,
+      sebi: entities.filter((e) => e.source_id === "sebi_orders").length,
+      nse: entities.filter((e) => e.source_id === "nse_circulars").length,
+      bse: entities.filter((e) => e.source_id === "bse_notices").length,
+      nse_bse: entities.filter((e) => e.source_id === "nse_circulars" || e.source_id === "bse_notices").length,
+      rbi: entities.filter((e) => e.source_id === "rbi_standalone_circulars").length,
+    };
+  }, [entities]);
+
+  const sourceTabs = [
+    { id: "all", label: "All Sources", count: stats.total },
+    { id: "sebi_orders", label: "SEBI Orders", count: stats.sebi },
+    { id: "nse_circulars", label: "NSE Circulars", count: stats.nse },
+    { id: "bse_notices", label: "BSE Notices", count: stats.bse },
+    { id: "rbi_standalone_circulars", label: "RBI Actions", count: stats.rbi },
+  ];
+
+  const getSourceBadge = (sourceId: string) => {
     switch (sourceId) {
-      case "sebi_orders": return "SEBI Orders";
-      case "rbi_standalone_circulars": return "RBI Default/Actions";
-      case "nse_circulars": return "NSE Circulars";
-      case "bse_notices": return "BSE Notices";
-      default: return sourceId.replace("_", " ").toUpperCase();
+      case "sebi_orders":
+        return {
+          label: "SEBI Orders",
+          bg: "#FEF3F2",
+          text: "#B42318",
+          dot: "#D92D20",
+          darkBg: "rgba(254, 243, 242, 0.15)",
+          darkText: "#F97066",
+        };
+      case "nse_circulars":
+        return {
+          label: "NSE Circulars",
+          bg: "#EFF4FF",
+          text: "#1849A9",
+          dot: "#2E6BFF",
+          darkBg: "rgba(239, 244, 255, 0.15)",
+          darkText: "#84ADFF",
+        };
+      case "bse_notices":
+        return {
+          label: "BSE Notices",
+          bg: "#ECFDF3",
+          text: "#067647",
+          dot: "#12B76A",
+          darkBg: "rgba(236, 253, 243, 0.15)",
+          darkText: "#6CE9A6",
+        };
+      case "rbi_standalone_circulars":
+        return {
+          label: "RBI Actions",
+          bg: "#FFFAEB",
+          text: "#B54708",
+          dot: "#DC6803",
+          darkBg: "rgba(255, 250, 235, 0.15)",
+          darkText: "#FDB022",
+        };
+      default:
+        return {
+          label: sourceId.replace(/_/g, " ").toUpperCase(),
+          bg: "#F2F4F7",
+          text: "#344054",
+          dot: "#667085",
+          darkBg: "rgba(242, 244, 247, 0.15)",
+          darkText: "#98A2B3",
+        };
     }
   };
-
-  const getActualLink = (entity: ScrapedEntity) => {
-    return entity.link_to_circular;
-  };
-
-  const getSourceBadgeColor = (sourceId: string) => {
-    switch (sourceId) {
-      case "sebi_orders": return "bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20";
-      case "nse_circulars": return "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20";
-      case "bse_notices": return "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20";
-      case "rbi_standalone_circulars": return "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20";
-      default: return "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700";
-    }
-  };
-
-  const stats = {
-    total: entities.length,
-    sebi: entities.filter(e => e.source_id === "sebi_orders").length,
-    nse_bse: entities.filter(e => e.source_id === "nse_circulars" || e.source_id === "bse_notices").length,
-    rbi: entities.filter(e => e.source_id === "rbi_standalone_circulars").length,
-  };
-
-  const availableSources = ["all", "sebi_orders", "nse_circulars", "bse_notices", "rbi_standalone_circulars"];
 
   return (
-    <div className="p-6 space-y-6 bg-grid-pattern min-h-screen">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">SEBI Regulatory Shield (India Only)</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Strictly monitoring SEBI, NSE, BSE, and RBI actions with source provenance
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={fetchEntities} disabled={isLoading || isRunningPipeline} className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium transition-colors border border-slate-300 dark:border-slate-700 ${(isLoading || isRunningPipeline) ? "opacity-50 cursor-not-allowed" : ""}`}>
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-            {isLoading ? "Fetching data..." : "Refresh Feed"}
-          </button>
-          <button onClick={runPipeline} disabled={isLoading || isRunningPipeline} className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors shadow-sm ${(isLoading || isRunningPipeline) ? "opacity-50 cursor-not-allowed" : ""}`}>
-            <Play className={`w-4 h-4 ${isRunningPipeline ? "animate-pulse" : ""}`} />
-            {isRunningPipeline ? "Running Pipeline..." : "Run Pipeline"}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Actions</span><Users className="w-4 h-4 text-slate-400" /></div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</div>
-          <p className="text-xs text-slate-400 mt-1">Regulatory Actions Tracked</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-rose-200 dark:border-rose-500/20 p-4 shadow-sm glow-rose">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-rose-600 dark:text-rose-400 uppercase tracking-wider">SEBI Actions</span><ShieldAlert className="w-4 h-4 text-rose-500" /></div>
-          <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">{stats.sebi}</div>
-          <p className="text-xs text-rose-500/70 mt-1">Debarred / Banned / Penalized</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-500/20 p-4 shadow-sm glow-blue">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">NSE/BSE Restrictions</span><Building2 className="w-4 h-4 text-blue-500" /></div>
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{stats.nse_bse}</div>
-          <p className="text-xs text-blue-500/70 mt-1">Exchange Level Surveillance</p>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-500/20 p-4 shadow-sm glow-amber">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">RBI Actions</span><FileWarning className="w-4 h-4 text-amber-500" /></div>
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.rbi}</div>
-          <p className="text-xs text-amber-500/70 mt-1">RBI Circulars</p>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl flex items-start gap-2 text-sm">
-          <FileWarning className="w-5 h-5 shrink-0" />
-          <div className="flex-1 mt-0.5">{error}</div>
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors shadow-sm">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input type="text" placeholder="Search entities by name, DIN, PAN..." className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400 outline-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400 mx-1" />
-          {availableSources.map((f) => (
-            <button key={f} onClick={() => setFilterSource(f)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterSource === f ? "bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"}`}>
-              {f === 'all' ? 'All Sources' : getSourceLabel(f)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Entity Details</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Identifiers</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Source</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">Action & Status</th>
-                <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  <button
-                    onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
-                    className="inline-flex items-center gap-1.5 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer group"
-                    title={`Currently sorted ${sortOrder === "desc" ? "Latest to Oldest" : "Oldest to Latest"}. Click to toggle.`}
-                  >
-                    <span>Publish Date</span>
-                    {sortOrder === "desc" ? (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded font-medium">
-                        Latest First <ArrowDown className="w-3 h-3" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-1.5 py-0.5 rounded font-medium">
-                        Oldest First <ArrowUp className="w-3 h-3" />
-                      </span>
-                    )}
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60">
-              {filteredEntities.map((entity) => (
-                <tr key={`${entity.id}-${entity.source_id}-${entity.circular_number}`} onClick={() => {
-                  const link = getActualLink(entity);
-                  if (link && link !== "UNKNOWN") {
-                    window.open(link, '_blank', 'noopener,noreferrer');
-                  }
-                  setSelectedEntity(selectedEntity?.id === entity.id ? null : entity);
-                }} className={`group cursor-pointer transition-colors ${selectedEntity?.id === entity.id ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/70 dark:hover:bg-slate-800/30"}`}>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-300">
-                        {entity.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-slate-900 dark:text-white capitalize group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{entity.name.toLowerCase()}</div>
-                        {entity.issuing_body && <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[280px]">Body: {entity.issuing_body}</div>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="space-y-1">
-                      {entity.din_number && <div className="text-[11px]"><span className="text-slate-400">DIN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.din_number}</span></div>}
-                      {entity.pan_number && <div className="text-[11px]"><span className="text-slate-400">PAN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.pan_number}</span></div>}
-                      {entity.cin_number && <div className="text-[11px]"><span className="text-slate-400">CIN:</span> <span className="font-mono text-slate-700 dark:text-slate-300">{entity.cin_number}</span></div>}
-                      {!entity.din_number && !entity.pan_number && !entity.cin_number && <span className="text-[11px] text-slate-400">—</span>}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide ${getSourceBadgeColor(entity.source_id)}`}>
-                      {getSourceLabel(entity.source_id)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="flex flex-col items-start gap-1">
-                      <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 mt-1">
-                        {entity.action_type || "REGULATORY ACTION"}
-                      </div>
-                      <div className="text-[10px] font-semibold tracking-wide mt-0.5" style={{ color: entity.status === 'ACTIVE' ? '#ef4444' : entity.status === 'EXPIRED' ? '#10b981' : '#64748b' }}>
-                        {entity.status || "UNKNOWN"}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 align-top">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Calendar className="w-3.5 h-3.5 text-slate-400" />{entity.date_of_publish || "N/A"}</div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredEntities.length === 0 && !isLoading && (
-            <div className="px-5 py-8 text-center text-sm text-slate-500">No matching entities found.</div>
-          )}
-        </div>
-      </div>
-
-      {selectedEntity && (
-        <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-300 dark:border-slate-700 p-5 shadow-sm animate-fade-in relative overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-400 to-teal-500"></div>
-          <div className="flex gap-4">
-            <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
-              <FileWarning className="w-6 h-6 text-slate-400" />
+    <div className="min-h-screen bg-[#F6F7F9] dark:bg-[#090d16] text-[#0F172A] dark:text-slate-100 font-sans antialiased overflow-x-hidden">
+      <main
+        className="mx-auto px-4 sm:px-8 pt-6 sm:pt-8 pb-16 flex flex-col gap-5 w-full"
+        style={{
+          zoom: 0.92,
+          width: "108.696%",
+          maxWidth: "1461px",
+          transformOrigin: "top center",
+        }}
+      >
+        
+        {/* ─── Top Header & Primary Actions ─── */}
+        <div className="flex items-center justify-between gap-5 flex-wrap">
+          <div className="flex items-center gap-4">
+            <span
+              className="w-[52px] h-[52px] rounded-[14px] bg-[#ECFDF3] dark:bg-emerald-950/40 text-[#067647] dark:text-emerald-400 border border-[#ABEFC6] dark:border-emerald-800/60 grid place-items-center shrink-0 shadow-xs"
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </span>
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="m-0 text-[28px] font-bold tracking-[-0.02em] text-[#0F172A] dark:text-white">
+                  SEBI Regulatory Shield
+                </h1>
+                <span className="px-2.5 py-1 border border-[#D0D5DD] dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-[11px] font-semibold tracking-[0.1em] text-[#475467] dark:text-slate-300">
+                  INDIA ONLY
+                </span>
+              </div>
+              <p className="mt-1.5 mb-0 text-[14.5px] text-[#475467] dark:text-slate-400">
+                Strictly monitoring SEBI, NSE, BSE, and RBI actions with source provenance
+              </p>
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white capitalize">{selectedEntity.name.toLowerCase()}</h3>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold ${getSourceBadgeColor(selectedEntity.source_id)}`}>{getSourceLabel(selectedEntity.source_id)}</span>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={fetchEntities}
+              disabled={isLoading || isRunningPipeline}
+              className={`inline-flex items-center gap-2 h-11 px-[18px] rounded-xl border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#0F172A] dark:text-slate-200 text-sm font-semibold hover:bg-[#F9FAFB] dark:hover:bg-slate-800 transition-colors shadow-2xs ${
+                isLoading || isRunningPipeline ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              }`}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={isLoading ? "animate-spin" : ""}
+                aria-hidden="true"
+              >
+                <path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" />
+              </svg>
+              <span>{isLoading ? "Refreshing..." : "Refresh Feed"}</span>
+            </button>
+
+            <button
+              onClick={runPipeline}
+              disabled={isLoading || isRunningPipeline}
+              className={`inline-flex items-center gap-2 h-11 px-[18px] rounded-xl border border-[#1F5EFF] bg-[#1F5EFF] text-white text-sm font-semibold hover:bg-blue-600 transition-colors shadow-sm ${
+                isLoading || isRunningPipeline ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              }`}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 4l13 8-13 8V4z" />
+              </svg>
+              <span>{isRunningPipeline ? "Running Pipeline..." : "Run Pipeline"}</span>
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* ─── 4 KPI Stat Cards (Compact Height & Black Border on Active) ─── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Card 1: Total Actions */}
+          <div
+            onClick={() => setFilterSource("all")}
+            className={`bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all ${
+              filterSource === "all"
+                ? "border-2 border-[#0F172A] dark:border-white shadow-md ring-1 ring-[#0F172A]/10"
+                : "border-2 border-[#E5E8EE] dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+            }`}
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold tracking-[0.07em] uppercase text-[#475467] dark:text-slate-400">
+                Total Actions
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-[#F2F4F7] dark:bg-slate-800 text-[#344054] dark:text-slate-300 grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <circle cx="9" cy="8" r="3.2" />
+                  <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 010 5.6M18 14.3c1.8.8 3 2.6 3 4.7" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-[30px] font-bold tracking-[-0.02em] leading-tight tabular-nums text-[#0F172A] dark:text-white">
+              {stats.total.toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-xs text-[#667085] dark:text-slate-400">
+              Regulatory records tracked
+            </div>
+          </div>
+
+          {/* Card 2: SEBI Actions */}
+          <div
+            onClick={() => setFilterSource("sebi_orders")}
+            className={`bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all ${
+              filterSource === "sebi_orders"
+                ? "border-2 border-[#0F172A] dark:border-white shadow-md ring-1 ring-[#0F172A]/10"
+                : "border-2 border-[#E5E8EE] dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+            }`}
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold tracking-[0.07em] uppercase text-[#B42318] dark:text-rose-400">
+                SEBI Actions
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-[#FEF3F2] dark:bg-rose-950/40 text-[#B42318] dark:text-rose-400 grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3zM12 8.5v4M12 15.5h.01" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-[30px] font-bold tracking-[-0.02em] leading-tight tabular-nums text-[#0F172A] dark:text-white">
+              {stats.sebi.toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-xs text-[#667085] dark:text-slate-400">
+              Debarred / Banned / Penalized
+            </div>
+          </div>
+
+          {/* Card 3: Exchange Surveillance */}
+          <div
+            onClick={() => setFilterSource("nse_circulars")}
+            className={`bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all ${
+              filterSource === "nse_circulars" || filterSource === "bse_notices"
+                ? "border-2 border-[#0F172A] dark:border-white shadow-md ring-1 ring-[#0F172A]/10"
+                : "border-2 border-[#E5E8EE] dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+            }`}
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold tracking-[0.07em] uppercase text-[#1849A9] dark:text-blue-400">
+                Exchange Surveillance
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-[#EFF4FF] dark:bg-blue-950/40 text-[#1849A9] dark:text-blue-400 grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M4 21V5l8-2v18M12 8h8v13M2 21h20M8 9h1M8 13h1M8 17h1M16 12h1M16 16h1" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-[30px] font-bold tracking-[-0.02em] leading-tight tabular-nums text-[#0F172A] dark:text-white">
+              {stats.nse_bse.toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-xs text-[#667085] dark:text-slate-400">
+              NSE / BSE Restrictions
+            </div>
+          </div>
+
+          {/* Card 4: RBI Actions */}
+          <div
+            onClick={() => setFilterSource("rbi_standalone_circulars")}
+            className={`bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all ${
+              filterSource === "rbi_standalone_circulars"
+                ? "border-2 border-[#0F172A] dark:border-white shadow-md ring-1 ring-[#0F172A]/10"
+                : "border-2 border-[#E5E8EE] dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
+            }`}
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold tracking-[0.07em] uppercase text-[#B54708] dark:text-amber-400">
+                RBI Actions
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-[#FFFAEB] dark:bg-amber-950/40 text-[#B54708] dark:text-amber-400 grid place-items-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 3l10 18H2L12 3zM12 10v5M12 18h.01" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-[30px] font-bold tracking-[-0.02em] leading-tight tabular-nums text-[#0F172A] dark:text-white">
+              {stats.rbi.toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-xs text-[#667085] dark:text-slate-400">
+              Banking &amp; NBFC Circulars
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Search Bar & Segmented Source Filters ─── */}
+        <div className="flex flex-wrap gap-4 items-center justify-between">
+          <label className="flex items-center gap-2.5 h-12 px-4 bg-white dark:bg-slate-900 border border-[#D0D5DD] dark:border-slate-700 rounded-xl flex-1 max-w-[460px] text-[#667085] focus-within:border-[#1F5EFF] focus-within:ring-3 focus-within:ring-[#D1E0FF] transition-all">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search entity, DIN, PAN, or circular..."
+              aria-label="Search entity, DIN, PAN, or circular"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border-0 outline-none flex-1 min-w-0 bg-transparent text-sm text-[#0F172A] dark:text-white placeholder:text-[#667085]"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Source Filter Buttons (Black border on each box, solid black when active) */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5" role="group" aria-label="Filter by source">
+              {sourceTabs.map((tab) => {
+                const active = filterSource === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFilterSource(tab.id)}
+                    className={`inline-flex items-center gap-2 h-11 px-3.5 sm:px-4 rounded-xl text-[13.5px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      active
+                        ? "bg-black dark:bg-white text-white dark:text-black border border-black dark:border-white shadow-xs"
+                        : "bg-white dark:bg-slate-900 text-black dark:text-white border border-black dark:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-2xs"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-xs px-2.5 py-0.5 rounded-full font-semibold tabular-nums transition-colors ${
+                        active
+                          ? "bg-white dark:bg-black text-black dark:text-white"
+                          : "bg-[#E9ECEF] dark:bg-slate-800 text-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      {tab.count.toLocaleString()}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Date Sort Toggle */}
+            <button
+              onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+              className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-black dark:border-slate-400 bg-white dark:bg-slate-900 text-black dark:text-slate-200 text-[13.5px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer shadow-2xs"
+            >
+              <span>Date</span>
+              {sortOrder === "desc" ? (
+                <ArrowDown className="w-4 h-4 text-black dark:text-slate-200" strokeWidth={1.8} />
+              ) : (
+                <ArrowUp className="w-4 h-4 text-black dark:text-slate-200" strokeWidth={1.8} />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Data Table matching HTML & Mockup Exactly ─── */}
+        <div className="bg-white dark:bg-slate-900 border border-[#E5E8EE] dark:border-slate-800 rounded-2xl shadow-[0_1px_2px_rgba(16,24,40,0.04)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="min-w-[960px]">
+              
+              {/* Header Columns */}
+              <div
+                className="grid gap-4 items-center px-6 h-12 bg-[#F9FAFB] dark:bg-slate-800/60 text-[11.5px] font-semibold tracking-[0.07em] uppercase text-[#667085] dark:text-slate-400 select-none"
+                style={{ gridTemplateColumns: "minmax(280px, 3.2fr) 1.3fr 1.5fr 1.3fr 1.0fr 64px" }}
+              >
+                <span>Entity &amp; Regulatory Context</span>
+                <span>Authority</span>
+                <span>Action &amp; Status</span>
+                <span>Identifiers</span>
+                <span>Publish Date</span>
+                <span className="text-right">Order</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                {selectedEntity.din_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">DIN Number</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.din_number}</div></div>}
-                {selectedEntity.pan_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">PAN</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.pan_number}</div></div>}
-                {selectedEntity.cin_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">CIN</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.cin_number}</div></div>}
-                {selectedEntity.circular_number && <div><div className="text-[10px] font-medium text-slate-500 uppercase">Order/Circular No.</div><div className="text-sm font-mono text-slate-700 dark:text-slate-300 mt-1">{selectedEntity.circular_number}</div></div>}
-              </div>
-              {getActualLink(selectedEntity) && getActualLink(selectedEntity) !== "UNKNOWN" && (
-                <div className="mt-5 pt-5 border-t border-slate-200 dark:border-slate-700/50">
-                  <a href={getActualLink(selectedEntity)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium text-blue-600 dark:text-blue-400 hover:border-blue-300 dark:hover:border-blue-500/50 transition-colors shadow-sm"><ExternalLink className="w-4 h-4" />Open Original Source</a>
+
+              {/* Data Rows */}
+              {isLoading ? (
+                <div className="px-6 py-16 text-center text-sm text-[#667085] flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-[#1F5EFF]" />
+                  <span>Loading regulatory feed...</span>
                 </div>
+              ) : paginatedEntities.length === 0 ? (
+                <div className="px-6 py-16 text-center text-sm text-[#667085]">
+                  No matching regulatory actions found.
+                </div>
+              ) : (
+                paginatedEntities.map((item) => {
+                  const badge = getSourceBadge(item.source_id);
+                  const link = item.link_to_circular;
+                  const ident = getEntityIdentifier(item);
+
+                  return (
+                    <div
+                      key={`${item.id}-${item.source_id}-${item.circular_number}`}
+                      className="grid gap-4 items-center px-6 min-h-[64px] border-t border-[#EAECF0] dark:border-slate-800 hover:bg-[#F9FAFB] dark:hover:bg-slate-800/40 transition-colors group"
+                      style={{ gridTemplateColumns: "minmax(280px, 3.2fr) 1.3fr 1.5fr 1.3fr 1.0fr 64px" }}
+                    >
+                      {/* Entity & Context (without Body field) */}
+                      <div className="py-3">
+                        <a
+                          href={link || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-[14.5px] font-semibold leading-[1.35] text-[#0F172A] dark:text-white group-hover:text-[#1F5EFF] dark:group-hover:text-blue-400 transition-colors"
+                        >
+                          {item.name}
+                        </a>
+                      </div>
+
+                      {/* Authority */}
+                      <div>
+                        <span
+                          className="inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full text-xs font-semibold whitespace-nowrap"
+                          style={{ background: badge.bg, color: badge.text }}
+                        >
+                          <i className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: badge.dot }} />
+                          {badge.label}
+                        </span>
+                      </div>
+
+                      {/* Action & Status */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-semibold text-[#344054] dark:text-slate-300">
+                          {item.action_type || "Regulatory Action"}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-full text-xs font-semibold whitespace-nowrap"
+                          style={
+                            item.status === "ACTIVE"
+                              ? { background: "#FEF3F2", color: "#B42318" }
+                              : { background: "#F2F4F7", color: "#344054" }
+                          }
+                        >
+                          <i
+                            className="w-1.5 h-1.5 rounded-full inline-block"
+                            style={{ background: item.status === "ACTIVE" ? "#D92D20" : "#667085" }}
+                          />
+                          {item.status || "ACTIVE"}
+                        </span>
+                      </div>
+
+                      {/* Identifiers */}
+                      <div className="text-[12.5px] font-mono whitespace-nowrap overflow-hidden text-ellipsis">
+                        <span className="text-[10px] font-sans font-semibold text-[#667085] dark:text-slate-400 mr-1 uppercase">
+                          {ident.type}:
+                        </span>
+                        <span className="font-semibold text-[#0F172A] dark:text-slate-200">
+                          {ident.val}
+                        </span>
+                      </div>
+
+                      {/* Publish Date */}
+                      <div className="text-[13.5px] font-medium text-[#344054] dark:text-slate-300 whitespace-nowrap tabular-nums">
+                        {formatDisplayDate(item.date_of_publish)}
+                      </div>
+
+                      {/* Order Button */}
+                      <div className="flex justify-end">
+                        <a
+                          href={link || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open order: ${item.name}`}
+                          className="w-11 h-11 grid place-items-center rounded-xl border border-[#E5E8EE] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#475467] dark:text-slate-300 hover:bg-[#F2F4F7] dark:hover:bg-slate-700 hover:text-[#0F172A] transition-colors"
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" />
+                          </svg>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
+
+          {/* ─── Clean Pagination Footer ─── */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-[#EAECF0] dark:border-slate-800 bg-[#F9FAFB] dark:bg-slate-800/40 text-[13px] text-[#475467] dark:text-slate-400">
+            <div className="flex items-center gap-2">
+              <span>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-8 px-2 rounded-lg border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-[#0F172A] dark:text-slate-200 outline-none cursor-pointer"
+              >
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="ml-2 font-mono tabular-nums text-xs">
+                {Math.min(filteredEntities.length, (page - 1) * pageSize + 1)}–
+                {Math.min(filteredEntities.length, page * pageSize)} of {filteredEntities.length.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page <= 1}
+                className="w-8 h-8 grid place-items-center rounded-lg border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#475467] dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#F2F4F7] dark:hover:bg-slate-800 transition-colors"
+                title="First Page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="w-8 h-8 grid place-items-center rounded-lg border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#475467] dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#F2F4F7] dark:hover:bg-slate-800 transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-3 font-semibold text-[#0F172A] dark:text-white tabular-nums text-xs">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="w-8 h-8 grid place-items-center rounded-lg border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#475467] dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#F2F4F7] dark:hover:bg-slate-800 transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page >= totalPages}
+                className="w-8 h-8 grid place-items-center rounded-lg border border-[#D0D5DD] dark:border-slate-700 bg-white dark:bg-slate-900 text-[#475467] dark:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#F2F4F7] dark:hover:bg-slate-800 transition-colors"
+                title="Last Page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
-      )}
+
+      </main>
     </div>
   );
 }

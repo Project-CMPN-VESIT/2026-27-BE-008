@@ -1,10 +1,13 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from database import get_announcements, get_stats
 
 app = FastAPI(title="FinPilot News Feed API")
 
+# the announcement list is several MB of repetitive JSON; compressing it cuts the transfer ~10x
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,7 +27,7 @@ async def list_news(
     symbol: str | None = None,
     source: str | None = None,
     nse_index: str | None = None,
-    limit: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=5000, ge=1, le=20000),
 ):
     normalized_symbol = symbol.strip().upper() if symbol else None
     normalized_source = source.strip().upper() if source else None
@@ -52,8 +55,11 @@ async def list_news(
 
 
 @app.get("/v1/news/{symbol}")
-async def list_news_for_symbol(symbol: str):
-    results = get_announcements(symbol=symbol.strip().upper())
+async def list_news_for_symbol(symbol: str, limit: int = Query(default=500, ge=1, le=5000)):
+    normalized = symbol.strip().upper()
+    if not normalized or len(normalized) > 40:
+        raise HTTPException(status_code=400, detail="symbol must be 1-40 characters")
+    results = get_announcements(symbol=normalized, limit=limit)
     return {
         "count": len(results),
         "results": results,

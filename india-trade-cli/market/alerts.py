@@ -411,6 +411,37 @@ def check_news_risk(symbol: str) -> List[Dict[str, Any]]:
     return out
 
 
+# ── SEBI Shield Regulatory Sanctions ───────────────────────────────────────
+
+def check_regulatory_sebi(symbol: str) -> List[Dict[str, Any]]:
+    """Screen the ticker and company against SEBI, NSE, and RBI sanctions via SEBI Shield."""
+    try:
+        from market.sebi_shield import screen_sebi_shield
+
+        res = screen_sebi_shield(symbol)
+        if not res.get("clean") and res.get("matches"):
+            out = []
+            for m in res["matches"][:2]:
+                reg = m.get("regulator") or "SEBI"
+                act = m.get("action_type") or "Regulatory action"
+                st = m.get("status") or "ACTIVE"
+                order_num = m.get("order_number")
+                order_str = f" [Order: {order_num}]" if order_num else ""
+                desc = m.get("description") or f"Listed in {reg} enforcement orders."
+                ent = m.get("entity_name") or symbol
+                out.append(_a(
+                    "danger" if st == "ACTIVE" else "warning",
+                    f"{reg} Regulatory Action: {act}",
+                    f"{ent}: {desc}{order_str} (Status: {st})",
+                    "Regulatory",
+                    f"SEBI Shield ({reg})",
+                ))
+            return out
+    except Exception as exc:
+        logger.debug("[Alerts] SEBI Shield check failed for %s: %s", symbol, exc)
+    return []
+
+
 # ── Orchestrator ────────────────────────────────────────────────────────────
 
 _CHECKS: Dict[str, Callable[[str], List[Dict[str, Any]]]] = {
@@ -422,6 +453,7 @@ _CHECKS: Dict[str, Callable[[str], List[Dict[str, Any]]]] = {
     "events": check_events,
     "bulk_deals": check_deals,
     "news_risk": check_news_risk,
+    "regulatory_sebi": check_regulatory_sebi,
 }
 
 

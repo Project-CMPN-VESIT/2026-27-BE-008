@@ -15,11 +15,12 @@ HTTP API for the CYRO chat agent.
 import asyncio
 import logging
 import threading
+import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from cyro_chat import agent, memory, store
 from cyro_chat.firebase_auth import require_firebase_user
@@ -57,10 +58,21 @@ def health():
     return {"status": "ok", "database": status}
 
 
+_USER_SYNCED: dict = {}
+_USER_SYNC_TTL_S = 300
+
+
 def _uid(authorization: Optional[str], header: Optional[str] = None) -> str:
     identity = require_firebase_user(authorization, header)
+    # The user row only needs syncing now and then; writing it on every request cost one DB round trip each time.
+    now = time.monotonic()
+    if now - _USER_SYNCED.get(identity["uid"], -1e9) < _USER_SYNC_TTL_S:
+        return identity["uid"]
     try:
         store.ensure_user(identity["uid"], identity.get("email"), identity.get("name"), identity.get("picture"))
+        _USER_SYNCED[identity["uid"]] = now
+        if len(_USER_SYNCED) > 5000:
+            _USER_SYNCED.clear()
     except Exception as exc:
         logger.error("[CyroChat] Failed to synchronize app user: %s", exc)
         raise HTTPException(status_code=503, detail=f"Database service degraded: {exc}")
@@ -68,9 +80,9 @@ def _uid(authorization: Optional[str], header: Optional[str] = None) -> str:
 
 
 class ChatBody(BaseModel):
-    message: str
-    session_id: Optional[str] = None
-    ticker: Optional[str] = None
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+    ticker: Optional[str] = Field(default=None, max_length=40)
 
 
 @router.post("")
@@ -116,7 +128,7 @@ def sessions(authorization: Optional[str] = Header(None), x_cyro_user: Optional[
 
 
 class NewSession(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=120)
 
 
 @router.post("/sessions")
@@ -125,7 +137,7 @@ def new_session(body: NewSession, authorization: Optional[str] = Header(None), x
 
 
 class Rename(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=120)
 
 
 @router.patch("/sessions/{session_id}")
@@ -159,7 +171,7 @@ def get_memory(authorization: Optional[str] = Header(None), x_cyro_user: Optiona
 
 
 class MemoryBody(BaseModel):
-    key: str
+    key: str = Field(min_length=1, max_length=40)
     value: Any
 
 

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminOnly } from "@/lib/admin-session";
 import { getSessionShorts } from "@/lib/niftyShortsService";
 
 const VIDEO_ENGINE_URL = process.env.VIDEO_ENGINE_URL || "http://127.0.0.1:8500";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = adminOnly(request);
+  if (denied) return denied;
   try {
     const res = await fetch(`${VIDEO_ENGINE_URL}/api/video/batch`);
     if (!res.ok) {
@@ -25,6 +28,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminOnly(req);
+  if (denied) return denied;
   try {
     const body = await req.json().catch(() => ({}));
     const force = Boolean(body?.force);
@@ -74,7 +79,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  const denied = adminOnly(request);
+  if (denied) return denied;
   try {
     const res = await fetch(`${VIDEO_ENGINE_URL}/api/video/batch`, {
       method: "DELETE",
